@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<classpath>
+	<classpathentry kind="src" path="src"/>
+	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER/org.eclipse.jdt.internal.debug.ui.launcher.StandardVMType/JavaSE-1.8"/>
+	<classpathentry kind="lib" path="lib/commons-logging-1.2.jar"/>
+	<classpathentry kind="lib" path="lib/commons-text-1.8.jar"/>
+	<classpathentry kind="lib" path="lib/guava-30.0-jre.jar"/>
+	<classpathentry kind="lib" path="lib/HikariCP-2.6.2.jar"/>
+	<classpathentry kind="lib" path="lib/httpclient-4.5.13.jar"/>
+	<classpathentry kind="lib" path="lib/httpcore-4.4.13.jar"/>
+	<classpathentry kind="lib" path="lib/jackson-annotations-2.13.2.jar"/>
+	<classpathentry kind="lib" path="lib/jackson-core-2.13.2.jar"/>
+	<classpathentry kind="lib" path="lib/jackson-databind-2.13.2.1.jar"/>
+	<classpathentry kind="lib" path="lib/json-20180813.jar"/>
+	<classpathentry kind="lib" path="lib/json-simple-1.1.1.jar"/>
+	<classpathentry kind="lib" path="lib/log4j-1.2.16.jar"/>
+	<classpathentry kind="lib" path="lib/mchange-commons-java-0.2.3.jar"/>
+	<classpathentry kind="lib" path="lib/mysql-connector-java-5.1.22-bin.jar"/>
+	<classpathentry kind="lib" path="lib/netty-3.9.9.Final.jar"/>
+	<classpathentry kind="lib" path="lib/org.eclipse.swt.win32.win32.x86_64_3.7.1.v3738a.jar"/>
+	<classpathentry kind="lib" path="lib/slf4j-api-1.6.1.jar"/>
+	<classpathentry kind="lib" path="lib/slf4j-api-1.7.32.jar"/>
+	<classpathentry kind="lib" path="lib/slf4j-log4j12-1.6.1.jar"/>
+	<classpathentry kind="lib" path="lib/swt-3.5.1-win32-win32-x86.jar"/>
+	<classpathentry kind="lib" path="lib/telegrambots-6.0.1.jar"/>
+	<classpathentry kind="lib" path="lib/telegrambots-meta-6.0.1.jar"/>
+	<classpathentry kind="lib" path="lib/spring-boot-2.7.0.jar"/>
+	<classpathentry kind="output" path="bin"/>
+</classpath>
