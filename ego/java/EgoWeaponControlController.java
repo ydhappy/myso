@@ -15,56 +15,24 @@ import lineage.world.object.instance.RobotInstance;
 /**
  * 에고무기 대화/상태인식/간단 제어 컨트롤러.
  *
- * 적용 위치:
- * - 이 파일을 bitna/src/lineage/world/controller/EgoWeaponControlController.java 로 복사한다.
- * - ChattingController 일반 채팅 처리부에서 onNormalChat(pc, msg)를 호출한다.
- *
- * 1차 안전 정책:
- * - 사용자가 에고 이름을 직접 말했을 때만 동작한다.
- * - 자동 이동, 자동 귀환, 자동 물약 난사는 하지 않는다.
- * - 공격 명령은 주변 선공 몬스터 중 가장 가까운 대상만 autoAttackTarget으로 지정한다.
+ * 버그 방지 보강:
+ * - 정상 전투 무기만 에고 반응 허용.
+ * - 낚싯대/비무기 아이템 차단.
+ * - 상태 출력에 무기 종류 표시.
+ * - 자동공격 대상 지정 전 무기 종류 재검증.
  */
 public final class EgoWeaponControlController {
 
-    /**
-     * 1차 기본 에고 이름.
-     * 나중에 DB의 character_item_ego.ego_name 또는 ItemInstance.getEgoName()으로 교체 가능.
-     */
     private static final String DEFAULT_EGO_NAME = "에고";
-
-    /**
-     * 에고 반응 쿨타임. 일반 채팅으로 여러 번 호출해도 너무 자주 반응하지 않게 한다.
-     */
     private static final long TALK_DELAY_MS = 800L;
-
-    /**
-     * 자동 경고 확장용 쿨타임. 1차에서는 수동 호출 중심이므로 예비값이다.
-     */
     private static final long WARNING_DELAY_MS = 5000L;
 
-    /**
-     * 마지막 에고 대화 시간. 캐릭터 objectId 기준.
-     * 간단 적용용으로 PcInstance 필드 수정 없이 컨트롤러 내부에서 관리한다.
-     */
     private static final java.util.Map<Long, Long> talkDelayMap = new java.util.concurrent.ConcurrentHashMap<Long, Long>();
     private static final java.util.Map<Long, Long> warningDelayMap = new java.util.concurrent.ConcurrentHashMap<Long, Long>();
 
     private EgoWeaponControlController() {
     }
 
-    /**
-     * 일반 채팅에서 에고 이름 호출을 감지한다.
-     *
-     * 예:
-     * - 에고
-     * - 에고 상태
-     * - 에고 조언
-     * - 에고 선공
-     * - 에고 공격
-     * - 에고 멈춰
-     *
-     * @return true면 에고가 채팅을 소비했으므로 일반 채팅으로 퍼뜨리지 않는다.
-     */
     public static boolean onNormalChat(PcInstance pc, String msg) {
         if (pc == null || msg == null)
             return false;
@@ -78,6 +46,9 @@ public final class EgoWeaponControlController {
 
         ItemInstance weapon = inv.getSlot(Lineage.SLOT_WEAPON);
         if (weapon == null)
+            return false;
+
+        if (!EgoWeaponTypeUtil.isValidEgoBaseWeapon(weapon))
             return false;
 
         String egoName = getEgoName(weapon);
@@ -97,11 +68,6 @@ public final class EgoWeaponControlController {
         return true;
     }
 
-    /**
-     * 자동 경고용 예비 메서드.
-     * 주기성 스레드/캐릭터 틱에서 호출하면 선공 몬스터 접근 시 에고가 경고한다.
-     * 1차 적용 문서에서는 필수 연결하지 않는다.
-     */
     public static void checkAutoWarning(PcInstance pc) {
         if (pc == null || pc instanceof RobotInstance)
             return;
@@ -111,7 +77,7 @@ public final class EgoWeaponControlController {
             return;
 
         ItemInstance weapon = inv.getSlot(Lineage.SLOT_WEAPON);
-        if (weapon == null)
+        if (weapon == null || !EgoWeaponTypeUtil.isValidEgoBaseWeapon(weapon))
             return;
 
         if (!checkWarningDelay(pc))
@@ -148,7 +114,6 @@ public final class EgoWeaponControlController {
         if (text.toLowerCase().startsWith(egoName.toLowerCase() + " "))
             return true;
 
-        // 한국어 편의형: "에고야", "에고님" 지원
         if (text.equalsIgnoreCase(egoName + "야") || text.equalsIgnoreCase(egoName + "님"))
             return true;
 
@@ -193,13 +158,15 @@ public final class EgoWeaponControlController {
     }
 
     private static String getEgoName(ItemInstance weapon) {
-        // 1차는 고정명.
-        // 2차 확장 예:
-        // if (weapon.getEgoName() != null && weapon.getEgoName().length() > 0) return weapon.getEgoName();
         return DEFAULT_EGO_NAME;
     }
 
     private static void handle(PcInstance pc, ItemInstance weapon, String command) {
+        if (!EgoWeaponTypeUtil.isValidEgoBaseWeapon(weapon)) {
+            say(pc, "\\fR[에고] 이 장비는 에고무기로 사용할 수 없습니다. " + EgoWeaponTypeUtil.getAbilityDenyReason("", weapon));
+            return;
+        }
+
         if (command == null || command.length() == 0) {
             say(pc, buildGreeting(pc, weapon));
             return;
@@ -221,7 +188,7 @@ public final class EgoWeaponControlController {
         }
 
         if (containsAny(command, "공격", "쳐", "잡아", "처리")) {
-            controlAttackNearestAggro(pc);
+            controlAttackNearestAggro(pc, weapon);
             return;
         }
 
@@ -232,6 +199,7 @@ public final class EgoWeaponControlController {
 
         if (containsAny(command, "도움", "명령", "사용법")) {
             say(pc, "\\fY[에고] 사용법: 에고 상태 / 에고 조언 / 에고 선공 / 에고 공격 / 에고 멈춰");
+            say(pc, EgoWeaponTypeUtil.getSupportedWeaponTypesText());
             return;
         }
 
@@ -258,7 +226,7 @@ public final class EgoWeaponControlController {
         if (!aggroList.isEmpty())
             return "\\fY[에고] 듣고 있습니다. 근처에 선공 몬스터 기척이 있습니다.";
 
-        return "\\fY[에고] 부르셨습니까, 주인님.";
+        return String.format("\\fY[에고] 부르셨습니까, 주인님. 현재 무기 종류는 %s입니다.", EgoWeaponTypeUtil.getDisplayTypeName(weapon));
     }
 
     private static String buildStatus(PcInstance pc, ItemInstance weapon) {
@@ -266,7 +234,7 @@ public final class EgoWeaponControlController {
         int mpRate = getMpRate(pc);
 
         return String.format(
-            "\\fY[에고] Lv.%d / HP %d%%(%d/%d) / MP %d%%(%d/%d) / 무기 +%d %s",
+            "\\fY[에고] Lv.%d / HP %d%%(%d/%d) / MP %d%%(%d/%d) / 무기 +%d %s [%s]",
             pc.getLevel(),
             hpRate,
             pc.getNowHp(),
@@ -275,7 +243,8 @@ public final class EgoWeaponControlController {
             pc.getNowMp(),
             pc.getTotalMp(),
             weapon.getEnLevel(),
-            weapon.getName()
+            weapon.getName(),
+            EgoWeaponTypeUtil.getDisplayTypeName(weapon)
         );
     }
 
@@ -289,6 +258,9 @@ public final class EgoWeaponControlController {
 
         if (hpRate <= 30)
             return "\\fR[에고] 체력이 낮습니다. 물약 사용 또는 후퇴를 권합니다.";
+
+        if (mpRate <= 20 && EgoWeaponTypeUtil.isMagicWeapon(weapon))
+            return "\\fY[에고] 마나가 부족합니다. 지팡이/완드 계열 능력 효율이 낮아질 수 있습니다.";
 
         if (mpRate <= 20)
             return "\\fY[에고] 마나가 부족합니다. 스킬 사용은 아끼고 평타 위주로 싸우십시오.";
@@ -318,14 +290,18 @@ public final class EgoWeaponControlController {
         String name = getMonsterName(nearest);
         int dist = Util.getDistance(pc, nearest);
 
-        if (nearest.getMonster() != null && nearest.getMonster().isBoss()) {
+        if (nearest.getMonster() != null && nearest.getMonster().isBoss())
             return String.format("\\fR[에고] 보스급 선공 몬스터 %s 감지. 거리 %d칸. 위험합니다.", name, dist);
-        }
 
         return String.format("\\fY[에고] 선공 몬스터 %s 감지. 거리 %d칸. 주변 선공 수: %d", name, dist, list.size());
     }
 
-    private static void controlAttackNearestAggro(PcInstance pc) {
+    private static void controlAttackNearestAggro(PcInstance pc, ItemInstance weapon) {
+        if (!EgoWeaponTypeUtil.isValidEgoBaseWeapon(weapon)) {
+            say(pc, "\\fR[에고] 공격 제어 불가: " + EgoWeaponTypeUtil.getAbilityDenyReason("", weapon));
+            return;
+        }
+
         List<MonsterInstance> list = findAggressiveMonsters(pc);
 
         if (list.isEmpty()) {
@@ -350,7 +326,7 @@ public final class EgoWeaponControlController {
         pc.setTarget(target);
 
         String name = getMonsterName(target);
-        say(pc, String.format("\\fY[에고] %s 공격을 시작합니다.", name));
+        say(pc, String.format("\\fY[에고] %s 공격을 시작합니다. 무기 종류: %s", name, EgoWeaponTypeUtil.getDisplayTypeName(weapon)));
     }
 
     private static void stopControl(PcInstance pc) {
@@ -361,7 +337,6 @@ public final class EgoWeaponControlController {
         try {
             pc.resetAutoAttack();
         } catch (Throwable e) {
-            // resetAutoAttack 메서드가 없는 서버 버전 대비.
         }
 
         say(pc, "\\fY[에고] 전투 제어를 중지했습니다.");
@@ -389,8 +364,6 @@ public final class EgoWeaponControlController {
             if (mon.getMap() != pc.getMap())
                 continue;
 
-            // 기본 선공 판단 기준.
-            // monster.atk_type 값의 실제 의미가 서버 DB와 다르면 이 부분만 수정한다.
             if (mon.getMonster().getAtkType() <= 0)
                 continue;
 
