@@ -15,11 +15,10 @@ import lineage.world.object.instance.PcInstance;
 /**
  * 에고무기 유저/운영 명령 헬퍼.
  *
- * 버그 방지 보강:
- * - 무기 슬롯/전투 무기만 에고 생성 가능.
- * - 낚싯대 제외.
- * - 무기 종류별 허용 능력만 설정 가능.
- * - .에고정보에 type2/표시 무기종류 출력.
+ * 보강 기능:
+ * - .에고검사 진단 명령 추가.
+ * - 무기 종류별 에고 생성/능력 설정 제한.
+ * - 낚싯대/비무기 차단.
  */
 public final class EgoWeaponCommand {
 
@@ -34,6 +33,11 @@ public final class EgoWeaponCommand {
 
         if (key.equalsIgnoreCase(Lineage.command + "에고도움")) {
             help(pc);
+            return true;
+        }
+
+        if (key.equalsIgnoreCase(Lineage.command + "에고검사")) {
+            EgoWeaponDiagnostics.printDiagnosis(pc);
             return true;
         }
 
@@ -67,6 +71,7 @@ public final class EgoWeaponCommand {
 
     private static void help(PcInstance pc) {
         msg(pc, "\\fY[에고무기] 명령어 안내");
+        msg(pc, Lineage.command + "에고검사 : 착용무기/DB/능력/선공감지 진단");
         msg(pc, Lineage.command + "에고생성 [이름] : 착용 무기를 에고무기로 활성화");
         msg(pc, Lineage.command + "에고정보 : 착용 에고무기 정보 확인");
         msg(pc, Lineage.command + "에고이름 [새이름] : 에고 호출 이름 변경");
