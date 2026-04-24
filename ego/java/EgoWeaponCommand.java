@@ -16,9 +16,9 @@ import lineage.world.object.instance.PcInstance;
  * 에고무기 유저/운영 명령 헬퍼.
  *
  * 보강 기능:
- * - .에고검사 진단 명령 추가.
+ * - .에고검사 진단 명령.
+ * - .에고상대 / .에고주변 상대 캐릭터 감지.
  * - 무기 종류별 에고 생성/능력 설정 제한.
- * - 낚싯대/비무기 차단.
  */
 public final class EgoWeaponCommand {
 
@@ -38,6 +38,16 @@ public final class EgoWeaponCommand {
 
         if (key.equalsIgnoreCase(Lineage.command + "에고검사")) {
             EgoWeaponDiagnostics.printDiagnosis(pc);
+            return true;
+        }
+
+        if (key.equalsIgnoreCase(Lineage.command + "에고상대")) {
+            EgoOpponentScanController.scanTargetOrNearest(pc);
+            return true;
+        }
+
+        if (key.equalsIgnoreCase(Lineage.command + "에고주변")) {
+            EgoOpponentScanController.scanNearbyPlayers(pc);
             return true;
         }
 
@@ -72,13 +82,15 @@ public final class EgoWeaponCommand {
     private static void help(PcInstance pc) {
         msg(pc, "\\fY[에고무기] 명령어 안내");
         msg(pc, Lineage.command + "에고검사 : 착용무기/DB/능력/선공감지 진단");
+        msg(pc, Lineage.command + "에고상대 : 타겟 또는 가장 가까운 상대 캐릭터 분석");
+        msg(pc, Lineage.command + "에고주변 : 주변 캐릭터 목록/위험도 감지");
         msg(pc, Lineage.command + "에고생성 [이름] : 착용 무기를 에고무기로 활성화");
         msg(pc, Lineage.command + "에고정보 : 착용 에고무기 정보 확인");
         msg(pc, Lineage.command + "에고이름 [새이름] : 에고 호출 이름 변경");
         msg(pc, Lineage.command + "에고능력 [능력코드] : 에고 특별 능력 설정");
         msg(pc, "능력코드: EGO_BALANCE, BLOOD_DRAIN, MANA_DRAIN, CRITICAL_BURST, GUARDIAN_SHIELD, AREA_SLASH, EXECUTION, FLAME_BRAND, FROST_BIND");
         msg(pc, EgoWeaponTypeUtil.getSupportedWeaponTypesText());
-        msg(pc, "일반 채팅 사용: 에고 상태 / 에고 조언 / 에고 선공 / 에고 공격 / 에고 멈춰");
+        msg(pc, "일반 채팅 사용: 에고 상태 / 에고 조언 / 에고 선공 / 에고 상대 / 에고 주변캐릭 / 에고 공격 / 에고 멈춰");
     }
 
     private static void create(PcInstance pc, StringTokenizer st) {
@@ -141,9 +153,8 @@ public final class EgoWeaponCommand {
         if (abilityList.isEmpty()) {
             msg(pc, "능력: 없음");
         } else {
-            for (EgoAbilityInfo ai : abilityList) {
+            for (EgoAbilityInfo ai : abilityList)
                 msg(pc, String.format("능력: %s Lv.%d / 추가확률 %+d / 추가피해 %+d", safe(ai.abilityType), ai.abilityLevel, ai.procChanceBonus, ai.damageBonus));
-            }
         }
     }
 
@@ -170,11 +181,10 @@ public final class EgoWeaponCommand {
             return;
         }
 
-        if (EgoWeaponDatabase.setEgoName(weapon, name)) {
+        if (EgoWeaponDatabase.setEgoName(weapon, name))
             msg(pc, String.format("\\fY[에고무기] 에고 이름이 '%s' 로 변경되었습니다.", name));
-        } else {
+        else
             msg(pc, "\\fR[에고무기] 이름 변경에 실패했습니다.");
-        }
     }
 
     private static void ability(PcInstance pc, StringTokenizer st) {
@@ -214,11 +224,10 @@ public final class EgoWeaponCommand {
             return;
         }
 
-        if (EgoWeaponDatabase.setAbility(weapon, type)) {
+        if (EgoWeaponDatabase.setAbility(weapon, type))
             msg(pc, String.format("\\fY[에고무기] 특별 능력이 %s 로 설정되었습니다.", type));
-        } else {
+        else
             msg(pc, "\\fR[에고무기] 능력 설정에 실패했습니다.");
-        }
     }
 
     private static void reload(PcInstance pc) {
@@ -242,15 +251,7 @@ public final class EgoWeaponCommand {
     private static boolean isValidAbility(String type) {
         if (type == null)
             return false;
-        return type.equals("EGO_BALANCE") ||
-               type.equals("BLOOD_DRAIN") ||
-               type.equals("MANA_DRAIN") ||
-               type.equals("CRITICAL_BURST") ||
-               type.equals("GUARDIAN_SHIELD") ||
-               type.equals("AREA_SLASH") ||
-               type.equals("EXECUTION") ||
-               type.equals("FLAME_BRAND") ||
-               type.equals("FROST_BIND");
+        return type.equals("EGO_BALANCE") || type.equals("BLOOD_DRAIN") || type.equals("MANA_DRAIN") || type.equals("CRITICAL_BURST") || type.equals("GUARDIAN_SHIELD") || type.equals("AREA_SLASH") || type.equals("EXECUTION") || type.equals("FLAME_BRAND") || type.equals("FROST_BIND");
     }
 
     private static String safe(String s) {
