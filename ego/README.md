@@ -1,6 +1,6 @@
 # 에고무기 시스템 작업 폴더
 
-이 폴더는 `ydhappy/myso` 서버에 **에고무기 대화/상태인식/제어/특별능력/DB저장/무기종류검사/진단 기능**을 적용하기 위한 준비 자료입니다.
+이 폴더는 `ydhappy/myso` 서버에 **에고무기 대화/상태인식/제어/특별능력/DB저장/무기종류검사/진단/상대감지 기능**을 적용하기 위한 준비 자료입니다.
 
 본 폴더는 기존 서버 코어를 직접 수정하지 않고, 초보자도 단계별로 복사/붙여넣기 할 수 있도록 자바 코드, SQL, 적용 문서를 분리합니다.
 
@@ -13,6 +13,8 @@
 - 에고 이름을 일반 채팅으로 부르면 자동 반응
 - 내 캐릭터 HP, MP, 레벨, 무기, 현재 타겟 상태 인식
 - 주변 선공 몬스터 감지
+- 주변 상대 캐릭터 감지
+- 상대 캐릭터 공개 정보/위험도 분석
 - 선공 몬스터가 보이면 경고
 - 명령에 따라 가장 가까운 선공 몬스터를 자동공격 대상으로 지정
 - 명령에 따라 자동공격 중지
@@ -21,7 +23,7 @@
 - 무기 종류별 능력 제한
 - 낚싯대/비무기 에고화 방지
 - `.에고검사`로 착용무기/DB/능력/선공감지 진단
-- 게임 안에서 `.에고생성`, `.에고정보`, `.에고이름`, `.에고능력` 명령으로 관리
+- 게임 안에서 `.에고생성`, `.에고정보`, `.에고이름`, `.에고능력`, `.에고상대`, `.에고주변` 명령으로 관리
 
 ## 폴더 구성
 
@@ -30,12 +32,14 @@ ego/
 ├─ README.md
 ├─ docs/
 │  ├─ BEGINNER_APPLY_GUIDE.md
+│  ├─ EGO_OPPONENT_SCAN_GUIDE.md
 │  ├─ EGO_WEAPON_ABILITY_GUIDE.md
 │  ├─ EGO_WEAPON_APPLY_CHECKLIST.md
 │  ├─ EGO_WEAPON_BUGCHECK_AND_WEAPON_TYPE.md
 │  ├─ EGO_WEAPON_DATABASE_COMMAND_GUIDE.md
 │  └─ EGO_WEAPON_DESIGN.md
 ├─ java/
+│  ├─ EgoOpponentScanController.java
 │  ├─ EgoWeaponAbilityController.java
 │  ├─ EgoWeaponCommand.java
 │  ├─ EgoWeaponControlController.java
@@ -93,6 +97,20 @@ ego/
 .에고리로드
 ```
 
+### 4단계: 상대 캐릭터 감지
+
+1. `ego/java/EgoOpponentScanController.java`를 `bitna/src/lineage/world/controller/`로 복사합니다.
+2. 최신 `EgoWeaponControlController.java`와 `EgoWeaponCommand.java`를 적용합니다.
+3. 아래 명령을 테스트합니다.
+
+```text
+.에고상대
+.에고주변
+에고 상대
+에고 주변캐릭
+에고 타겟분석
+```
+
 ## 지원 무기 종류
 
 ```text
@@ -111,6 +129,26 @@ wand         완드
 ```text
 fishing_rod  낚싯대
 방어구/소모품/주문서/포션/기타 비무기
+```
+
+## 상대 감지 출력 범위
+
+표시:
+
+```text
+이름, 호칭, 혈맹, 클래스, 성향, PK수, 거리, HP구간, 무기종류, 위험도, 에고 조언
+```
+
+숨김:
+
+```text
+계정, IP, 정확한 HP 숫자, 전체 인벤토리, 정확 스탯, 전체 장비명, 숨김 버프 전체
+```
+
+상세 문서:
+
+```text
+ego/docs/EGO_OPPONENT_SCAN_GUIDE.md
 ```
 
 ## 특별 능력 목록
@@ -150,6 +188,7 @@ ego/docs/EGO_WEAPON_BUGCHECK_AND_WEAPON_TYPE.md
 - 사용자가 에고 이름을 말해야 반응합니다.
 - `에고 공격` 명령 시 주변 선공 몬스터 중 가장 가까운 대상만 자동공격 대상으로 지정합니다.
 - `에고 멈춰` 명령 시 자동공격을 중지합니다.
+- 상대 캐릭터 감지는 공개/추정 정보만 보여줍니다.
 - 자동 귀환, 자동 이동, 자동 물약 난사는 포함하지 않았습니다.
 
 ## 보강된 안전장치
@@ -162,6 +201,7 @@ ego/docs/EGO_WEAPON_BUGCHECK_AND_WEAPON_TYPE.md
 - 능력 발동 메시지 쿨타임 적용
 - 광역 피해는 몬스터에만 제한
 - `.에고검사`로 현장 진단 가능
+- 상대 캐릭터 정확 스탯/정확 HP/인벤토리/IP 비공개
 
 ## 나중에 확장할 기능
 
@@ -172,6 +212,7 @@ ego/docs/EGO_WEAPON_BUGCHECK_AND_WEAPON_TYPE.md
 - HTML 상태창 출력
 - LLM/AI 멘트 연동
 - 에고 전용 퀘스트/각성 시스템
+- GM 전용 상세 상대 분석
 
 ## 주의
 
