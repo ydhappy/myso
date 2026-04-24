@@ -22,6 +22,13 @@ myso 서버에 적용할 때:
 3. docs/EGO_WEAPON_APPLY_CHECKLIST.md
 ```
 
+Java를 더 이상 수정하지 않고 DB에서 생성/편집만 할 때:
+
+```text
+1. docs/EGO_NO_JAVA_ADMIN_GUIDE.md
+2. sql/ego_no_java_admin.sql
+```
+
 다른 서버코어에 적용할 때:
 
 ```text
@@ -35,6 +42,7 @@ myso 서버에 적용할 때:
 상세 문서:
 
 ```text
+docs/EGO_NO_JAVA_ADMIN_GUIDE.md             무자바 DB 생성/편집 가이드
 docs/EGO_JAVA8_COMPATIBILITY.md             Java 8 호환성 기준
 docs/EGO_OPPONENT_SCAN_GUIDE.md             상대 캐릭터 감지 상세
 docs/EGO_WEAPON_BUGCHECK_AND_WEAPON_TYPE.md 오류/무기종류/능력제한 점검
@@ -59,6 +67,7 @@ docs/EGO_WEAPON_BUGCHECK_AND_WEAPON_TYPE.md 오류/무기종류/능력제한 점
 - 간단 자동공격 제어
 - 특별 능력 발동
 - 에고 이름/레벨/경험치/능력 DB 저장
+- Java 수정 없이 DB에서 에고 생성/편집 가능
 - .에고검사 진단 명령
 - 타 서버코어 포팅용 Adapter/Rules 제공
 - Java 8 호환 기준 문서화
@@ -73,6 +82,7 @@ ego/
 ├─ README.md
 ├─ docs/
 │  ├─ EGO_SYSTEM_MANUAL.md
+│  ├─ EGO_NO_JAVA_ADMIN_GUIDE.md
 │  ├─ EGO_PORTING_GUIDE.md
 │  ├─ EGO_JAVA8_COMPATIBILITY.md
 │  ├─ EGO_WEAPON_APPLY_CHECKLIST.md
@@ -95,7 +105,8 @@ ego/
 │  └─ EgoPortableRules.java
 └─ sql/
    ├─ ego_weapon.sql
-   └─ ego_weapon_ability.sql
+   ├─ ego_weapon_ability.sql
+   └─ ego_no_java_admin.sql
 ```
 
 ---
@@ -124,7 +135,43 @@ docs/EGO_SYSTEM_MANUAL.md
 
 ---
 
-## 5. 타 서버코어 적용 순서
+## 5. Java 수정 없이 DB로 생성/편집
+
+이미 에고 시스템이 서버코어에 연결되어 있다면, 이후 생성/편집은 Java를 건드리지 않고 DB에서 처리할 수 있습니다.
+
+사용 파일:
+
+```text
+sql/ego_no_java_admin.sql
+docs/EGO_NO_JAVA_ADMIN_GUIDE.md
+```
+
+지원 작업:
+
+```text
+- 에고 생성/재활성화
+- 에고 이름 변경
+- 에고 성격 변경
+- 에고 능력 변경
+- 에고 레벨/경험치 보정
+- 에고 능력 레벨/확률/피해 보정
+- 에고 비활성화
+- 에고 완전 삭제
+- 전체 에고 목록 조회
+- 이상 데이터 점검/보정
+```
+
+주의:
+
+```text
+SQL은 데이터 생성/편집용입니다.
+서버코어가 에고 테이블을 읽는 Java 연결이 전혀 없다면 SQL만으로 게임 기능이 발동하지 않습니다.
+DB 수정 후에는 .에고리로드 또는 서버 재시작이 필요할 수 있습니다.
+```
+
+---
+
+## 6. 타 서버코어 적용 순서
 
 다른 서버코어에 적용할 때는 `ego/java/` 파일을 바로 복사하지 말고, 먼저 포팅 가이드를 보세요.
 
@@ -147,11 +194,12 @@ docs/EGO_SYSTEM_MANUAL.md
 
 ---
 
-## 6. SQL 파일
+## 7. SQL 파일
 
 ```text
 sql/ego_weapon.sql
 sql/ego_weapon_ability.sql
+sql/ego_no_java_admin.sql
 ```
 
 생성 테이블:
@@ -169,7 +217,7 @@ ego_ability_proc_log
 
 ---
 
-## 7. myso 자바 파일 복사 위치
+## 8. myso 자바 파일 복사 위치
 
 ### world/controller
 
@@ -202,7 +250,7 @@ bitna/src/lineage/database/
 
 ---
 
-## 8. 게임 명령어
+## 9. 게임 명령어
 
 ```text
 .에고도움        명령어 안내
@@ -218,7 +266,7 @@ bitna/src/lineage/database/
 
 ---
 
-## 9. 일반 채팅 명령
+## 10. 일반 채팅 명령
 
 에고 이름이 `카르마`라면:
 
@@ -236,7 +284,7 @@ bitna/src/lineage/database/
 
 ---
 
-## 10. 지원 무기 종류
+## 11. 지원 무기 종류
 
 ```text
 dagger       단검
@@ -266,7 +314,7 @@ fishing_rod  낚싯대
 
 ---
 
-## 11. 특별 능력
+## 12. 특별 능력
 
 ```text
 EGO_BALANCE      공명 타격
@@ -282,7 +330,7 @@ FROST_BIND       서리 충격
 
 ---
 
-## 12. 상대 감지 정보 범위
+## 13. 상대 감지 정보 범위
 
 표시:
 
@@ -298,7 +346,7 @@ FROST_BIND       서리 충격
 
 ---
 
-## 13. 안전장치
+## 14. 안전장치
 
 ```text
 - 정상 전투 무기만 에고 생성 가능
@@ -312,11 +360,12 @@ FROST_BIND       서리 충격
 - 상대 캐릭터 정확 스탯/정확 HP/인벤토리/IP 비공개
 - 타 서버코어 포팅 시 Adapter로 코어 종속성 분리
 - Java 8 기준 문법만 사용
+- 운영 생성/편집은 SQL로 처리 가능
 ```
 
 ---
 
-## 14. 운영 전 주의
+## 15. 운영 전 주의
 
 `EgoWeaponAbilityController.java`의 테스트 모드를 확인하세요.
 
