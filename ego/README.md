@@ -1,6 +1,6 @@
 # 에고무기 시스템 작업 폴더
 
-이 폴더는 `ydhappy/myso` 서버에 **에고무기 대화/상태인식/제어/특별능력/DB저장/무기종류검사 기능**을 적용하기 위한 준비 자료입니다.
+이 폴더는 `ydhappy/myso` 서버에 **에고무기 대화/상태인식/제어/특별능력/DB저장/무기종류검사/진단 기능**을 적용하기 위한 준비 자료입니다.
 
 본 폴더는 기존 서버 코어를 직접 수정하지 않고, 초보자도 단계별로 복사/붙여넣기 할 수 있도록 자바 코드, SQL, 적용 문서를 분리합니다.
 
@@ -20,6 +20,7 @@
 - 에고 특별 능력 발동
 - 무기 종류별 능력 제한
 - 낚싯대/비무기 에고화 방지
+- `.에고검사`로 착용무기/DB/능력/선공감지 진단
 - 게임 안에서 `.에고생성`, `.에고정보`, `.에고이름`, `.에고능력` 명령으로 관리
 
 ## 폴더 구성
@@ -30,6 +31,7 @@ ego/
 ├─ docs/
 │  ├─ BEGINNER_APPLY_GUIDE.md
 │  ├─ EGO_WEAPON_ABILITY_GUIDE.md
+│  ├─ EGO_WEAPON_APPLY_CHECKLIST.md
 │  ├─ EGO_WEAPON_BUGCHECK_AND_WEAPON_TYPE.md
 │  ├─ EGO_WEAPON_DATABASE_COMMAND_GUIDE.md
 │  └─ EGO_WEAPON_DESIGN.md
@@ -38,6 +40,7 @@ ego/
 │  ├─ EgoWeaponCommand.java
 │  ├─ EgoWeaponControlController.java
 │  ├─ EgoWeaponDatabase.java
+│  ├─ EgoWeaponDiagnostics.java
 │  └─ EgoWeaponTypeUtil.java
 └─ sql/
    ├─ ego_weapon.sql
@@ -72,16 +75,17 @@ ego/
 4. `ego/docs/EGO_WEAPON_ABILITY_GUIDE.md`를 보면서 `DamageController.java`에 연결 코드를 추가합니다.
 5. 몬스터 공격 시 특별 능력 발동을 테스트합니다.
 
-### 3단계: DB 저장/게임 내 명령어
+### 3단계: DB 저장/게임 내 명령어/진단
 
 1. `ego/java/EgoWeaponDatabase.java`를 `bitna/src/lineage/database/`로 복사합니다.
-2. `ego/java/EgoWeaponTypeUtil.java`와 `ego/java/EgoWeaponCommand.java`를 `bitna/src/lineage/world/controller/`로 복사합니다.
+2. `ego/java/EgoWeaponTypeUtil.java`, `EgoWeaponDiagnostics.java`, `EgoWeaponCommand.java`를 `bitna/src/lineage/world/controller/`로 복사합니다.
 3. `ego/docs/EGO_WEAPON_DATABASE_COMMAND_GUIDE.md`를 보면서 `CommandController.java`에 연결합니다.
 4. 서버 로딩 시 `EgoWeaponDatabase.init(con)`을 연결하거나, GM으로 `.에고리로드`를 실행합니다.
 5. 게임에서 아래 명령을 테스트합니다.
 
 ```text
 .에고도움
+.에고검사
 .에고생성 카르마
 .에고정보
 .에고이름 루나
@@ -93,7 +97,7 @@ ego/
 
 ```text
 dagger       단검
-tsword/sword 한손검은 서버 기준 type2=sword
+sword        한손검
 tohandsword  양손검
 axe          도끼
 spear        창
@@ -123,13 +127,21 @@ FLAME_BRAND      화염 각인
 FROST_BIND       서리 충격
 ```
 
-## 오류/버그 점검 문서
+## 상세 점검 문서
 
-무기 종류 확인, 낚싯대 차단, 능력 중복 버그, 무기별 능력 제한은 아래 문서에 정리되어 있습니다.
+```text
+ego/docs/EGO_WEAPON_APPLY_CHECKLIST.md
+```
+
+복사 파일, SQL, ChattingController, CommandController, DamageController, DB 로드, `.에고검사`까지 전체 적용 체크리스트입니다.
+
+## 오류/버그 점검 문서
 
 ```text
 ego/docs/EGO_WEAPON_BUGCHECK_AND_WEAPON_TYPE.md
 ```
+
+무기 종류 확인, 낚싯대 차단, 능력 중복 버그, 무기별 능력 제한이 정리되어 있습니다.
 
 ## 1차 동작 방식
 
@@ -139,6 +151,17 @@ ego/docs/EGO_WEAPON_BUGCHECK_AND_WEAPON_TYPE.md
 - `에고 공격` 명령 시 주변 선공 몬스터 중 가장 가까운 대상만 자동공격 대상으로 지정합니다.
 - `에고 멈춰` 명령 시 자동공격을 중지합니다.
 - 자동 귀환, 자동 이동, 자동 물약 난사는 포함하지 않았습니다.
+
+## 보강된 안전장치
+
+- 정상 전투 무기만 에고 생성 가능
+- 낚싯대 제외
+- 무기별 능력 제한
+- 능력 교체 시 기존 능력 비활성화
+- 데미지 0 이하일 때 능력 발동 차단
+- 능력 발동 메시지 쿨타임 적용
+- 광역 피해는 몬스터에만 제한
+- `.에고검사`로 현장 진단 가능
 
 ## 나중에 확장할 기능
 
