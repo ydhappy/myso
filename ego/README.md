@@ -1,117 +1,193 @@
-# 에고무기 시스템 작업 폴더
+# 에고무기 시스템
 
-이 폴더는 `ydhappy/myso` 서버에 **에고무기 대화/상태인식/제어/특별능력/DB저장/무기종류검사/진단/상대감지 기능**을 적용하기 위한 준비 자료입니다.
+`ego/` 폴더는 `ydhappy/myso` 서버에 에고무기 기능을 적용하기 위한 **자바 소스, SQL, 적용 문서**를 모아둔 작업 폴더입니다.
 
-본 폴더는 기존 서버 코어를 직접 수정하지 않고, 초보자도 단계별로 복사/붙여넣기 할 수 있도록 자바 코드, SQL, 적용 문서를 분리합니다.
+기존 서버 코어를 바로 수정하지 않고, 필요한 파일을 복사한 뒤 기존 컨트롤러에 연결하는 방식으로 구성했습니다.
 
-## 목표
+---
 
-에고무기는 단순한 무기 옵션이 아니라, 착용 중인 무기에 깃든 인격처럼 동작합니다.
+## 1. 먼저 볼 문서
 
-가능 기능:
+처음 적용하거나 전체 구조를 확인할 때는 아래 순서로 보세요.
 
-- 에고 이름을 일반 채팅으로 부르면 자동 반응
-- 내 캐릭터 HP, MP, 레벨, 무기, 현재 타겟 상태 인식
+```text
+1. README.md
+2. docs/EGO_SYSTEM_MANUAL.md
+3. docs/EGO_WEAPON_APPLY_CHECKLIST.md
+```
+
+상세 문서:
+
+```text
+docs/EGO_OPPONENT_SCAN_GUIDE.md              상대 캐릭터 감지 상세
+docs/EGO_WEAPON_BUGCHECK_AND_WEAPON_TYPE.md  오류/무기종류/능력제한 점검
+```
+
+기존 세부 문서들은 참고용으로 유지합니다.
+
+---
+
+## 2. 기능 요약
+
+에고무기는 착용 무기에 인격을 부여하여 캐릭터 상태와 주변 상황을 인식하는 시스템입니다.
+
+지원 기능:
+
+```text
+- 에고 이름 호출 대화
+- 내 캐릭터 HP/MP/무기/타겟 상태 인식
 - 주변 선공 몬스터 감지
 - 주변 상대 캐릭터 감지
-- 상대 캐릭터 공개 정보/위험도 분석
-- 선공 몬스터가 보이면 경고
-- 명령에 따라 가장 가까운 선공 몬스터를 자동공격 대상으로 지정
-- 명령에 따라 자동공격 중지
-- 에고 이름/성격/레벨/경험치 DB 저장
-- 에고 특별 능력 발동
-- 무기 종류별 능력 제한
-- 낚싯대/비무기 에고화 방지
-- `.에고검사`로 착용무기/DB/능력/선공감지 진단
-- 게임 안에서 `.에고생성`, `.에고정보`, `.에고이름`, `.에고능력`, `.에고상대`, `.에고주변` 명령으로 관리
+- 상대 캐릭터 위험도 분석
+- 간단 자동공격 제어
+- 특별 능력 발동
+- 에고 이름/레벨/경험치/능력 DB 저장
+- .에고검사 진단 명령
+```
 
-## 폴더 구성
+---
+
+## 3. 현재 폴더 구성
 
 ```text
 ego/
 ├─ README.md
 ├─ docs/
-│  ├─ BEGINNER_APPLY_GUIDE.md
-│  ├─ EGO_OPPONENT_SCAN_GUIDE.md
-│  ├─ EGO_WEAPON_ABILITY_GUIDE.md
+│  ├─ EGO_SYSTEM_MANUAL.md
 │  ├─ EGO_WEAPON_APPLY_CHECKLIST.md
+│  ├─ EGO_OPPONENT_SCAN_GUIDE.md
 │  ├─ EGO_WEAPON_BUGCHECK_AND_WEAPON_TYPE.md
+│  ├─ BEGINNER_APPLY_GUIDE.md
+│  ├─ EGO_WEAPON_ABILITY_GUIDE.md
 │  ├─ EGO_WEAPON_DATABASE_COMMAND_GUIDE.md
 │  └─ EGO_WEAPON_DESIGN.md
 ├─ java/
-│  ├─ EgoOpponentScanController.java
-│  ├─ EgoWeaponAbilityController.java
-│  ├─ EgoWeaponCommand.java
+│  ├─ EgoWeaponTypeUtil.java
 │  ├─ EgoWeaponControlController.java
+│  ├─ EgoWeaponAbilityController.java
 │  ├─ EgoWeaponDatabase.java
+│  ├─ EgoWeaponCommand.java
 │  ├─ EgoWeaponDiagnostics.java
-│  └─ EgoWeaponTypeUtil.java
+│  └─ EgoOpponentScanController.java
 └─ sql/
    ├─ ego_weapon.sql
    └─ ego_weapon_ability.sql
 ```
 
-## 적용 순서
+---
 
-### 1단계: 대화/상태인식/간단제어
-
-1. `ego/sql/ego_weapon.sql`을 DB에 적용합니다.
-2. `ego/java/EgoWeaponTypeUtil.java`를 `bitna/src/lineage/world/controller/`로 복사합니다.
-3. `ego/java/EgoWeaponControlController.java`를 `bitna/src/lineage/world/controller/`로 복사합니다.
-4. `ego/docs/BEGINNER_APPLY_GUIDE.md`를 보면서 `ChattingController.java`에 연결 코드를 추가합니다.
-5. 서버를 빌드합니다.
-6. 게임에서 착용 무기를 들고 아래처럼 테스트합니다.
+## 4. 빠른 적용 순서
 
 ```text
-에고
-에고 상태
-에고 조언
-에고 선공
-에고 공격
-에고 멈춰
+1. DB 백업
+2. SQL 2개 적용
+3. 자바 파일 7개 복사
+4. ChattingController 연결
+5. CommandController 연결
+6. DamageController 연결
+7. 서버 시작 시 EgoWeaponDatabase.init(con) 연결 또는 .에고리로드
+8. 서버 빌드
+9. 게임 접속 후 .에고검사
+10. .에고생성 카르마
+11. .에고정보 / .에고능력 / 카르마 상태 / 카르마 상대 테스트
 ```
 
-### 2단계: 특별 능력
-
-1. `ego/sql/ego_weapon_ability.sql`을 DB에 적용합니다.
-2. `ego/java/EgoWeaponTypeUtil.java`가 복사되어 있는지 확인합니다.
-3. `ego/java/EgoWeaponAbilityController.java`를 `bitna/src/lineage/world/controller/`로 복사합니다.
-4. `ego/docs/EGO_WEAPON_ABILITY_GUIDE.md`를 보면서 `DamageController.java`에 연결 코드를 추가합니다.
-5. 몬스터 공격 시 특별 능력 발동을 테스트합니다.
-
-### 3단계: DB 저장/게임 내 명령어/진단
-
-1. `ego/java/EgoWeaponDatabase.java`를 `bitna/src/lineage/database/`로 복사합니다.
-2. `ego/java/EgoWeaponTypeUtil.java`, `EgoWeaponDiagnostics.java`, `EgoWeaponCommand.java`를 `bitna/src/lineage/world/controller/`로 복사합니다.
-3. `ego/docs/EGO_WEAPON_DATABASE_COMMAND_GUIDE.md`를 보면서 `CommandController.java`에 연결합니다.
-4. 서버 로딩 시 `EgoWeaponDatabase.init(con)`을 연결하거나, GM으로 `.에고리로드`를 실행합니다.
-5. 게임에서 아래 명령을 테스트합니다.
+자세한 코드는 아래 문서를 보세요.
 
 ```text
-.에고도움
-.에고검사
-.에고생성 카르마
-.에고정보
-.에고이름 루나
-.에고능력 BLOOD_DRAIN
-.에고리로드
+docs/EGO_SYSTEM_MANUAL.md
 ```
 
-### 4단계: 상대 캐릭터 감지
+---
 
-1. `ego/java/EgoOpponentScanController.java`를 `bitna/src/lineage/world/controller/`로 복사합니다.
-2. 최신 `EgoWeaponControlController.java`와 `EgoWeaponCommand.java`를 적용합니다.
-3. 아래 명령을 테스트합니다.
+## 5. SQL 파일
 
 ```text
-.에고상대
-.에고주변
-에고 상대
-에고 주변캐릭
-에고 타겟분석
+sql/ego_weapon.sql
+sql/ego_weapon_ability.sql
 ```
 
-## 지원 무기 종류
+생성 테이블:
+
+```text
+character_item_ego
+character_item_ego_ability
+ego_personality_template
+ego_talk_template
+ego_ability_template
+ego_ability_proc_log
+```
+
+---
+
+## 6. 자바 파일 복사 위치
+
+### world/controller
+
+```text
+java/EgoWeaponTypeUtil.java
+java/EgoWeaponControlController.java
+java/EgoWeaponAbilityController.java
+java/EgoWeaponCommand.java
+java/EgoWeaponDiagnostics.java
+java/EgoOpponentScanController.java
+```
+
+복사 위치:
+
+```text
+bitna/src/lineage/world/controller/
+```
+
+### database
+
+```text
+java/EgoWeaponDatabase.java
+```
+
+복사 위치:
+
+```text
+bitna/src/lineage/database/
+```
+
+---
+
+## 7. 게임 명령어
+
+```text
+.에고도움        명령어 안내
+.에고검사        착용무기/DB/능력/선공감지 진단
+.에고생성 이름   착용 무기를 에고무기로 활성화
+.에고정보        착용 에고무기 정보 확인
+.에고이름 이름   에고 호출 이름 변경
+.에고능력 코드   특별 능력 설정
+.에고상대        타겟 또는 가까운 상대 캐릭터 분석
+.에고주변        주변 캐릭터 목록/위험도 감지
+.에고리로드      DB 캐시 리로드, GM 권장
+```
+
+---
+
+## 8. 일반 채팅 명령
+
+에고 이름이 `카르마`라면:
+
+```text
+카르마
+카르마 상태
+카르마 조언
+카르마 선공
+카르마 공격
+카르마 멈춰
+카르마 상대
+카르마 주변캐릭
+카르마 타겟분석
+```
+
+---
+
+## 9. 지원 무기 종류
 
 ```text
 dagger       단검
@@ -128,30 +204,12 @@ wand         완드
 
 ```text
 fishing_rod  낚싯대
-방어구/소모품/주문서/포션/기타 비무기
+방어구/주문서/포션/기타 비무기
 ```
 
-## 상대 감지 출력 범위
+---
 
-표시:
-
-```text
-이름, 호칭, 혈맹, 클래스, 성향, PK수, 거리, HP구간, 무기종류, 위험도, 에고 조언
-```
-
-숨김:
-
-```text
-계정, IP, 정확한 HP 숫자, 전체 인벤토리, 정확 스탯, 전체 장비명, 숨김 버프 전체
-```
-
-상세 문서:
-
-```text
-ego/docs/EGO_OPPONENT_SCAN_GUIDE.md
-```
-
-## 특별 능력 목록
+## 10. 특별 능력
 
 ```text
 EGO_BALANCE      공명 타격
@@ -165,34 +223,27 @@ FLAME_BRAND      화염 각인
 FROST_BIND       서리 충격
 ```
 
-## 상세 점검 문서
+---
+
+## 11. 상대 감지 정보 범위
+
+표시:
 
 ```text
-ego/docs/EGO_WEAPON_APPLY_CHECKLIST.md
+이름, 호칭, 혈맹, 클래스, 성향, PK수, 거리, HP구간, 무기종류, 위험도, 에고 조언
 ```
 
-복사 파일, SQL, ChattingController, CommandController, DamageController, DB 로드, `.에고검사`까지 전체 적용 체크리스트입니다.
-
-## 오류/버그 점검 문서
+숨김:
 
 ```text
-ego/docs/EGO_WEAPON_BUGCHECK_AND_WEAPON_TYPE.md
+계정, IP, 정확한 HP 숫자, 전체 인벤토리, 정확 스탯, 전체 장비명, 숨김 버프 전체
 ```
 
-무기 종류 확인, 낚싯대 차단, 능력 중복 버그, 무기별 능력 제한이 정리되어 있습니다.
+---
 
-## 1차 동작 방식
+## 12. 안전장치
 
-1차 버전은 안전성을 위해 완전 자동사냥이 아닙니다.
-
-- 사용자가 에고 이름을 말해야 반응합니다.
-- `에고 공격` 명령 시 주변 선공 몬스터 중 가장 가까운 대상만 자동공격 대상으로 지정합니다.
-- `에고 멈춰` 명령 시 자동공격을 중지합니다.
-- 상대 캐릭터 감지는 공개/추정 정보만 보여줍니다.
-- 자동 귀환, 자동 이동, 자동 물약 난사는 포함하지 않았습니다.
-
-## 보강된 안전장치
-
+```text
 - 정상 전투 무기만 에고 생성 가능
 - 낚싯대 제외
 - 무기별 능력 제한
@@ -200,24 +251,24 @@ ego/docs/EGO_WEAPON_BUGCHECK_AND_WEAPON_TYPE.md
 - 데미지 0 이하일 때 능력 발동 차단
 - 능력 발동 메시지 쿨타임 적용
 - 광역 피해는 몬스터에만 제한
-- `.에고검사`로 현장 진단 가능
+- .에고검사로 현장 진단 가능
 - 상대 캐릭터 정확 스탯/정확 HP/인벤토리/IP 비공개
+```
 
-## 나중에 확장할 기능
+---
 
-- 몬스터 처치 시 에고 경험치 완전 자동 지급
-- 에고 레벨업 시 능력 강화
-- 에고 성격별 말투 변경
-- 위험 상황 자동 경고 주기 제한
-- HTML 상태창 출력
-- LLM/AI 멘트 연동
-- 에고 전용 퀘스트/각성 시스템
-- GM 전용 상세 상대 분석
+## 13. 운영 전 주의
 
-## 주의
+`EgoWeaponAbilityController.java`의 테스트 모드를 확인하세요.
 
-이 폴더의 자바 파일은 바로 서버 경로에 들어간 상태가 아니라, 적용용 원본입니다.
-실제 적용 시에는 각 문서의 순서대로 복사하고 기존 파일에 연결 코드를 추가해야 합니다.
+```java
+private static final boolean ENABLE_TEST_MODE = true;
+```
 
-특히 `EgoWeaponAbilityController.java`의 테스트 모드 값을 확인하세요.
-운영 서버에서는 모든 무기 발동을 막기 위해 DB 기반 에고무기 판정으로 바꾸는 것을 권장합니다.
+운영 전에는 DB 기반 판정으로 전환하고 아래처럼 변경하는 것을 권장합니다.
+
+```java
+private static final boolean ENABLE_TEST_MODE = false;
+```
+
+자세한 내용은 `docs/EGO_SYSTEM_MANUAL.md`의 운영 전 필수 확인 항목을 참고하세요.
