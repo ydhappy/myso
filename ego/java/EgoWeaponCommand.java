@@ -15,17 +15,11 @@ import lineage.world.object.instance.PcInstance;
 /**
  * 에고무기 유저/운영 명령 헬퍼.
  *
- * 적용 위치:
- * - 이 파일을 bitna/src/lineage/world/controller/EgoWeaponCommand.java 로 복사한다.
- * - CommandController.toCommand(...)의 PluginController 호출 이후 또는 유저 명령어 분기 초반에 연결한다.
- *
- * 지원 명령:
- * - .에고도움
- * - .에고생성 [이름]
- * - .에고정보
- * - .에고이름 [새이름]
- * - .에고능력 [능력코드]
- * - .에고리로드    GM 전용 권장
+ * 버그 방지 보강:
+ * - 무기 슬롯/전투 무기만 에고 생성 가능.
+ * - 낚싯대 제외.
+ * - 무기 종류별 허용 능력만 설정 가능.
+ * - .에고정보에 type2/표시 무기종류 출력.
  */
 public final class EgoWeaponCommand {
 
@@ -78,6 +72,7 @@ public final class EgoWeaponCommand {
         msg(pc, Lineage.command + "에고이름 [새이름] : 에고 호출 이름 변경");
         msg(pc, Lineage.command + "에고능력 [능력코드] : 에고 특별 능력 설정");
         msg(pc, "능력코드: EGO_BALANCE, BLOOD_DRAIN, MANA_DRAIN, CRITICAL_BURST, GUARDIAN_SHIELD, AREA_SLASH, EXECUTION, FLAME_BRAND, FROST_BIND");
+        msg(pc, EgoWeaponTypeUtil.getSupportedWeaponTypesText());
         msg(pc, "일반 채팅 사용: 에고 상태 / 에고 조언 / 에고 선공 / 에고 공격 / 에고 멈춰");
     }
 
@@ -85,6 +80,12 @@ public final class EgoWeaponCommand {
         ItemInstance weapon = getWeapon(pc);
         if (weapon == null) {
             msg(pc, "\\fR[에고무기] 무기를 착용한 뒤 사용하세요.");
+            return;
+        }
+
+        if (!EgoWeaponTypeUtil.isValidEgoBaseWeapon(weapon)) {
+            msg(pc, "\\fR[에고무기] 생성 불가: " + EgoWeaponTypeUtil.getAbilityDenyReason("", weapon));
+            msg(pc, EgoWeaponTypeUtil.getSupportedWeaponTypesText());
             return;
         }
 
@@ -99,7 +100,10 @@ public final class EgoWeaponCommand {
 
         boolean ok = EgoWeaponDatabase.enableEgo(pc, weapon, egoName, "guardian");
         if (ok) {
-            msg(pc, String.format("\\fY[에고무기] +%d %s 에고가 깨어났습니다. 호출명: %s", weapon.getEnLevel(), weapon.getName(), egoName));
+            String defaultAbility = EgoWeaponTypeUtil.getDefaultAbilityType(weapon);
+            EgoWeaponDatabase.setAbility(weapon, defaultAbility);
+            msg(pc, String.format("\\fY[에고무기] +%d %s [%s] 에고가 깨어났습니다. 호출명: %s", weapon.getEnLevel(), weapon.getName(), EgoWeaponTypeUtil.getDisplayTypeName(weapon), egoName));
+            msg(pc, String.format("기본 능력: %s", defaultAbility));
             msg(pc, String.format("일반 채팅으로 '%s 상태' 를 입력해보세요.", egoName));
         } else {
             msg(pc, "\\fR[에고무기] 에고 생성에 실패했습니다. DB 적용 여부를 확인하세요.");
@@ -116,12 +120,14 @@ public final class EgoWeaponCommand {
         EgoWeaponInfo info = EgoWeaponDatabase.find(weapon);
         if (info == null || !info.enabled) {
             msg(pc, "\\fR[에고무기] 현재 착용 무기는 에고무기가 아닙니다.");
+            msg(pc, String.format("착용 무기 종류: %s / type2=%s", EgoWeaponTypeUtil.getDisplayTypeName(weapon), EgoWeaponTypeUtil.getType2(weapon)));
             msg(pc, Lineage.command + "에고생성 [이름] 으로 활성화할 수 있습니다.");
             return;
         }
 
         msg(pc, "\\fY========== 에고무기 정보 ==========");
         msg(pc, String.format("무기: +%d %s", weapon.getEnLevel(), weapon.getName()));
+        msg(pc, String.format("종류: %s / type2=%s", EgoWeaponTypeUtil.getDisplayTypeName(weapon), EgoWeaponTypeUtil.getType2(weapon)));
         msg(pc, String.format("이름: %s / 성격: %s", safe(info.egoName), safe(info.personality)));
         msg(pc, String.format("레벨: %d / 경험치: %,d / 다음: %,d", info.level, info.exp, info.maxExp));
         msg(pc, String.format("대화단계: %d / 제어단계: %d", info.talkLevel, info.controlLevel));
@@ -178,9 +184,15 @@ public final class EgoWeaponCommand {
             return;
         }
 
+        if (!EgoWeaponTypeUtil.isValidEgoBaseWeapon(weapon)) {
+            msg(pc, "\\fR[에고무기] 능력 설정 불가: " + EgoWeaponTypeUtil.getAbilityDenyReason("", weapon));
+            return;
+        }
+
         if (st == null || !st.hasMoreTokens()) {
             msg(pc, Lineage.command + "에고능력 능력코드");
             msg(pc, "예: " + Lineage.command + "에고능력 BLOOD_DRAIN");
+            msg(pc, String.format("현재 무기 추천 능력: %s", EgoWeaponTypeUtil.getDefaultAbilityType(weapon)));
             return;
         }
 
@@ -188,6 +200,12 @@ public final class EgoWeaponCommand {
         if (!isValidAbility(type)) {
             msg(pc, "\\fR[에고무기] 알 수 없는 능력코드입니다.");
             msg(pc, "가능: EGO_BALANCE, BLOOD_DRAIN, MANA_DRAIN, CRITICAL_BURST, GUARDIAN_SHIELD, AREA_SLASH, EXECUTION, FLAME_BRAND, FROST_BIND");
+            return;
+        }
+
+        if (!EgoWeaponTypeUtil.isAbilityAllowed(type, weapon)) {
+            msg(pc, "\\fR[에고무기] " + EgoWeaponTypeUtil.getAbilityDenyReason(type, weapon));
+            msg(pc, String.format("현재 무기 추천 능력: %s", EgoWeaponTypeUtil.getDefaultAbilityType(weapon)));
             return;
         }
 
