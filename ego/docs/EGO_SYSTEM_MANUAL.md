@@ -4,6 +4,8 @@
 
 기존에 나뉘어 있던 적용 가이드, 설계서, 특별능력, DB/명령어, 상대감지, 오류점검 내용을 이 문서 하나에서 확인할 수 있도록 재정리했습니다.
 
+다른 서버코어에 적용하려면 `docs/EGO_PORTING_GUIDE.md`와 `portable/` 폴더를 먼저 확인하세요. `ego/java/`는 myso 서버 기준 참고 구현입니다.
+
 ---
 
 ## 1. 기능 요약
@@ -22,6 +24,7 @@
 - 특별 능력 발동
 - 에고 이름/레벨/경험치/능력 DB 저장
 - .에고검사 진단 명령
+- 타 서버코어 포팅용 Adapter/Rules 제공
 ```
 
 ---
@@ -33,6 +36,7 @@ ego/
 ├─ README.md
 ├─ docs/
 │  ├─ EGO_SYSTEM_MANUAL.md              # 통합 매뉴얼
+│  ├─ EGO_PORTING_GUIDE.md              # 타 서버코어 포팅 가이드
 │  ├─ EGO_WEAPON_APPLY_CHECKLIST.md     # 실전 적용 체크리스트
 │  ├─ EGO_OPPONENT_SCAN_GUIDE.md        # 상대감지 상세 설명
 │  ├─ EGO_WEAPON_BUGCHECK_AND_WEAPON_TYPE.md
@@ -48,6 +52,9 @@ ego/
 │  ├─ EgoWeaponCommand.java
 │  ├─ EgoWeaponDiagnostics.java
 │  └─ EgoOpponentScanController.java
+├─ portable/
+│  ├─ EgoCoreAdapter.java
+│  └─ EgoPortableRules.java
 └─ sql/
    ├─ ego_weapon.sql
    └─ ego_weapon_ability.sql
@@ -55,7 +62,7 @@ ego/
 
 ---
 
-## 3. 적용 순서 한눈에 보기
+## 3. myso 적용 순서 한눈에 보기
 
 ```text
 1. DB 백업
@@ -73,7 +80,29 @@ ego/
 
 ---
 
-## 4. SQL 적용
+## 4. 다른 서버코어 적용 순서
+
+```text
+1. docs/EGO_PORTING_GUIDE.md 확인
+2. portable/EgoCoreAdapter.java를 대상 서버 클래스에 맞게 구현
+3. portable/EgoPortableRules.java의 무기 type2 규칙 확인/수정
+4. 대상 서버의 채팅 처리부에 에고 호출 연결
+5. 대상 서버의 명령어 처리부에 에고 명령 연결
+6. 대상 서버의 데미지 계산부에 특별 능력 연결
+7. DB 테이블명/컬럼명을 대상 서버에 맞게 조정
+8. 대화 → 상태 → 감지 → 능력 → DB 순서로 단계별 테스트
+```
+
+핵심 구분:
+
+```text
+ego/java/      myso 전용 참고 구현
+ego/portable/  타 서버코어 포팅 기반
+```
+
+---
+
+## 5. SQL 적용
 
 적용 순서:
 
@@ -97,7 +126,7 @@ ego_ability_proc_log
 
 ---
 
-## 5. 자바 파일 복사 위치
+## 6. myso 자바 파일 복사 위치
 
 ### world/controller 경로
 
@@ -130,9 +159,9 @@ ego/java/EgoWeaponDatabase.java
 
 ---
 
-## 6. 기존 자바 연결 코드
+## 7. 기존 자바 연결 코드
 
-### 6.1 ChattingController.java
+### 7.1 ChattingController.java
 
 파일:
 
@@ -165,7 +194,7 @@ import lineage.world.object.instance.RobotInstance;
 
 ---
 
-### 6.2 CommandController.java
+### 7.2 CommandController.java
 
 파일:
 
@@ -183,7 +212,7 @@ if (EgoWeaponCommand.toCommand(o, key, st)) {
 
 ---
 
-### 6.3 DamageController.java
+### 7.3 DamageController.java
 
 파일:
 
@@ -203,7 +232,7 @@ if (cha instanceof PcInstance && weapon != null) {
 
 ---
 
-### 6.4 서버 시작 시 DB 로드
+### 7.4 서버 시작 시 DB 로드
 
 서버 DB 초기화 구간에 추가 권장:
 
@@ -225,7 +254,7 @@ import lineage.database.EgoWeaponDatabase;
 
 ---
 
-## 7. 게임 명령어
+## 8. 게임 명령어
 
 ```text
 .에고도움        명령어 안내
@@ -241,7 +270,7 @@ import lineage.database.EgoWeaponDatabase;
 
 ---
 
-## 8. 일반 채팅 사용법
+## 9. 일반 채팅 사용법
 
 에고 이름이 `에고`일 때:
 
@@ -270,7 +299,7 @@ import lineage.database.EgoWeaponDatabase;
 
 ---
 
-## 9. 지원 무기 종류
+## 10. 지원 무기 종류
 
 ```text
 dagger       단검
@@ -281,6 +310,14 @@ spear        창
 bow          활
 staff        지팡이
 wand         완드
+```
+
+portable 규칙에는 아래 변형도 포함되어 있습니다.
+
+```text
+twohand_sword
+two_handed_sword
+crossbow
 ```
 
 제외:
@@ -300,9 +337,15 @@ fishing_rod  낚싯대
 EgoWeaponTypeUtil.isValidEgoBaseWeapon(weapon)
 ```
 
+portable 기준:
+
+```java
+EgoPortableRules.isSupportedWeaponType(type2)
+```
+
 ---
 
-## 10. 특별 능력
+## 11. 특별 능력
 
 ```text
 EGO_BALANCE      공명 타격
@@ -332,7 +375,7 @@ FROST_BIND       지팡이/완드/창/활
 
 ---
 
-## 11. 상대 캐릭터 감지
+## 12. 상대 캐릭터 감지
 
 명령:
 
@@ -373,18 +416,9 @@ IP
 운영자 내부 정보
 ```
 
-HP 구간:
-
-```text
-0~25%     위험
-26~50%    낮음
-51~75%    보통
-76~100%   높음
-```
-
 ---
 
-## 12. 진단 명령
+## 13. 진단 명령
 
 적용 후 가장 먼저 실행할 명령:
 
@@ -408,7 +442,7 @@ HP 구간:
 
 ---
 
-## 13. 첫 테스트 순서
+## 14. 첫 테스트 순서
 
 ```text
 .에고검사
@@ -427,7 +461,7 @@ HP 구간:
 
 ---
 
-## 14. 운영 전 필수 확인
+## 15. 운영 전 필수 확인
 
 파일:
 
@@ -455,7 +489,7 @@ return EgoWeaponDatabase.isEgoWeapon(weapon);
 
 ---
 
-## 15. 자주 나는 오류
+## 16. 자주 나는 오류
 
 ### EgoWeaponTypeUtil 찾을 수 없음
 
@@ -473,19 +507,13 @@ return EgoWeaponDatabase.isEgoWeapon(weapon);
 
 `Lineage.java`에서 실제 공격 타입 상수명을 확인하고 맞춰야 합니다.
 
-### 에고 이름 변경 후 일반 채팅 호출 안 됨
+### 타 서버코어에서 lineage 패키지 오류
 
-DB 캐시가 최신이 아닐 수 있습니다.
-
-```text
-.에고리로드
-```
-
-또는 서버 시작 시 `EgoWeaponDatabase.init(con)` 연결 여부를 확인하세요.
+`ego/java/`를 그대로 복사했기 때문입니다. `docs/EGO_PORTING_GUIDE.md`와 `ego/portable/` 구조로 포팅하세요.
 
 ---
 
-## 16. 원복 방법
+## 17. 원복 방법
 
 1. `ChattingController.java`에 추가한 에고 채팅 연결 코드 삭제
 2. `CommandController.java`에 추가한 에고 명령 연결 코드 삭제
@@ -506,12 +534,18 @@ DROP TABLE IF EXISTS character_item_ego;
 
 ---
 
-## 17. 권장 문서 사용법
+## 18. 권장 문서 사용법
 
-처음 적용:
+myso 적용:
 
 ```text
 README.md → EGO_SYSTEM_MANUAL.md → EGO_WEAPON_APPLY_CHECKLIST.md
+```
+
+타 서버코어 적용:
+
+```text
+README.md → EGO_PORTING_GUIDE.md → portable/EgoCoreAdapter.java → portable/EgoPortableRules.java
 ```
 
 문제 해결:
