@@ -1,5 +1,5 @@
 -- ============================================================
--- 에고무기 미사용 DB 정리 + 레벨 0~10 경험치 보정 SQL
+-- 에고무기 미사용 DB 정리 + 레벨 0~10 경험치/말투 보정 SQL
 -- 목적: type2 변형/이미지 커스터마이징 제거 후 남은 미사용 컬럼/테이블 삭제
 -- 대상: 기존에 구버전 에고 SQL을 이미 적용한 서버
 -- 주의: 실행 전 DB 백업 필수
@@ -26,10 +26,14 @@ ALTER TABLE ego DROP COLUMN form;
 ALTER TABLE ego DROP COLUMN prev_shield;
 
 -- ------------------------------------------------------------
--- 3. 에고 레벨 0~10 및 레벨별 경험치 보정
+-- 3. 말투/레벨/경험치 보정
 -- ------------------------------------------------------------
+ALTER TABLE ego MODIFY ego_type VARCHAR(30) NOT NULL DEFAULT '예의' COMMENT '실시간 대화 말투: 예의/예의반대';
 ALTER TABLE ego MODIFY ego_lv INT NOT NULL DEFAULT 0 COMMENT '에고 레벨 0~10, 0은 전투능력 없음';
 ALTER TABLE ego MODIFY need_exp BIGINT NOT NULL DEFAULT 100 COMMENT '현재 레벨에서 다음 레벨 필요 경험치';
+
+-- 기존 수호/광전/냉정/현자/공백 값은 새 정책상 예의로 통합한다.
+UPDATE ego SET ego_type = '예의' WHERE ego_type IS NULL OR ego_type = '' OR ego_type NOT IN ('예의', '예의반대');
 
 UPDATE ego SET ego_lv = 0 WHERE ego_lv < 0;
 UPDATE ego SET ego_lv = 10 WHERE ego_lv > 10;
@@ -56,9 +60,6 @@ UPDATE ego SET need_exp = 5200 WHERE ego_lv = 7;
 UPDATE ego SET need_exp = 7500 WHERE ego_lv = 8;
 UPDATE ego SET need_exp = 10000 WHERE ego_lv = 9;
 UPDATE ego SET need_exp = 0, ego_exp = 0 WHERE ego_lv = 10;
-
--- 현재 경험치가 새 필요 경험치를 초과하는 경우는 다음 사냥/공격 경험치 획득 시 Java 로직이 자동 레벨업 처리합니다.
--- 단, 만렙은 경험치 0으로 고정합니다.
 
 -- ------------------------------------------------------------
 -- 4. 레벨별 해금 능력 기본값 추가/보정
@@ -97,6 +98,10 @@ SHOW TABLES LIKE 'ego_talk';
 SHOW TABLES LIKE 'ego_view';
 SHOW TABLES LIKE '에고모양';
 
+SELECT ego_type, COUNT(*) AS count
+FROM ego
+GROUP BY ego_type;
+
 SELECT ego_lv, need_exp, COUNT(*) AS count
 FROM ego
 GROUP BY ego_lv, need_exp
@@ -106,4 +111,4 @@ SELECT *
 FROM ego_skill_base
 WHERE skill IN ('EGO_COUNTER', 'EGO_REVENGE', 'CRITICAL_BURST');
 
-SELECT 'EGO_CLEANUP_EXP_CURVE_0_10_OK' AS result;
+SELECT 'EGO_CLEANUP_TONE_EXP_CURVE_0_10_OK' AS result;
