@@ -6,6 +6,7 @@ import java.util.List;
 import lineage.database.EgoWeaponDatabase.EgoAbilityInfo;
 import lineage.database.EgoWeaponDatabase.EgoWeaponInfo;
 import lineage.world.controller.EgoView;
+import lineage.world.controller.EgoWeaponAbilityController;
 import lineage.world.object.instance.ItemInstance;
 import lineage.world.object.instance.PcInstance;
 
@@ -22,11 +23,13 @@ public final class EgoDB {
     public static void init(Connection con) {
         EgoWeaponDatabase.init(con);
         EgoView.reload(con);
+        EgoWeaponAbilityController.reloadConfig();
     }
 
     public static void reload(Connection con) {
         EgoWeaponDatabase.reload(con);
         EgoView.reload(con);
+        EgoWeaponAbilityController.reloadConfig();
     }
 
     public static EgoWeaponInfo find(long itemObjId) {
@@ -45,12 +48,14 @@ public final class EgoDB {
         return EgoWeaponDatabase.getEgoName(item, defaultName);
     }
 
+    /** 무기변형 기능 제거: 항상 빈 문자열. */
     public static String form(ItemInstance item) {
-        return EgoWeaponDatabase.getFormType(item);
+        return "";
     }
 
+    /** 무기변형 기능 제거: 이전 방패 없음. */
     public static long prevShield(ItemInstance item) {
-        return EgoWeaponDatabase.getPrevShieldObjId(item);
+        return 0;
     }
 
     public static int level(ItemInstance item, int defaultLevel) {
@@ -73,8 +78,9 @@ public final class EgoDB {
         return EgoWeaponDatabase.setEgoName(item, name);
     }
 
+    /** 무기변형 기능 제거: 항상 false. */
     public static boolean setForm(ItemInstance item, String form, long prevShieldObjId) {
-        return EgoWeaponDatabase.setForm(item, form, prevShieldObjId);
+        return false;
     }
 
     public static boolean setSkill(ItemInstance item, String skill) {
