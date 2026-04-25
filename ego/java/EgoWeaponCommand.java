@@ -73,6 +73,7 @@ public final class EgoWeaponCommand {
         msg(pc, Lineage.command + "에고능력 [능력코드] : 에고 특별 능력 설정");
         msg(pc, Lineage.command + "에고상대 : 타겟 또는 가장 가까운 상대 캐릭터 분석");
         msg(pc, Lineage.command + "에고주변 : 주변 캐릭터 목록/위험도 감지");
+        msg(pc, Lineage.command + "에고리로드 : DB/이미지 캐시 리로드 및 온라인 인벤토리 즉시반영");
         msg(pc, "일반 채팅: 에고 상태 / 에고 조언 / 에고 선공 / 에고 상대 / 에고 주변캐릭 / 에고 활 / 에고 양검 / 에고 한검 / 에고 공격 / 에고 멈춰");
         msg(pc, "형태변환: 활, 양검, 양손검, 한검, 한손검, 단검, 창, 도끼, 지팡이, 완드");
         msg(pc, "능력코드: EGO_BALANCE, BLOOD_DRAIN, MANA_DRAIN, CRITICAL_BURST, GUARDIAN_SHIELD, AREA_SLASH, EXECUTION, FLAME_BRAND, FROST_BIND");
@@ -105,6 +106,7 @@ public final class EgoWeaponCommand {
         if (ok) {
             String defaultAbility = EgoWeaponTypeUtil.getDefaultAbilityType(weapon);
             EgoWeaponDatabase.setAbility(weapon, defaultAbility);
+            EgoView.refreshInventory(pc, weapon);
             msg(pc, String.format("+%d %s [%s] 에고가 깨어났습니다. 호출명: %s", weapon.getEnLevel(), weapon.getName(), EgoWeaponTypeUtil.getDisplayTypeName(weapon), egoName));
             msg(pc, String.format("기본 능력: %s", defaultAbility));
             msg(pc, String.format("일반 채팅 예: '%s 상태', '%s 활', '%s 양검', '%s 한검'", egoName, egoName, egoName, egoName));
@@ -130,6 +132,7 @@ public final class EgoWeaponCommand {
 
         info(pc, "========== 에고무기 정보 ==========");
         msg(pc, String.format("무기: +%d %s", weapon.getEnLevel(), weapon.getName()));
+        msg(pc, String.format("표시: %s", EgoView.info(weapon)));
         msg(pc, String.format("이름: %s / 성격: %s", safe(egoInfo.egoName), safe(egoInfo.personality)));
         msg(pc, String.format("원본 type2: %s / 현재 에고형태: %s", EgoWeaponTypeUtil.getOriginalType2(weapon), EgoWeaponTypeUtil.getDisplayTypeName(weapon)));
         msg(pc, String.format("레벨: %d / 경험치: %,d / 다음: %,d", egoInfo.level, egoInfo.exp, egoInfo.maxExp));
@@ -163,10 +166,12 @@ public final class EgoWeaponCommand {
             danger(pc, "이름은 1~20자만 가능합니다.");
             return;
         }
-        if (EgoWeaponDatabase.setEgoName(weapon, name))
+        if (EgoWeaponDatabase.setEgoName(weapon, name)) {
+            EgoView.refreshInventory(pc, weapon);
             msg(pc, String.format("에고 이름이 '%s' 로 변경되었습니다.", name));
-        else
+        } else {
             danger(pc, "이름 변경에 실패했습니다.");
+        }
     }
 
     private static void ability(PcInstance pc, StringTokenizer st) {
@@ -200,10 +205,12 @@ public final class EgoWeaponCommand {
             info(pc, String.format("현재 형태 추천 능력: %s", EgoWeaponTypeUtil.getDefaultAbilityType(weapon)));
             return;
         }
-        if (EgoWeaponDatabase.setAbility(weapon, type))
+        if (EgoWeaponDatabase.setAbility(weapon, type)) {
+            EgoView.refreshInventory(pc, weapon);
             msg(pc, String.format("특별 능력이 %s 로 설정되었습니다.", type));
-        else
+        } else {
             danger(pc, "능력 설정에 실패했습니다.");
+        }
     }
 
     private static void reload(PcInstance pc) {
@@ -212,7 +219,8 @@ public final class EgoWeaponCommand {
             return;
         }
         EgoWeaponDatabase.reload(null);
-        msg(pc, "DB 캐시를 리로드했습니다.");
+        int refreshed = EgoView.refreshOnlineInventories(pc);
+        msg(pc, String.format("에고 DB/이미지 캐시를 리로드하고 온라인 에고 아이템 %,d개를 즉시 갱신했습니다.", refreshed));
     }
 
     private static ItemInstance getWeapon(PcInstance pc) {
