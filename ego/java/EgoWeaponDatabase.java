@@ -17,21 +17,17 @@ import lineage.world.object.instance.PcInstance;
 /**
  * 에고무기 DB 헬퍼.
  *
- * DB 명칭 단순화:
- * - 테이블: 에고, 에고능력
- * - 컬럼: 아이템번호, 캐릭터번호, 사용, 이름, 성격, 레벨, 경험치, 필요경험치, 형태, 이전방패 등 한글명 사용
- *
- * 주의:
- * - Java 소스는 UTF-8로 저장/컴파일해야 한다.
- * - MySQL/MariaDB에서 한글 테이블/컬럼명을 사용하므로 SQL에는 백틱(`)을 사용한다.
+ * EUC-KR 안전 정책:
+ * - 우선 영문 단순 테이블 ego / ego_skill 사용.
+ * - 기존 한글 테이블 `에고` / `에고능력`이 있는 서버는 자동 fallback.
+ * - SQL 오류 방지를 위해 신규 설치는 ego_install_euckr.sql 권장.
  */
 public final class EgoWeaponDatabase {
 
-    private static final String T_EGO = "`에고`";
-    private static final String T_ABILITY = "`에고능력`";
-
     private static final Map<Long, EgoWeaponInfo> egoMap = new ConcurrentHashMap<Long, EgoWeaponInfo>();
     private static final Map<Long, List<EgoAbilityInfo>> abilityMap = new ConcurrentHashMap<Long, List<EgoAbilityInfo>>();
+
+    private static volatile boolean useEnglishSchema = true;
 
     private EgoWeaponDatabase() {
     }
@@ -48,6 +44,18 @@ public final class EgoWeaponDatabase {
         EgoView.reload(con);
     }
 
+    private static void detectSchema(Connection con) {
+        if (tableExists(con, "ego")) {
+            useEnglishSchema = true;
+            return;
+        }
+        if (tableExists(con, "에고")) {
+            useEnglishSchema = false;
+            return;
+        }
+        useEnglishSchema = true;
+    }
+
     private static void loadEgoInfo(Connection con) {
         PreparedStatement st = null;
         ResultSet rs = null;
@@ -59,25 +67,46 @@ public final class EgoWeaponDatabase {
                 closeCon = true;
             }
 
-            st = con.prepareStatement("SELECT * FROM " + T_EGO + " WHERE `사용`=1");
+            detectSchema(con);
+            if (useEnglishSchema)
+                st = con.prepareStatement("SELECT * FROM ego WHERE use_yn=1");
+            else
+                st = con.prepareStatement("SELECT * FROM `에고` WHERE `사용`=1");
             rs = st.executeQuery();
 
             while (rs.next()) {
                 EgoWeaponInfo info = new EgoWeaponInfo();
-                info.itemObjId = rs.getLong("아이템번호");
-                info.chaObjId = rs.getLong("캐릭터번호");
-                info.enabled = rs.getBoolean("사용");
-                info.egoName = rs.getString("이름");
-                info.personality = rs.getString("성격");
-                info.level = Math.max(1, rs.getInt("레벨"));
-                info.exp = Math.max(0, rs.getLong("경험치"));
-                info.maxExp = Math.max(100, rs.getLong("필요경험치"));
-                info.talkLevel = Math.max(1, rs.getInt("대화단계"));
-                info.controlLevel = Math.max(1, rs.getInt("제어단계"));
-                info.lastTalkTime = rs.getLong("마지막대화");
-                info.lastWarningTime = rs.getLong("마지막경고");
-                info.formType = safe(rs.getString("형태"));
-                info.prevShieldObjId = Math.max(0, rs.getLong("이전방패"));
+                if (useEnglishSchema) {
+                    info.itemObjId = rs.getLong("item_id");
+                    info.chaObjId = rs.getLong("char_id");
+                    info.enabled = rs.getBoolean("use_yn");
+                    info.egoName = rs.getString("ego_name");
+                    info.personality = rs.getString("ego_type");
+                    info.level = Math.max(1, rs.getInt("ego_lv"));
+                    info.exp = Math.max(0, rs.getLong("ego_exp"));
+                    info.maxExp = Math.max(100, rs.getLong("need_exp"));
+                    info.talkLevel = Math.max(1, rs.getInt("talk_lv"));
+                    info.controlLevel = Math.max(1, rs.getInt("ctrl_lv"));
+                    info.lastTalkTime = rs.getLong("last_talk");
+                    info.lastWarningTime = rs.getLong("last_warn");
+                    info.formType = safe(rs.getString("form"));
+                    info.prevShieldObjId = Math.max(0, rs.getLong("prev_shield"));
+                } else {
+                    info.itemObjId = rs.getLong("아이템번호");
+                    info.chaObjId = rs.getLong("캐릭터번호");
+                    info.enabled = rs.getBoolean("사용");
+                    info.egoName = rs.getString("이름");
+                    info.personality = rs.getString("성격");
+                    info.level = Math.max(1, rs.getInt("레벨"));
+                    info.exp = Math.max(0, rs.getLong("경험치"));
+                    info.maxExp = Math.max(100, rs.getLong("필요경험치"));
+                    info.talkLevel = Math.max(1, rs.getInt("대화단계"));
+                    info.controlLevel = Math.max(1, rs.getInt("제어단계"));
+                    info.lastTalkTime = rs.getLong("마지막대화");
+                    info.lastWarningTime = rs.getLong("마지막경고");
+                    info.formType = safe(rs.getString("형태"));
+                    info.prevShieldObjId = Math.max(0, rs.getLong("이전방패"));
+                }
                 egoMap.put(info.itemObjId, info);
             }
         } catch (Exception e) {
@@ -102,19 +131,34 @@ public final class EgoWeaponDatabase {
                 closeCon = true;
             }
 
-            st = con.prepareStatement("SELECT * FROM " + T_ABILITY + " WHERE `사용`=1");
+            detectSchema(con);
+            if (useEnglishSchema)
+                st = con.prepareStatement("SELECT * FROM ego_skill WHERE use_yn=1");
+            else
+                st = con.prepareStatement("SELECT * FROM `에고능력` WHERE `사용`=1");
             rs = st.executeQuery();
 
             while (rs.next()) {
                 EgoAbilityInfo info = new EgoAbilityInfo();
-                info.uid = rs.getLong("번호");
-                info.itemObjId = rs.getLong("아이템번호");
-                info.abilityType = rs.getString("능력");
-                info.abilityLevel = Math.max(1, rs.getInt("레벨"));
-                info.procChanceBonus = rs.getInt("확률보너스");
-                info.damageBonus = rs.getInt("피해보너스");
-                info.lastProcTime = rs.getLong("마지막발동");
-                info.enabled = rs.getBoolean("사용");
+                if (useEnglishSchema) {
+                    info.uid = rs.getLong("id");
+                    info.itemObjId = rs.getLong("item_id");
+                    info.abilityType = rs.getString("skill");
+                    info.abilityLevel = Math.max(1, rs.getInt("skill_lv"));
+                    info.procChanceBonus = rs.getInt("rate_bonus");
+                    info.damageBonus = rs.getInt("dmg_bonus");
+                    info.lastProcTime = rs.getLong("last_proc");
+                    info.enabled = rs.getBoolean("use_yn");
+                } else {
+                    info.uid = rs.getLong("번호");
+                    info.itemObjId = rs.getLong("아이템번호");
+                    info.abilityType = rs.getString("능력");
+                    info.abilityLevel = Math.max(1, rs.getInt("레벨"));
+                    info.procChanceBonus = rs.getInt("확률보너스");
+                    info.damageBonus = rs.getInt("피해보너스");
+                    info.lastProcTime = rs.getLong("마지막발동");
+                    info.enabled = rs.getBoolean("사용");
+                }
 
                 List<EgoAbilityInfo> list = abilityMap.get(info.itemObjId);
                 if (list == null) {
@@ -210,12 +254,22 @@ public final class EgoWeaponDatabase {
 
         try {
             con = DatabaseConnection.getLineage();
-            st = con.prepareStatement(
-                "INSERT INTO " + T_EGO + " " +
-                "(`아이템번호`, `캐릭터번호`, `사용`, `이름`, `성격`, `레벨`, `경험치`, `필요경험치`, `대화단계`, `제어단계`, `마지막대화`, `마지막경고`, `형태`, `이전방패`) " +
-                "VALUES (?, ?, 1, ?, ?, 1, 0, 100, 1, 1, 0, 0, '', 0) " +
-                "ON DUPLICATE KEY UPDATE `캐릭터번호`=?, `사용`=1, `이름`=?, `성격`=?"
-            );
+            detectSchema(con);
+            if (useEnglishSchema) {
+                st = con.prepareStatement(
+                    "INSERT INTO ego " +
+                    "(item_id, char_id, use_yn, ego_name, ego_type, ego_lv, ego_exp, need_exp, talk_lv, ctrl_lv, last_talk, last_warn, form, prev_shield) " +
+                    "VALUES (?, ?, 1, ?, ?, 1, 0, 100, 1, 1, 0, 0, '', 0) " +
+                    "ON DUPLICATE KEY UPDATE char_id=?, use_yn=1, ego_name=?, ego_type=?"
+                );
+            } else {
+                st = con.prepareStatement(
+                    "INSERT INTO `에고` " +
+                    "(`아이템번호`, `캐릭터번호`, `사용`, `이름`, `성격`, `레벨`, `경험치`, `필요경험치`, `대화단계`, `제어단계`, `마지막대화`, `마지막경고`, `형태`, `이전방패`) " +
+                    "VALUES (?, ?, 1, ?, ?, 1, 0, 100, 1, 1, 0, 0, '', 0) " +
+                    "ON DUPLICATE KEY UPDATE `캐릭터번호`=?, `사용`=1, `이름`=?, `성격`=?"
+                );
+            }
             st.setLong(1, item.getObjectId());
             st.setLong(2, pc.getObjectId());
             st.setString(3, egoName);
@@ -264,7 +318,11 @@ public final class EgoWeaponDatabase {
 
         try {
             con = DatabaseConnection.getLineage();
-            st = con.prepareStatement("UPDATE " + T_EGO + " SET `이름`=? WHERE `아이템번호`=? AND `사용`=1");
+            detectSchema(con);
+            if (useEnglishSchema)
+                st = con.prepareStatement("UPDATE ego SET ego_name=? WHERE item_id=? AND use_yn=1");
+            else
+                st = con.prepareStatement("UPDATE `에고` SET `이름`=? WHERE `아이템번호`=? AND `사용`=1");
             st.setString(1, egoName);
             st.setLong(2, item.getObjectId());
             int count = st.executeUpdate();
@@ -294,7 +352,11 @@ public final class EgoWeaponDatabase {
 
         try {
             con = DatabaseConnection.getLineage();
-            st = con.prepareStatement("UPDATE " + T_EGO + " SET `형태`=?, `이전방패`=? WHERE `아이템번호`=? AND `사용`=1");
+            detectSchema(con);
+            if (useEnglishSchema)
+                st = con.prepareStatement("UPDATE ego SET form=?, prev_shield=? WHERE item_id=? AND use_yn=1");
+            else
+                st = con.prepareStatement("UPDATE `에고` SET `형태`=?, `이전방패`=? WHERE `아이템번호`=? AND `사용`=1");
             st.setString(1, formType);
             st.setLong(2, Math.max(0, prevShieldObjId));
             st.setLong(3, item.getObjectId());
@@ -329,17 +391,29 @@ public final class EgoWeaponDatabase {
 
         try {
             con = DatabaseConnection.getLineage();
+            detectSchema(con);
             con.setAutoCommit(false);
 
-            off = con.prepareStatement("UPDATE " + T_ABILITY + " SET `사용`=0 WHERE `아이템번호`=?");
+            if (useEnglishSchema)
+                off = con.prepareStatement("UPDATE ego_skill SET use_yn=0 WHERE item_id=?");
+            else
+                off = con.prepareStatement("UPDATE `에고능력` SET `사용`=0 WHERE `아이템번호`=?");
             off.setLong(1, item.getObjectId());
             off.executeUpdate();
 
-            upsert = con.prepareStatement(
-                "INSERT INTO " + T_ABILITY + " (`아이템번호`, `능력`, `레벨`, `사용`) " +
-                "VALUES (?, ?, 1, 1) " +
-                "ON DUPLICATE KEY UPDATE `레벨`=GREATEST(`레벨`, 1), `사용`=1"
-            );
+            if (useEnglishSchema) {
+                upsert = con.prepareStatement(
+                    "INSERT INTO ego_skill (item_id, skill, skill_lv, use_yn) " +
+                    "VALUES (?, ?, 1, 1) " +
+                    "ON DUPLICATE KEY UPDATE skill_lv=GREATEST(skill_lv, 1), use_yn=1"
+                );
+            } else {
+                upsert = con.prepareStatement(
+                    "INSERT INTO `에고능력` (`아이템번호`, `능력`, `레벨`, `사용`) " +
+                    "VALUES (?, ?, 1, 1) " +
+                    "ON DUPLICATE KEY UPDATE `레벨`=GREATEST(`레벨`, 1), `사용`=1"
+                );
+            }
             upsert.setLong(1, item.getObjectId());
             upsert.setString(2, abilityType);
             upsert.executeUpdate();
@@ -390,7 +464,11 @@ public final class EgoWeaponDatabase {
 
         try {
             con = DatabaseConnection.getLineage();
-            st = con.prepareStatement("UPDATE " + T_EGO + " SET `레벨`=?, `경험치`=?, `필요경험치`=? WHERE `아이템번호`=? AND `사용`=1");
+            detectSchema(con);
+            if (useEnglishSchema)
+                st = con.prepareStatement("UPDATE ego SET ego_lv=?, ego_exp=?, need_exp=? WHERE item_id=? AND use_yn=1");
+            else
+                st = con.prepareStatement("UPDATE `에고` SET `레벨`=?, `경험치`=?, `필요경험치`=? WHERE `아이템번호`=? AND `사용`=1");
             st.setInt(1, info.level);
             st.setLong(2, info.exp);
             st.setLong(3, info.maxExp);
@@ -406,11 +484,10 @@ public final class EgoWeaponDatabase {
         return false;
     }
 
-    @SuppressWarnings("unused")
-    private static boolean hasColumn(Connection con, String table, String column) {
+    private static boolean tableExists(Connection con, String table) {
         ResultSet rs = null;
         try {
-            rs = con.getMetaData().getColumns(null, null, table, column);
+            rs = con.getMetaData().getTables(null, null, table, null);
             if (rs != null && rs.next())
                 return true;
         } catch (SQLException e) {
