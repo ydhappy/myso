@@ -1,5 +1,6 @@
 package lineage.world.controller;
 
+import java.lang.reflect.Field;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -26,6 +27,7 @@ import lineage.world.object.instance.PcInstance;
  * - 바닥 이미지: 에고모양.바닥이미지
  * - 인벤토리 이름/아이템정보: [에고:형태 Lv.n 능력] suffix
  * - 형태변신 직후 인벤토리 아이콘 재전송
+ * - 형태변신 직후 바닥 표시 gfx 동기화
  *
  * 안전 원칙:
  * - 원본 Item 템플릿의 InvGfx/GroundGfx/NameId/type2는 변경하지 않는다.
@@ -37,28 +39,14 @@ public final class EgoView {
     private static final Map<String, ViewInfo> viewMap = new ConcurrentHashMap<String, ViewInfo>();
 
     static {
-        putDefault("dagger", "단검");
-        putDefault("sword", "한손검");
-        putDefault("tohandsword", "양손검");
-        putDefault("axe", "도끼");
-        putDefault("spear", "창");
-        putDefault("bow", "활");
-        putDefault("staff", "지팡이");
-        putDefault("wand", "완드");
+        resetDefaults();
     }
 
     private EgoView() {
     }
 
     public static void reload(Connection con) {
-        putDefault("dagger", "단검");
-        putDefault("sword", "한손검");
-        putDefault("tohandsword", "양손검");
-        putDefault("axe", "도끼");
-        putDefault("spear", "창");
-        putDefault("bow", "활");
-        putDefault("staff", "지팡이");
-        putDefault("wand", "완드");
+        resetDefaults();
 
         PreparedStatement st = null;
         ResultSet rs = null;
@@ -136,6 +124,22 @@ public final class EgoView {
         return item.getItem().getGroundGfx();
     }
 
+    /**
+     * 아이템 객체의 바닥 표시 gfx를 현재 에고 형태에 맞춰 동기화한다.
+     * object.gfx 필드가 protected라 reflection으로 안전하게 접근한다.
+     */
+    public static void applyGroundGfx(ItemInstance item) {
+        if (item == null)
+            return;
+        try {
+            Field field = lineage.world.object.object.class.getDeclaredField("gfx");
+            field.setAccessible(true);
+            field.setInt(item, groundGfx(item));
+        } catch (Throwable e) {
+            // 바닥 이미지 동기화 실패가 게임 진행을 막으면 안 된다.
+        }
+    }
+
     public static String name(ItemInstance item, String baseName) {
         if (item == null || baseName == null)
             return baseName;
@@ -177,12 +181,13 @@ public final class EgoView {
     }
 
     /**
-     * 형태변신 후 인벤토리 아이콘/이름/상태를 즉시 갱신한다.
+     * 형태변신 후 인벤토리 아이콘/이름/상태와 바닥 gfx를 즉시 갱신한다.
      */
     public static void refreshInventory(PcInstance pc, ItemInstance item) {
         if (pc == null || item == null)
             return;
         try {
+            applyGroundGfx(item);
             pc.toSender(S_InventoryDelete.clone(BasePacketPooling.getPool(S_InventoryDelete.class), item));
             pc.toSender(S_InventoryAdd.clone(BasePacketPooling.getPool(S_InventoryAdd.class), item));
             pc.toSender(S_InventoryStatus.clone(BasePacketPooling.getPool(S_InventoryStatus.class), item));
@@ -233,14 +238,23 @@ public final class EgoView {
         return viewMap.get(normalize(form));
     }
 
+    private static void resetDefaults() {
+        viewMap.clear();
+        putDefault("dagger", "단검");
+        putDefault("sword", "한손검");
+        putDefault("tohandsword", "양손검");
+        putDefault("axe", "도끼");
+        putDefault("spear", "창");
+        putDefault("bow", "활");
+        putDefault("staff", "지팡이");
+        putDefault("wand", "완드");
+    }
+
     private static void putDefault(String form, String label) {
-        ViewInfo info = viewMap.get(form);
-        if (info == null)
-            info = new ViewInfo();
+        ViewInfo info = new ViewInfo();
         info.form = form;
         info.label = label;
-        if (info.info == null)
-            info.info = "";
+        info.info = "";
         viewMap.put(form, info);
     }
 
