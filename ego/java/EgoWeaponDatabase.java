@@ -19,10 +19,14 @@ import lineage.world.object.instance.PcInstance;
  *
  * 최종 정책:
  * - 영문 단순 테이블 ego / ego_skill 사용.
- * - 무기변형 제거로 form, prev_shield 컬럼/필드/메서드 제거.
- * - 한글 구버전 테이블 fallback 제거.
+ * - 에고 레벨은 0~10 고정.
+ * - Lv.0은 스킬/치명/반격/스턴 없음.
+ * - 에고삭제는 ego/ego_skill/ego_log 완전삭제.
  */
 public final class EgoWeaponDatabase {
+
+    public static final int MIN_EGO_LEVEL = 0;
+    public static final int MAX_EGO_LEVEL = 10;
 
     private static final Map<Long, EgoWeaponInfo> egoMap = new ConcurrentHashMap<Long, EgoWeaponInfo>();
     private static final Map<Long, List<EgoAbilityInfo>> abilityMap = new ConcurrentHashMap<Long, List<EgoAbilityInfo>>();
@@ -66,7 +70,7 @@ public final class EgoWeaponDatabase {
                 info.enabled = rs.getBoolean("use_yn");
                 info.egoName = rs.getString("ego_name");
                 info.personality = rs.getString("ego_type");
-                info.level = Math.max(1, rs.getInt("ego_lv"));
+                info.level = clampLevel(rs.getInt("ego_lv"));
                 info.exp = Math.max(0, rs.getLong("ego_exp"));
                 info.maxExp = Math.max(100, rs.getLong("need_exp"));
                 info.talkLevel = Math.max(1, rs.getInt("talk_lv"));
@@ -156,9 +160,9 @@ public final class EgoWeaponDatabase {
 
     public static int getEgoLevel(ItemInstance item, int defaultLevel) {
         EgoWeaponInfo info = find(item);
-        if (info != null && info.level > 0)
-            return info.level;
-        return Math.max(1, defaultLevel);
+        if (info != null)
+            return clampLevel(info.level);
+        return clampLevel(defaultLevel);
     }
 
     public static List<EgoAbilityInfo> getAbilities(ItemInstance item) {
@@ -197,8 +201,8 @@ public final class EgoWeaponDatabase {
             st = con.prepareStatement(
                 "INSERT INTO ego " +
                 "(item_id, char_id, use_yn, ego_name, ego_type, ego_lv, ego_exp, need_exp, talk_lv, ctrl_lv, last_talk, last_warn) " +
-                "VALUES (?, ?, 1, ?, ?, 1, 0, 100, 1, 1, 0, 0) " +
-                "ON DUPLICATE KEY UPDATE char_id=?, use_yn=1, ego_name=?, ego_type=?"
+                "VALUES (?, ?, 1, ?, ?, 0, 0, 100, 1, 1, 0, 0) " +
+                "ON DUPLICATE KEY UPDATE char_id=?, use_yn=1, ego_name=?, ego_type=?, ego_lv=0, ego_exp=0, need_exp=100"
             );
             st.setLong(1, item.getObjectId());
             st.setLong(2, pc.getObjectId());
@@ -209,22 +213,17 @@ public final class EgoWeaponDatabase {
             st.setString(7, personality);
             st.executeUpdate();
 
-            EgoWeaponInfo info = find(item.getObjectId());
-            if (info == null)
-                info = new EgoWeaponInfo();
+            EgoWeaponInfo info = new EgoWeaponInfo();
             info.itemObjId = item.getObjectId();
             info.chaObjId = pc.getObjectId();
             info.enabled = true;
             info.egoName = egoName;
             info.personality = personality;
-            if (info.level <= 0)
-                info.level = 1;
-            if (info.maxExp <= 0)
-                info.maxExp = 100;
-            if (info.talkLevel <= 0)
-                info.talkLevel = 1;
-            if (info.controlLevel <= 0)
-                info.controlLevel = 1;
+            info.level = 0;
+            info.exp = 0;
+            info.maxExp = 100;
+            info.talkLevel = 1;
+            info.controlLevel = 1;
             egoMap.put(info.itemObjId, info);
             return true;
         } catch (Exception e) {
@@ -236,29 +235,31 @@ public final class EgoWeaponDatabase {
         return false;
     }
 
-    /**
-     * 에고 삭제는 데이터 완전삭제가 아니라 use_yn=0 비활성화로 처리한다.
-     * 로그와 과거 성장 기록은 운영 추적을 위해 보존한다.
-     */
+    /** 에고삭제: ego / ego_skill / ego_log 완전삭제. */
     public static boolean disableEgo(ItemInstance item) {
         if (item == null)
             return false;
 
         Connection con = null;
-        PreparedStatement ego = null;
+        PreparedStatement log = null;
         PreparedStatement skill = null;
+        PreparedStatement ego = null;
 
         try {
             con = DatabaseConnection.getLineage();
             con.setAutoCommit(false);
 
-            ego = con.prepareStatement("UPDATE ego SET use_yn=0, mod_date=NOW() WHERE item_id=? AND use_yn=1");
-            ego.setLong(1, item.getObjectId());
-            int count = ego.executeUpdate();
+            log = con.prepareStatement("DELETE FROM ego_log WHERE item_id=?");
+            log.setLong(1, item.getObjectId());
+            log.executeUpdate();
 
-            skill = con.prepareStatement("UPDATE ego_skill SET use_yn=0, mod_date=NOW() WHERE item_id=?");
+            skill = con.prepareStatement("DELETE FROM ego_skill WHERE item_id=?");
             skill.setLong(1, item.getObjectId());
             skill.executeUpdate();
+
+            ego = con.prepareStatement("DELETE FROM ego WHERE item_id=?");
+            ego.setLong(1, item.getObjectId());
+            int count = ego.executeUpdate();
 
             con.commit();
 
@@ -271,8 +272,9 @@ public final class EgoWeaponDatabase {
             lineage.share.System.println(e);
         } finally {
             try { if (con != null) con.setAutoCommit(true); } catch (Exception ignore) {}
-            DatabaseConnection.close(ego);
-            DatabaseConnection.close(con, skill);
+            DatabaseConnection.close(log);
+            DatabaseConnection.close(skill);
+            DatabaseConnection.close(con, ego);
         }
         return false;
     }
@@ -363,14 +365,22 @@ public final class EgoWeaponDatabase {
         if (info == null || !info.enabled)
             return false;
 
+        if (info.level >= MAX_EGO_LEVEL)
+            return false;
+
         info.exp += addExp;
         boolean levelUp = false;
 
-        while (info.level < 30 && info.exp >= info.maxExp) {
+        while (info.level < MAX_EGO_LEVEL && info.exp >= info.maxExp) {
             info.exp -= info.maxExp;
             info.level++;
-            info.maxExp = Math.max(100, info.maxExp + (info.level * 100));
+            info.maxExp = Math.max(100, 100 + (info.level * 100));
             levelUp = true;
+        }
+
+        if (info.level >= MAX_EGO_LEVEL) {
+            info.level = MAX_EGO_LEVEL;
+            info.exp = 0;
         }
 
         Connection con = null;
@@ -392,6 +402,14 @@ public final class EgoWeaponDatabase {
             DatabaseConnection.close(con, st);
         }
         return false;
+    }
+
+    private static int clampLevel(int level) {
+        if (level < MIN_EGO_LEVEL)
+            return MIN_EGO_LEVEL;
+        if (level > MAX_EGO_LEVEL)
+            return MAX_EGO_LEVEL;
+        return level;
     }
 
     private static boolean tableExists(Connection con, String table) {
