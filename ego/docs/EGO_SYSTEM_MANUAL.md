@@ -1,10 +1,18 @@
 # 에고무기 통합 매뉴얼
 
-이 문서 하나로 에고무기 설치, 적용, 운영, 포팅, Java 8 주의사항을 모두 확인할 수 있습니다.
+이 문서 하나로 에고무기 설치, 적용, 운영, 다른 서버코어 포팅, Java 8 주의사항을 모두 확인할 수 있습니다.
+
+핵심 원칙:
+
+```text
+Java 파일은 전부 ego/java/ 한 곳에 둡니다.
+설치는 ego/install/ 원클릭 스크립트로 진행합니다.
+문서는 README.md와 이 문서만 봅니다.
+```
 
 ---
 
-## 1. 최종 축소 구조
+## 1. 최종 구조
 
 ```text
 ego/
@@ -15,23 +23,19 @@ ego/
 │  ├─ install_ego_windows.bat
 │  └─ install_ego_linux.sh
 ├─ java/
-│  ├─ EgoWeaponTypeUtil.java
-│  ├─ EgoWeaponControlController.java
-│  ├─ EgoWeaponAbilityController.java
-│  ├─ EgoWeaponDatabase.java
-│  ├─ EgoWeaponCommand.java
-│  ├─ EgoWeaponDiagnostics.java
-│  └─ EgoOpponentScanController.java
-├─ portable/
-│  ├─ EgoCoreAdapter.java
-│  └─ EgoPortableRules.java
+│  ├─ EgoWeaponTypeUtil.java              # myso 무기종류 판정
+│  ├─ EgoWeaponControlController.java     # myso 대화/상태/선공/제어
+│  ├─ EgoWeaponAbilityController.java     # myso 특별능력
+│  ├─ EgoWeaponDatabase.java              # myso DB 로드/저장
+│  ├─ EgoWeaponCommand.java               # myso 명령어
+│  ├─ EgoWeaponDiagnostics.java           # myso 진단
+│  ├─ EgoOpponentScanController.java      # myso 상대감지
+│  ├─ EgoCoreAdapter.java                 # 다른 서버코어 포팅용
+│  └─ EgoPortableRules.java               # 다른 서버코어 공통 규칙
 └─ sql/
    ├─ ego_oneclick_install.sql
    └─ ego_no_java_admin.sql
 ```
-
-기존 분산 문서는 이 매뉴얼로 통합했습니다.
-기존 분산 SQL은 `ego_oneclick_install.sql`로 통합했습니다.
 
 ---
 
@@ -81,11 +85,61 @@ javac -encoding UTF-8 -source 1.8 -target 1.8
 var, record, sealed, switch expression, text block, List.of, Map.of, Set.of, Stream.toList, module-info.java
 ```
 
-에고 소스는 Java 8 기준으로 작성합니다.
+---
+
+## 4. 어떤 Java 파일을 써야 하나?
+
+### 4.1 myso 서버에 적용할 때
+
+아래 7개가 myso 기준 구현입니다.
+
+```text
+ego/java/EgoWeaponTypeUtil.java
+ego/java/EgoWeaponControlController.java
+ego/java/EgoWeaponAbilityController.java
+ego/java/EgoWeaponDatabase.java
+ego/java/EgoWeaponCommand.java
+ego/java/EgoWeaponDiagnostics.java
+ego/java/EgoOpponentScanController.java
+```
+
+복사 위치:
+
+```text
+EgoWeaponTypeUtil.java
+EgoWeaponControlController.java
+EgoWeaponAbilityController.java
+EgoWeaponCommand.java
+EgoWeaponDiagnostics.java
+EgoOpponentScanController.java
+→ bitna/src/lineage/world/controller/
+
+EgoWeaponDatabase.java
+→ bitna/src/lineage/database/
+```
+
+### 4.2 다른 서버코어에 적용할 때
+
+먼저 아래 2개만 봅니다.
+
+```text
+ego/java/EgoCoreAdapter.java
+ego/java/EgoPortableRules.java
+```
+
+초보자 기준 설명:
+
+```text
+EgoCoreAdapter.java   = 서버마다 다른 클래스명/메서드명을 맞추는 연결표
+EgoPortableRules.java = 서버와 무관한 무기/능력/HP/위험도 규칙
+```
+
+다른 서버코어에서는 `EgoWeapon*.java`를 그대로 복사하면 `lineage.*`, `PcInstance`, `ItemInstance` 오류가 날 수 있습니다.
+먼저 `EgoCoreAdapter` 방식으로 맞추는 것이 안전합니다.
 
 ---
 
-## 4. 기능 요약
+## 5. 기능 요약
 
 ```text
 - 에고 이름 호출 대화
@@ -98,17 +152,17 @@ var, record, sealed, switch expression, text block, List.of, Map.of, Set.of, Str
 - 에고 이름/레벨/경험치/능력 DB 저장
 - .에고검사 진단 명령
 - Java 수정 없이 SQL로 생성/편집
-- 타 서버코어 포팅용 portable 제공
+- 다른 서버코어 포팅용 Adapter/Rules 제공
 ```
 
 ---
 
-## 5. myso 적용 순서
+## 6. myso 적용 순서
 
 ```text
 1. DB 백업
 2. ego/install/install_ego_windows.bat 또는 install_ego_linux.sh 실행
-3. java 파일 7개 복사
+3. myso용 java 파일 7개 복사
 4. ChattingController 연결
 5. CommandController 연결
 6. DamageController 연결
@@ -121,42 +175,9 @@ var, record, sealed, switch expression, text block, List.of, Map.of, Set.of, Str
 
 ---
 
-## 6. 자바 파일 복사 위치
+## 7. myso 기존 자바 연결 코드
 
-### world/controller
-
-```text
-EgoWeaponTypeUtil.java
-EgoWeaponControlController.java
-EgoWeaponAbilityController.java
-EgoWeaponCommand.java
-EgoWeaponDiagnostics.java
-EgoOpponentScanController.java
-```
-
-복사 위치:
-
-```text
-bitna/src/lineage/world/controller/
-```
-
-### database
-
-```text
-EgoWeaponDatabase.java
-```
-
-복사 위치:
-
-```text
-bitna/src/lineage/database/
-```
-
----
-
-## 7. 기존 자바 연결 코드
-
-### ChattingController.java
+### 7.1 ChattingController.java
 
 `if (!CommandController.toCommand(o, msg)) {` 바로 아래:
 
@@ -175,7 +196,7 @@ import lineage.world.object.instance.PcInstance;
 import lineage.world.object.instance.RobotInstance;
 ```
 
-### CommandController.java
+### 7.2 CommandController.java
 
 `PluginController.init(...)` 이후:
 
@@ -185,7 +206,7 @@ if (EgoWeaponCommand.toCommand(o, key, st)) {
 }
 ```
 
-### DamageController.java
+### 7.3 DamageController.java
 
 최종 데미지 반환 직전:
 
@@ -197,7 +218,7 @@ if (cha instanceof PcInstance && weapon != null) {
 
 실제 변수명은 서버 파일에 맞게 조정하세요.
 
-### 서버 시작 시 DB 로드
+### 7.4 서버 시작 시 DB 로드
 
 ```java
 EgoWeaponDatabase.init(con);
@@ -211,7 +232,120 @@ EgoWeaponDatabase.init(con);
 
 ---
 
-## 8. 게임 명령어
+## 8. 다른 서버코어 초보자 적용 방법
+
+다른 서버코어는 클래스명이 다릅니다.
+
+예:
+
+```text
+myso: PcInstance, ItemInstance, MonsterInstance
+다른 서버: L1PcInstance, L1ItemInstance, L1MonsterInstance
+또 다른 서버: Player, Item, Npc
+```
+
+그래서 바로 `EgoWeaponControlController.java`를 복사하면 오류가 날 수 있습니다.
+아래 순서로 진행하세요.
+
+### 8.1 1단계: DB만 먼저 설치
+
+```text
+ego/install/install_ego_windows.bat
+또는
+ego/install/install_ego_linux.sh
+```
+
+### 8.2 2단계: 서버 클래스명 확인
+
+찾을 것:
+
+```text
+플레이어 클래스명
+아이템 클래스명
+몬스터 클래스명
+채팅 메시지 보내는 메서드
+착용 무기 가져오는 메서드
+주변 객체 가져오는 메서드
+데미지 계산 위치
+```
+
+자주 나오는 이름:
+
+```text
+플레이어: PcInstance, L1PcInstance, Player, PlayerInstance
+아이템: ItemInstance, L1ItemInstance, Item
+몬스터: MonsterInstance, L1MonsterInstance, NpcInstance
+주변객체: getInsideList, getKnownObjects, getVisibleObjects, World.getVisibleObjects
+```
+
+### 8.3 3단계: EgoCoreAdapter 구현
+
+파일:
+
+```text
+ego/java/EgoCoreAdapter.java
+```
+
+이 인터페이스를 대상 서버에 맞게 구현합니다.
+
+예시:
+
+```java
+public final class MyServerEgoAdapter implements EgoCoreAdapter {
+
+    @Override
+    public boolean isPlayer(Object obj) {
+        return obj instanceof L1PcInstance;
+    }
+
+    @Override
+    public Object getEquippedWeapon(Object player) {
+        L1PcInstance pc = (L1PcInstance) player;
+        return pc.getWeapon();
+    }
+
+    @Override
+    public void sendSystemMessage(Object player, String message) {
+        ((L1PcInstance) player).sendPackets(new S_SystemMessage(message));
+    }
+
+    // 나머지 메서드도 서버코어에 맞게 연결
+}
+```
+
+### 8.4 4단계: EgoPortableRules 확인
+
+파일:
+
+```text
+ego/java/EgoPortableRules.java
+```
+
+서버의 무기 type2 이름이 다르면 여기에 추가합니다.
+
+예:
+
+```text
+myso: tohandsword
+다른 서버: twohand_sword, two_handed_sword
+```
+
+### 8.5 5단계: 단계별 테스트
+
+한 번에 다 붙이지 말고 아래 순서로 켭니다.
+
+```text
+1. 에고 대화
+2. 에고 상태
+3. 선공 몬스터 감지
+4. 상대 캐릭터 감지
+5. 특별 능력
+6. DB 저장/로드
+```
+
+---
+
+## 9. 게임 명령어
 
 ```text
 .에고도움        명령어 안내
@@ -240,7 +374,7 @@ EgoWeaponDatabase.init(con);
 
 ---
 
-## 9. 무기 종류와 능력
+## 10. 무기 종류와 능력
 
 지원 무기:
 
@@ -248,7 +382,7 @@ EgoWeaponDatabase.init(con);
 dagger, sword, tohandsword, axe, spear, bow, staff, wand
 ```
 
-portable 추가 지원:
+다른 서버 호환용 추가 지원:
 
 ```text
 twohand_sword, two_handed_sword, crossbow
@@ -276,7 +410,7 @@ FROST_BIND       서리 충격
 
 ---
 
-## 10. Java 수정 없이 생성/편집
+## 11. Java 수정 없이 생성/편집
 
 이미 에고 시스템이 서버에 연결되어 있다면 운영 중 생성/편집은 SQL만으로 가능합니다.
 
@@ -301,7 +435,7 @@ DB 수정 후:
 
 ---
 
-## 11. 상대 감지 정보 범위
+## 12. 상대 감지 정보 범위
 
 표시:
 
@@ -317,37 +451,14 @@ DB 수정 후:
 
 ---
 
-## 12. 타 서버코어 포팅
-
-다른 서버코어에서는 `ego/java/`를 그대로 복사하지 말고 아래 파일을 기준으로 포팅하세요.
-
-```text
-ego/portable/EgoCoreAdapter.java
-ego/portable/EgoPortableRules.java
-```
-
-순서:
-
-```text
-1. EgoCoreAdapter를 대상 서버 클래스에 맞게 구현
-2. EgoPortableRules의 type2 규칙 확인
-3. 채팅 처리부 연결
-4. 명령어 처리부 연결
-5. 데미지 계산부 연결
-6. DB 테이블/컬럼명 조정
-7. 대화 → 상태 → 감지 → 능력 → DB 순서로 테스트
-```
-
----
-
 ## 13. 오류 대응
 
 ```text
-EgoWeaponTypeUtil 없음       → java 파일 복사 누락
+EgoWeaponTypeUtil 없음       → myso용 java 파일 복사 누락
 EgoWeaponDatabase 없음       → database 경로에 복사해야 함
 getInsideList 없음           → 서버 주변객체 메서드명 확인
 ATTACK_TYPE_WEAPON 없음      → Lineage 공격 타입 상수명 확인
-lineage 패키지 오류          → 타 서버는 portable 기반 포팅 필요
+lineage 패키지 오류          → 다른 서버는 EgoCoreAdapter/EgoPortableRules 기준으로 포팅
 한글 깨짐                   → UTF-8 저장/컴파일 필요
 ```
 
