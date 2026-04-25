@@ -34,7 +34,7 @@ import lineage.world.object.instance.PcInstance;
  */
 public final class EgoView {
 
-    private static final String EGO_MARK = "\\fY[에고]\\fW";
+    private static final String EGO_MARK = "\fY[에고]\fW";
 
     private static final Map<String, ViewInfo> viewMap = new ConcurrentHashMap<String, ViewInfo>();
     private static volatile boolean useEnglishSchema = true;
@@ -111,9 +111,6 @@ public final class EgoView {
         return item != null && EgoWeaponDatabase.isEgoWeapon(item);
     }
 
-    /**
-     * 표시 타입도 원본 item.type2 기준으로만 사용한다.
-     */
     public static String form(ItemInstance item) {
         return EgoWeaponTypeUtil.getType2(item);
     }
@@ -163,17 +160,18 @@ public final class EgoView {
         if (baseName.indexOf("[에고]") >= 0 || baseName.indexOf("[에고:") >= 0)
             return baseName;
 
+        String fixedName = fixNameIdBaseName(item, baseName);
         EgoWeaponInfo ego = EgoWeaponDatabase.find(item);
         String label = label(item);
         String skill = skillName(item);
         int level = ego == null ? 1 : Math.max(1, ego.level);
 
-        StringBuilder sb = new StringBuilder(baseName);
+        StringBuilder sb = new StringBuilder(fixedName);
         sb.append(" ").append(EGO_MARK);
-        sb.append(" \\fS(").append(label).append(" Lv.").append(level);
+        sb.append(" \fS(").append(label).append(" Lv.").append(level);
         if (skill.length() > 0)
             sb.append(" ").append(skill);
-        sb.append(")\\fW");
+        sb.append(")\fW");
         return sb.toString();
     }
 
@@ -263,6 +261,27 @@ public final class EgoView {
         return EgoWeaponTypeUtil.getDisplayTypeName(item);
     }
 
+    private static String fixNameIdBaseName(ItemInstance item, String baseName) {
+        if (item == null || item.getItem() == null)
+            return baseName;
+
+        String realName = safe(item.getItem().getName());
+        if (realName.length() == 0)
+            return baseName;
+
+        String nameId = safe(item.getItem().getNameId());
+        String result = baseName;
+
+        if (nameId.length() > 0 && result.indexOf(nameId) >= 0)
+            result = result.replace(nameId, realName);
+
+        String runtimeName = safe(item.getName());
+        if (runtimeName.length() > 0 && runtimeName.startsWith("$") && result.indexOf(runtimeName) >= 0)
+            result = result.replace(runtimeName, realName);
+
+        return result;
+    }
+
     private static String skillName(ItemInstance item) {
         EgoAbilityInfo skill = EgoWeaponDatabase.getFirstAbility(item);
         if (skill == null || skill.abilityType == null)
@@ -277,6 +296,8 @@ public final class EgoView {
         if ("EXECUTION".equals(type)) return "처형";
         if ("FLAME_BRAND".equals(type)) return "화염";
         if ("FROST_BIND".equals(type)) return "서리";
+        if ("EGO_COUNTER".equals(type)) return "반격";
+        if ("EGO_REVENGE".equals(type)) return "복수";
         return type;
     }
 
