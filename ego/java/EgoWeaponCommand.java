@@ -16,7 +16,8 @@ import lineage.world.object.instance.PcInstance;
  * 에고무기 유저/운영 명령 헬퍼.
  *
  * 기존 서버 전투 코어는 변경하지 않는다.
- * 에고는 착용 중인 +0 무기에만 생성할 수 있다.
+ * 강화된 무기도 에고 생성 가능하다.
+ * 무기변형 기능은 제거되었다.
  */
 public final class EgoWeaponCommand {
 
@@ -67,15 +68,14 @@ public final class EgoWeaponCommand {
 
     private static void help(PcInstance pc) {
         info(pc, "========== 에고무기 명령어 ==========");
-        msg(pc, Lineage.command + "에고생성 [이름] : 착용 중인 +0 무기를 에고무기로 활성화");
+        msg(pc, Lineage.command + "에고생성 [이름] : 착용 중인 무기를 에고무기로 활성화");
         msg(pc, Lineage.command + "에고정보 : 착용 에고무기 정보 확인");
         msg(pc, Lineage.command + "에고이름 [새이름] : 에고 호출 이름 변경");
         msg(pc, Lineage.command + "에고능력 [능력코드] : 에고 특별 능력 설정");
         msg(pc, Lineage.command + "에고상대 : 타겟 또는 가장 가까운 상대 캐릭터 분석");
         msg(pc, Lineage.command + "에고주변 : 주변 캐릭터 목록/위험도 감지");
         msg(pc, Lineage.command + "에고리로드 : DB/이미지 캐시 리로드 및 온라인 인벤토리 즉시반영");
-        msg(pc, "일반 채팅: 에고 상태 / 에고 조언 / 에고 선공 / 에고 상대 / 에고 주변캐릭 / 에고 활 / 에고 양검 / 에고 한검 / 에고 공격 / 에고 멈춰");
-        msg(pc, "표시형태: 활, 양검, 양손검, 한검, 한손검, 단검, 창, 도끼, 지팡이, 완드");
+        msg(pc, "일반 채팅: 에고 상태 / 에고 조언 / 에고 선공 / 에고 상대 / 에고 주변캐릭 / 에고 공격 / 에고 멈춰");
         msg(pc, "능력코드: EGO_BALANCE, BLOOD_DRAIN, MANA_DRAIN, CRITICAL_BURST, GUARDIAN_SHIELD, AREA_SLASH, EXECUTION, FLAME_BRAND, FROST_BIND");
         info(pc, EgoWeaponTypeUtil.getSupportedWeaponTypesText());
     }
@@ -84,12 +84,6 @@ public final class EgoWeaponCommand {
         ItemInstance weapon = getWeapon(pc);
         if (weapon == null) {
             danger(pc, "무기를 착용한 뒤 사용하세요.");
-            return;
-        }
-
-        if (weapon.getEnLevel() != 0) {
-            danger(pc, String.format("강화된 무기는 에고를 생성할 수 없습니다. 현재 강화: %+d", weapon.getEnLevel()));
-            info(pc, "에고 생성은 안전을 위해 +0 착용 무기에만 허용됩니다.");
             return;
         }
 
@@ -120,8 +114,8 @@ public final class EgoWeaponCommand {
             EgoWeaponDatabase.reload(null);
             EgoView.refreshInventory(pc, weapon);
             msg(pc, String.format("%s 에고가 깨어났습니다. 호출명: %s", weapon.getName(), egoName));
-            msg(pc, String.format("원본 무기타입: %s / 기본 능력: %s", EgoWeaponTypeUtil.getDisplayTypeName(weapon), defaultAbility));
-            msg(pc, String.format("일반 채팅 예: '%s 상태', '%s 활', '%s 양검', '%s 한검'", egoName, egoName, egoName, egoName));
+            msg(pc, String.format("원본 무기타입: %s / 강화 %+d / 기본 능력: %s", EgoWeaponTypeUtil.getDisplayTypeName(weapon), weapon.getEnLevel(), defaultAbility));
+            msg(pc, String.format("일반 채팅 예: '%s 상태', '%s 조언', '%s 선공', '%s 상대'", egoName, egoName, egoName, egoName));
         } else {
             danger(pc, "에고 생성에 실패했습니다. DB 적용 여부를 확인하세요.");
         }
@@ -138,7 +132,7 @@ public final class EgoWeaponCommand {
         if (egoInfo == null || !egoInfo.enabled) {
             danger(pc, "현재 착용 무기는 에고무기가 아닙니다.");
             info(pc, String.format("착용 무기 원본: %s / originalType2=%s / 강화 %+d", EgoWeaponTypeUtil.getDisplayTypeName(weapon), EgoWeaponTypeUtil.getOriginalType2(weapon), weapon.getEnLevel()));
-            msg(pc, Lineage.command + "에고생성 [이름] 으로 활성화할 수 있습니다. 단, +0 무기만 가능합니다.");
+            msg(pc, Lineage.command + "에고생성 [이름] 으로 활성화할 수 있습니다.");
             return;
         }
 
