@@ -16,20 +16,9 @@ import lineage.world.object.instance.PcInstance;
  * - 인벤토리의 다른 무기로 교체하지 않는다.
  * - 현재 착용 중인 에고무기 자체의 "에고 형태"를 DB/캐시에 저장한다.
  * - EgoWeaponTypeUtil은 이 형태값을 우선 무기종류로 인식한다.
+ * - EgoView는 이 형태값을 기준으로 인벤토리 이미지/이름/정보를 표시한다.
  * - 활/양손검/창/지팡이 형태는 방패를 자동 해제한다.
  * - 한손검/단검/완드 형태는 이전에 해제한 방패를 자동 복구한다.
- *
- * 일반채팅 예:
- * - 카르마 활
- * - 카르마 양검
- * - 카르마 양손검
- * - 카르마 한검
- * - 카르마 한손검
- * - 카르마 단검
- * - 카르마 창
- * - 카르마 도끼
- * - 카르마 지팡이
- * - 카르마 완드
  */
 public final class EgoWeaponFormController {
 
@@ -101,6 +90,7 @@ public final class EgoWeaponFormController {
             restoreShieldIfPossible(pc, inv, egoWeapon);
         }
 
+        EgoView.refreshInventory(pc, egoWeapon);
         EgoMessageUtil.normal(pc, String.format("에고가 %s 형태로 변신했습니다.", displayForm(formType)));
     }
 
