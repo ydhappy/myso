@@ -1,6 +1,6 @@
 # 에고무기 시스템
 
-에고무기 기능을 적용하기 위한 최소 구성 폴더입니다. Java 파일은 전부 `ego/java/` 한 곳에 모았습니다. DB 테이블과 컬럼은 초보자가 보기 쉽도록 한글명으로 단순화했습니다.
+에고무기 기능을 적용하기 위한 최소 구성 폴더입니다. Java 파일은 전부 `ego/java/` 한 곳에 모았습니다. **적용할 때 쓰는 Java 이름은 짧게 단순화했습니다.** DB 테이블과 컬럼은 한글명입니다.
 
 Java 8 / UTF-8 기준입니다.
 
@@ -21,6 +21,14 @@ ego/
 │  ├─ install_ego_windows.bat
 │  └─ install_ego_linux.sh
 ├─ java/
+│  ├─ EgoMsg.java       # 메시지, 색상, 개인출력
+│  ├─ EgoType.java      # 형태/무기종류
+│  ├─ EgoForm.java      # 형태변신
+│  ├─ EgoTalk.java      # 일반채팅 대화
+│  ├─ EgoSkill.java     # 전투 능력
+│  ├─ EgoDB.java        # DB 연결
+│  ├─ EgoCmd.java       # 점 명령어
+│  ├─ EgoScan.java      # 상대감지
 │  ├─ EgoMessageUtil.java
 │  ├─ EgoWeaponTypeUtil.java
 │  ├─ EgoWeaponFormController.java
@@ -39,9 +47,39 @@ ego/
 
 ---
 
+## Java 명칭 단순화
+
+초보자는 아래 짧은 이름만 기억하면 됩니다.
+
+```text
+EgoMsg    메시지/색상/본인전용 출력
+EgoType   에고 형태/무기종류 판정
+EgoForm   에고무기 자체 형태변신
+EgoTalk   일반채팅 대화 처리
+EgoSkill  전투 능력 발동
+EgoDB     한글 DB 로드/저장
+EgoCmd    점 명령어 처리
+EgoScan   상대 캐릭터 감지
+```
+
+기존 긴 클래스는 내부 구현용으로 유지합니다.
+
+```text
+EgoWeaponControlController → 적용 코드에서는 EgoTalk 사용
+EgoWeaponDatabase          → 적용 코드에서는 EgoDB 사용
+EgoWeaponAbilityController → 적용 코드에서는 EgoSkill 사용
+EgoWeaponTypeUtil          → 적용 코드에서는 EgoType 사용
+EgoWeaponFormController    → 적용 코드에서는 EgoForm 사용
+EgoWeaponCommand           → 적용 코드에서는 EgoCmd 사용
+EgoOpponentScanController  → 적용 코드에서는 EgoScan 사용
+EgoMessageUtil             → 적용 코드에서는 EgoMsg 사용
+```
+
+---
+
 ## DB 명칭 단순화
 
-이제 Java 기준 메인 DB는 한글 테이블/컬럼을 사용합니다.
+메인 DB는 한글 테이블/컬럼을 사용합니다.
 
 ```text
 테이블:
@@ -68,16 +106,6 @@ ego/
 에고.이전방패
 ```
 
-기존의 긴 영문 컬럼명은 사용하지 않는 방향입니다.
-
-```text
-character_item_ego.item_objid      → 에고.아이템번호
-character_item_ego.ego_name        → 에고.이름
-character_item_ego.ego_form_type   → 에고.형태
-character_item_ego.prev_shield_objid → 에고.이전방패
-character_item_ego_ability.ability_type → 에고능력.능력
-```
-
 ---
 
 ## 핵심 구현 방향
@@ -89,13 +117,6 @@ character_item_ego_ability.ability_type → 에고능력.능력
 
 원본 아이템 템플릿의 type2는 직접 바꾸지 않습니다.
 대신 DB의 `에고.형태`에 현재 에고 형태를 저장하고, 에고 로직에서는 이 값을 현재 무기종류처럼 인식합니다.
-
-```text
-원본 type2: 실제 아이템 DB 값, 공유 템플릿이라 변경 금지
-에고 형태: 에고.형태, 해당 에고무기 1개에만 적용
-```
-
-방패 처리:
 
 ```text
 카르마 활      → 방패 자동 해제, 에고 활 형태
@@ -141,15 +162,45 @@ ego/sql/ego_install_korean.sql
 ```text
 1. DB 백업
 2. install/install_ego_windows.bat 또는 install/install_ego_linux.sh 실행
-3. java 파일 8개 복사
-4. ChattingController 연결
-5. CommandController 연결
-6. DamageController 연결
-7. EgoWeaponDatabase.init(con) 연결 또는 .에고리로드
+3. ego/java 파일 복사
+4. ChattingController 연결: EgoTalk.chat(...)
+5. CommandController 연결: EgoCmd.run(...)
+6. DamageController 연결: EgoSkill.attack(...)
+7. DB 시작 연결: EgoDB.init(con)
 8. 서버 빌드
 9. .에고생성 카르마
 10. 카르마 상태 / 카르마 활 / 카르마 양검 / 카르마 한검 테스트
 11. 카르마 상대 / .에고정보 테스트
+```
+
+연결 예시:
+
+```java
+// ChattingController
+if (o instanceof PcInstance && !(o instanceof RobotInstance)) {
+    if (EgoTalk.chat((PcInstance) o, msg)) {
+        return;
+    }
+}
+```
+
+```java
+// CommandController
+if (EgoCmd.run(o, key, st)) {
+    return true;
+}
+```
+
+```java
+// DamageController
+if (cha instanceof PcInstance && weapon != null) {
+    dmg = EgoSkill.attack((Character) cha, target, weapon, (int) Math.round(dmg));
+}
+```
+
+```java
+// 서버 시작 DB 로드
+EgoDB.init(con);
 ```
 
 ---
@@ -179,12 +230,6 @@ ego/sql/ego_install_korean.sql
 
 ```text
 sql/ego_no_java_admin.sql
-```
-
-지원 작업:
-
-```text
-에고 생성, 이름변경, 성격변경, 능력변경, 형태변경, 레벨/경험치 보정, 비활성화, 삭제, 전체 조회, 이상 데이터 보정
 ```
 
 ---
