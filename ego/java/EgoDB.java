@@ -64,6 +64,10 @@ public final class EgoDB {
         return EgoWeaponDatabase.enableEgo(pc, item, name, personality);
     }
 
+    public static boolean delete(ItemInstance item) {
+        return EgoWeaponDatabase.disableEgo(item);
+    }
+
     public static boolean rename(ItemInstance item, String name) {
         return EgoWeaponDatabase.setEgoName(item, name);
     }
