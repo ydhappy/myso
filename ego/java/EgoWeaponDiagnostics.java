@@ -17,12 +17,8 @@ import lineage.world.object.instance.PcInstance;
 /**
  * 에고무기 진단 도구.
  *
- * 적용 위치:
- * - bitna/src/lineage/world/controller/EgoWeaponDiagnostics.java
- *
- * 용도:
- * - .에고검사 명령에서 호출한다.
- * - 초보자 적용 후 가장 먼저 문제를 확인할 수 있게 한다.
+ * 메시지 정책:
+ * - .에고검사 출력은 EgoMessageUtil을 사용해 본인에게만 보이는 개인 메시지로 출력한다.
  */
 public final class EgoWeaponDiagnostics {
 
@@ -33,13 +29,13 @@ public final class EgoWeaponDiagnostics {
         if (pc == null)
             return;
 
-        msg(pc, "\\fY========== 에고무기 진단 시작 ==========");
+        info(pc, "========== 에고무기 진단 시작 ==========");
         checkCharacter(pc);
         ItemInstance weapon = checkWeapon(pc);
         checkDatabase(pc, weapon);
         checkAbility(pc, weapon);
         checkAggressiveMonster(pc);
-        msg(pc, "\\fY========== 에고무기 진단 종료 ==========");
+        info(pc, "========== 에고무기 진단 종료 ==========");
     }
 
     private static void checkCharacter(PcInstance pc) {
@@ -50,29 +46,29 @@ public final class EgoWeaponDiagnostics {
     private static ItemInstance checkWeapon(PcInstance pc) {
         Inventory inv = pc.getInventory();
         if (inv == null) {
-            msg(pc, "\\fR[FAIL] 인벤토리 객체가 null 입니다.");
+            danger(pc, "[FAIL] 인벤토리 객체가 null 입니다.");
             return null;
         }
 
         ItemInstance weapon = inv.getSlot(Lineage.SLOT_WEAPON);
         if (weapon == null) {
-            msg(pc, "\\fR[FAIL] 무기를 착용하지 않았습니다.");
+            danger(pc, "[FAIL] 무기를 착용하지 않았습니다.");
             return null;
         }
 
         msg(pc, String.format("착용무기: +%d %s / objectId=%d", weapon.getEnLevel(), weapon.getName(), weapon.getObjectId()));
 
         if (weapon.getItem() == null) {
-            msg(pc, "\\fR[FAIL] weapon.getItem()이 null 입니다. 아이템 DB 로딩 또는 인스턴스 생성 문제입니다.");
+            danger(pc, "[FAIL] weapon.getItem()이 null 입니다. 아이템 DB 로딩 또는 인스턴스 생성 문제입니다.");
             return weapon;
         }
 
         msg(pc, String.format("무기종류: %s / type2=%s / slot=%d", EgoWeaponTypeUtil.getDisplayTypeName(weapon), EgoWeaponTypeUtil.getType2(weapon), weapon.getItem().getSlot()));
 
         if (EgoWeaponTypeUtil.isValidEgoBaseWeapon(weapon)) {
-            msg(pc, "\\fY[OK] 에고무기로 사용할 수 있는 전투 무기입니다.");
+            info(pc, "[OK] 에고무기로 사용할 수 있는 전투 무기입니다.");
         } else {
-            msg(pc, "\\fR[FAIL] 에고무기로 사용할 수 없습니다: " + EgoWeaponTypeUtil.getAbilityDenyReason("", weapon));
+            danger(pc, "[FAIL] 에고무기로 사용할 수 없습니다: " + EgoWeaponTypeUtil.getAbilityDenyReason("", weapon));
         }
 
         return weapon;
@@ -84,11 +80,11 @@ public final class EgoWeaponDiagnostics {
 
         EgoWeaponInfo info = EgoWeaponDatabase.find(weapon);
         if (info == null) {
-            msg(pc, "\\fR[WARN] DB 캐시에 에고 정보가 없습니다. .에고생성 또는 .에고리로드를 확인하세요.");
+            danger(pc, "[WARN] DB 캐시에 에고 정보가 없습니다. .에고생성 또는 .에고리로드를 확인하세요.");
             return;
         }
 
-        msg(pc, String.format("\\fY[OK] DB 에고: enabled=%s / name=%s / personality=%s", info.enabled, safe(info.egoName), safe(info.personality)));
+        info(pc, String.format("[OK] DB 에고: enabled=%s / name=%s / personality=%s", info.enabled, safe(info.egoName), safe(info.personality)));
         msg(pc, String.format("에고성장: level=%d / exp=%d / maxExp=%d / talk=%d / control=%d", info.level, info.exp, info.maxExp, info.talkLevel, info.controlLevel));
     }
 
@@ -101,16 +97,16 @@ public final class EgoWeaponDiagnostics {
 
         List<EgoAbilityInfo> list = EgoWeaponDatabase.getAbilities(weapon);
         if (list.isEmpty()) {
-            msg(pc, "\\fR[WARN] DB 캐시에 활성 능력이 없습니다. .에고능력 " + recommend + " 를 실행할 수 있습니다.");
+            danger(pc, "[WARN] DB 캐시에 활성 능력이 없습니다. .에고능력 " + recommend + " 를 실행할 수 있습니다.");
             return;
         }
 
         for (EgoAbilityInfo ai : list) {
             boolean allowed = EgoWeaponTypeUtil.isAbilityAllowed(ai.abilityType, weapon);
             if (allowed) {
-                msg(pc, String.format("\\fY[OK] 능력: %s Lv.%d 허용됨", safe(ai.abilityType), ai.abilityLevel));
+                info(pc, String.format("[OK] 능력: %s Lv.%d 허용됨", safe(ai.abilityType), ai.abilityLevel));
             } else {
-                msg(pc, String.format("\\fR[FAIL] 능력: %s 는 현재 무기(%s)에 허용되지 않습니다.", safe(ai.abilityType), EgoWeaponTypeUtil.getDisplayTypeName(weapon)));
+                danger(pc, String.format("[FAIL] 능력: %s 는 현재 무기(%s)에 허용되지 않습니다.", safe(ai.abilityType), EgoWeaponTypeUtil.getDisplayTypeName(weapon)));
             }
         }
     }
@@ -129,7 +125,7 @@ public final class EgoWeaponDiagnostics {
         }
 
         if (nearest != null) {
-            msg(pc, String.format("선공몬스터: %d마리 / 최근접=%s / 거리=%d", list.size(), getMonsterName(nearest), Util.getDistance(pc, nearest)));
+            danger(pc, String.format("선공몬스터: %d마리 / 최근접=%s / 거리=%d", list.size(), getMonsterName(nearest), Util.getDistance(pc, nearest)));
         }
     }
 
@@ -180,6 +176,14 @@ public final class EgoWeaponDiagnostics {
     }
 
     private static void msg(PcInstance pc, String msg) {
-        ChattingController.toChatting(pc, msg, Lineage.CHATTING_MODE_MESSAGE);
+        EgoMessageUtil.normal(pc, msg);
+    }
+
+    private static void danger(PcInstance pc, String msg) {
+        EgoMessageUtil.danger(pc, msg);
+    }
+
+    private static void info(PcInstance pc, String msg) {
+        EgoMessageUtil.info(pc, msg);
     }
 }
