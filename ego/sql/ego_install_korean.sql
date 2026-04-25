@@ -45,6 +45,32 @@ CREATE TABLE IF NOT EXISTS `에고능력` (
     INDEX `능력_idx` (`능력`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='에고무기 능력 정보';
 
+CREATE TABLE IF NOT EXISTS `에고모양` (
+    `형태` VARCHAR(40) NOT NULL COMMENT 'dagger/sword/tohandsword/axe/spear/bow/staff/wand',
+    `표시` VARCHAR(50) NOT NULL DEFAULT '' COMMENT '표시 이름',
+    `인벤이미지` INT NOT NULL DEFAULT 0 COMMENT '인벤토리 아이콘 gfx, 0이면 원본 사용',
+    `바닥이미지` INT NOT NULL DEFAULT 0 COMMENT '바닥 드랍 gfx, 0이면 원본 사용',
+    `설명` VARCHAR(255) NOT NULL DEFAULT '' COMMENT '아이템정보 보조 설명',
+    `사용` TINYINT(1) NOT NULL DEFAULT 1 COMMENT '사용 여부',
+    PRIMARY KEY (`형태`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='에고 형태별 인벤토리/바닥 표시';
+
+INSERT INTO `에고모양`
+(`형태`, `표시`, `인벤이미지`, `바닥이미지`, `설명`, `사용`)
+VALUES
+('dagger', '단검', 0, 0, '에고 단검 형태', 1),
+('sword', '한손검', 0, 0, '에고 한손검 형태', 1),
+('tohandsword', '양손검', 0, 0, '에고 양손검 형태', 1),
+('axe', '도끼', 0, 0, '에고 도끼 형태', 1),
+('spear', '창', 0, 0, '에고 창 형태', 1),
+('bow', '활', 0, 0, '에고 활 형태', 1),
+('staff', '지팡이', 0, 0, '에고 지팡이 형태', 1),
+('wand', '완드', 0, 0, '에고 완드 형태', 1)
+ON DUPLICATE KEY UPDATE
+    `표시` = VALUES(`표시`),
+    `설명` = VALUES(`설명`),
+    `사용` = VALUES(`사용`);
+
 CREATE TABLE IF NOT EXISTS `에고성격` (
     `성격` VARCHAR(30) NOT NULL,
     `표시명` VARCHAR(50) NOT NULL,
@@ -138,6 +164,7 @@ CREATE TABLE IF NOT EXISTS `에고기록` (
 SELECT '에고 한글 테이블 설치 완료' AS result;
 SHOW TABLES LIKE '에고';
 SHOW TABLES LIKE '에고능력';
+SHOW TABLES LIKE '에고모양';
 SHOW TABLES LIKE '에고성격';
 SHOW TABLES LIKE '에고대화';
 SHOW TABLES LIKE '에고능력기본';
