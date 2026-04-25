@@ -14,19 +14,16 @@ import lineage.world.object.instance.PcInstance;
 import lineage.world.object.instance.RobotInstance;
 
 /**
- * 에고무기 대화/상태인식/형태변환/간단 제어 컨트롤러.
+ * 에고무기 대화/상태인식/간단 제어 컨트롤러.
+ *
+ * 무기변형 기능은 완전히 제거됨.
+ * - 활/양검/한검 같은 변형 명령은 처리하지 않는다.
+ * - 실제 무기 타입/공격 방식/인벤 표시 기준은 원본 무기 기준이다.
  *
  * 대화 정책:
  * - 사용자는 일반 채팅으로 에고를 호출한다.
  * - 에고 호출 채팅은 consume 처리하여 주변 일반채팅으로 방송되지 않게 한다.
  * - 에고 응답은 EgoMessageUtil을 통해 본인에게만 보이는 개인 시스템 메시지로 전송한다.
- *
- * 자연어 예:
- * - 카르마 상태
- * - 카르마 활
- * - 카르마 양검
- * - 카르마 한검
- * - 카르마 상대
  */
 public final class EgoWeaponControlController {
 
@@ -43,7 +40,6 @@ public final class EgoWeaponControlController {
     public static boolean onNormalChat(PcInstance pc, String msg) {
         if (pc == null || msg == null)
             return false;
-
         if (pc instanceof RobotInstance)
             return false;
 
@@ -57,7 +53,6 @@ public final class EgoWeaponControlController {
 
         String egoName = getEgoName(weapon);
         String text = msg.trim();
-
         if (text.length() == 0)
             return false;
 
@@ -172,9 +167,6 @@ public final class EgoWeaponControlController {
             return;
         }
 
-        if (EgoWeaponFormController.handleTalk(pc, weapon, command))
-            return;
-
         if (!EgoWeaponTypeUtil.isValidEgoBaseWeapon(weapon)) {
             danger(pc, "이 장비는 에고무기로 사용할 수 없습니다. " + EgoWeaponTypeUtil.getAbilityDenyReason("", weapon));
             return;
@@ -209,12 +201,17 @@ public final class EgoWeaponControlController {
         }
 
         if (containsAny(command, "도움", "명령", "사용법")) {
-            say(pc, "사용법: 에고 상태 / 에고 조언 / 에고 선공 / 에고 상대 / 에고 주변캐릭 / 에고 활 / 에고 양검 / 에고 한검 / 에고 공격 / 에고 멈춰");
+            say(pc, "사용법: 에고 상태 / 에고 조언 / 에고 선공 / 에고 상대 / 에고 주변캐릭 / 에고 공격 / 에고 멈춰");
             info(pc, EgoWeaponTypeUtil.getSupportedWeaponTypesText());
             return;
         }
 
-        say(pc, "명령을 이해하지 못했습니다. '상태', '조언', '선공', '상대', '활', '양검', '한검', '공격', '멈춰'로 말씀하십시오.");
+        if (containsAny(command, "활", "양검", "양손검", "한검", "한손검", "단검", "창", "도끼", "지팡이", "완드", "변신", "변형")) {
+            info(pc, "무기변형 기능은 제거되었습니다. 에고는 원본 무기 타입 그대로 성장/보조능력만 적용합니다.");
+            return;
+        }
+
+        say(pc, "명령을 이해하지 못했습니다. '상태', '조언', '선공', '상대', '공격', '멈춰'로 말씀하십시오.");
     }
 
     private static boolean containsAny(String text, String... keys) {
@@ -237,18 +234,15 @@ public final class EgoWeaponControlController {
         if (!aggroList.isEmpty())
             return "듣고 있습니다. 근처에 선공 몬스터 기척이 있습니다.";
 
-        return String.format("부르셨습니까, 주인님. 현재 에고 형태는 %s입니다.", EgoWeaponTypeUtil.getDisplayTypeName(weapon));
+        return String.format("부르셨습니까, 주인님. 원본 무기 타입은 %s입니다.", EgoWeaponTypeUtil.getDisplayTypeName(weapon));
     }
 
     private static String buildStatus(PcInstance pc, ItemInstance weapon) {
         int hpRate = getHpRate(pc);
         int mpRate = getMpRate(pc);
-        String form = EgoWeaponDatabase.getFormType(weapon);
-        if (form == null || form.length() == 0)
-            form = "원본";
 
-        return String.format("Lv.%d / HP %d%%(%d/%d) / MP %d%%(%d/%d) / 에고 +%d %s / 형태 %s / 원본 %s",
-            pc.getLevel(), hpRate, pc.getNowHp(), pc.getTotalHp(), mpRate, pc.getNowMp(), pc.getTotalMp(), weapon.getEnLevel(), weapon.getName(), EgoWeaponTypeUtil.getDisplayTypeName(weapon), EgoWeaponTypeUtil.getOriginalType2(weapon));
+        return String.format("Lv.%d / HP %d%%(%d/%d) / MP %d%%(%d/%d) / 에고 +%d %s / 원본 %s",
+            pc.getLevel(), hpRate, pc.getNowHp(), pc.getTotalHp(), mpRate, pc.getNowMp(), pc.getTotalMp(), weapon.getEnLevel(), weapon.getName(), EgoWeaponTypeUtil.getOriginalType2(weapon));
     }
 
     private static String buildAdvice(PcInstance pc, ItemInstance weapon) {
@@ -261,7 +255,7 @@ public final class EgoWeaponControlController {
         if (hpRate <= 30)
             return "DANGER:체력이 낮습니다. 물약 사용 또는 후퇴를 권합니다.";
         if (mpRate <= 20 && EgoWeaponTypeUtil.isMagicWeapon(weapon))
-            return "마나가 부족합니다. 지팡이/완드 형태 능력 효율이 낮아질 수 있습니다.";
+            return "마나가 부족합니다. 지팡이/완드 계열 원본 무기 능력 효율이 낮아질 수 있습니다.";
         if (mpRate <= 20)
             return "마나가 부족합니다. 스킬 사용은 아끼고 평타 위주로 싸우십시오.";
         if (!aggroList.isEmpty()) {
@@ -311,7 +305,7 @@ public final class EgoWeaponControlController {
         pc.autoAttackTarget = target;
         pc.isAutoAttack = true;
         pc.setTarget(target);
-        say(pc, String.format("%s 공격을 시작합니다. 에고 형태: %s", getMonsterName(target), EgoWeaponTypeUtil.getDisplayTypeName(weapon)));
+        say(pc, String.format("%s 공격을 시작합니다. 원본 무기 타입: %s", getMonsterName(target), EgoWeaponTypeUtil.getDisplayTypeName(weapon)));
     }
 
     private static void stopControl(PcInstance pc) {
