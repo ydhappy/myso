@@ -10,15 +10,16 @@ import lineage.world.object.instance.ItemInstance;
 import lineage.world.object.instance.PcInstance;
 
 /**
- * 에고무기 형태변환 컨트롤러.
+ * 에고무기 형태 컨트롤러.
  *
- * 핵심:
+ * 중요 원칙:
+ * - PcInstance 공격 로직을 바꾸지 않는다.
+ * - DamageController 데미지 공식/무기 타입 판정을 바꾸지 않는다.
+ * - 원본 아이템 type2, gfxMode, 공격 사거리, 화살 소비 로직은 기존 서버 코어 그대로 둔다.
+ * - 여기서 말하는 형태는 에고 전용 표시형태/대화형태/능력형태다.
+ * - 인벤토리 이미지, 이름, 아이템정보, 에고 대사, 에고 능력 선택에만 사용한다.
  * - 인벤토리의 다른 무기로 교체하지 않는다.
- * - 현재 착용 중인 에고무기 자체의 "에고 형태"를 DB/캐시에 저장한다.
- * - EgoWeaponTypeUtil은 이 형태값을 우선 무기종류로 인식한다.
- * - EgoView는 이 형태값을 기준으로 인벤토리 이미지/이름/정보를 표시한다.
- * - 활/양손검/창/지팡이 형태는 방패를 자동 해제한다.
- * - 한손검/단검/완드 형태는 이전에 해제한 방패를 자동 복구한다.
+ * - 원본 아이템 템플릿도 변경하지 않는다.
  */
 public final class EgoWeaponFormController {
 
@@ -59,13 +60,13 @@ public final class EgoWeaponFormController {
 
         Inventory inv = pc.getInventory();
         if (inv == null) {
-            EgoMessageUtil.danger(pc, "인벤토리를 확인할 수 없어 형태변환을 중단합니다.");
+            EgoMessageUtil.danger(pc, "인벤토리를 확인할 수 없어 에고 형태 변경을 중단합니다.");
             return;
         }
 
         ItemInstance equippedWeapon = inv.getSlot(Lineage.SLOT_WEAPON);
         if (equippedWeapon == null || equippedWeapon.getObjectId() != egoWeapon.getObjectId()) {
-            EgoMessageUtil.danger(pc, "현재 착용 중인 에고무기만 변신할 수 있습니다.");
+            EgoMessageUtil.danger(pc, "현재 착용 중인 에고무기만 에고 형태를 변경할 수 있습니다.");
             return;
         }
 
@@ -78,7 +79,7 @@ public final class EgoWeaponFormController {
                 EgoMessageUtil.danger(pc, "방패 해제에 실패했습니다. 저주/고정 착용 상태를 확인하세요.");
                 return;
             }
-            EgoMessageUtil.info(pc, String.format("%s 형태 변신을 위해 방패를 해제했습니다.", displayForm(formType)));
+            EgoMessageUtil.info(pc, String.format("에고 %s 형태 표시를 위해 방패를 해제했습니다.", displayForm(formType)));
         }
 
         if (!EgoWeaponDatabase.setForm(egoWeapon, formType, rememberedShieldObjId)) {
@@ -91,7 +92,7 @@ public final class EgoWeaponFormController {
         }
 
         EgoView.refreshInventory(pc, egoWeapon);
-        EgoMessageUtil.normal(pc, String.format("에고가 %s 형태로 변신했습니다.", displayForm(formType)));
+        EgoMessageUtil.normal(pc, String.format("에고 표시형태가 %s 로 변경되었습니다. 실제 공격 방식은 원본 무기 기준으로 유지됩니다.", displayForm(formType)));
     }
 
     private static void restoreShieldIfPossible(PcInstance pc, Inventory inv, ItemInstance egoWeapon) {
