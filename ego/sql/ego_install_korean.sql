@@ -1,6 +1,9 @@
 -- ============================================================
 -- 에고무기 한글 테이블 설치 SQL
--- Java 8 / MySQL 또는 MariaDB / UTF-8
+-- 파일 인코딩: UTF-8
+-- DB/테이블 문자셋: EUC-KR
+-- 중요: SQL 파일은 UTF-8로 저장하고, 접속은 SET NAMES utf8로 실행한다.
+--       테이블 저장 문자셋만 euckr로 생성한다.
 -- ============================================================
 
 SET NAMES utf8;
@@ -26,7 +29,7 @@ CREATE TABLE IF NOT EXISTS `에고` (
     INDEX `캐릭터번호_idx` (`캐릭터번호`),
     INDEX `이름_idx` (`이름`),
     INDEX `형태_idx` (`형태`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='에고무기 기본 정보';
+) ENGINE=InnoDB DEFAULT CHARSET=euckr COLLATE=euckr_korean_ci COMMENT='에고무기 기본 정보';
 
 CREATE TABLE IF NOT EXISTS `에고능력` (
     `번호` BIGINT NOT NULL AUTO_INCREMENT,
@@ -43,7 +46,7 @@ CREATE TABLE IF NOT EXISTS `에고능력` (
     UNIQUE KEY `아이템능력_uk` (`아이템번호`, `능력`),
     INDEX `아이템번호_idx` (`아이템번호`),
     INDEX `능력_idx` (`능력`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='에고무기 능력 정보';
+) ENGINE=InnoDB DEFAULT CHARSET=euckr COLLATE=euckr_korean_ci COMMENT='에고무기 능력 정보';
 
 CREATE TABLE IF NOT EXISTS `에고모양` (
     `형태` VARCHAR(40) NOT NULL COMMENT 'dagger/sword/tohandsword/axe/spear/bow/staff/wand',
@@ -53,7 +56,7 @@ CREATE TABLE IF NOT EXISTS `에고모양` (
     `설명` VARCHAR(255) NOT NULL DEFAULT '' COMMENT '아이템정보 보조 설명',
     `사용` TINYINT(1) NOT NULL DEFAULT 1 COMMENT '사용 여부',
     PRIMARY KEY (`형태`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='에고 형태별 인벤토리/바닥 표시';
+) ENGINE=InnoDB DEFAULT CHARSET=euckr COLLATE=euckr_korean_ci COMMENT='에고 형태별 인벤토리/바닥 표시';
 
 INSERT INTO `에고모양`
 (`형태`, `표시`, `인벤이미지`, `바닥이미지`, `설명`, `사용`)
@@ -79,7 +82,7 @@ CREATE TABLE IF NOT EXISTS `에고성격` (
     `자동공격` TINYINT(1) NOT NULL DEFAULT 1,
     `자동경고` TINYINT(1) NOT NULL DEFAULT 1,
     PRIMARY KEY (`성격`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='에고 성격 기본값';
+) ENGINE=InnoDB DEFAULT CHARSET=euckr COLLATE=euckr_korean_ci COMMENT='에고 성격 기본값';
 
 INSERT INTO `에고성격`
 (`성격`, `표시명`, `설명`, `위험체력`, `자동공격`, `자동경고`)
@@ -105,7 +108,7 @@ CREATE TABLE IF NOT EXISTS `에고대화` (
     PRIMARY KEY (`번호`),
     INDEX `성격_idx` (`성격`),
     INDEX `명령_idx` (`명령`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='에고 대화 기본값';
+) ENGINE=InnoDB DEFAULT CHARSET=euckr COLLATE=euckr_korean_ci COMMENT='에고 대화 기본값';
 
 CREATE TABLE IF NOT EXISTS `에고능력기본` (
     `능력` VARCHAR(40) NOT NULL COMMENT '능력 코드',
@@ -119,7 +122,7 @@ CREATE TABLE IF NOT EXISTS `에고능력기본` (
     `이펙트` INT NOT NULL DEFAULT 0,
     `사용` TINYINT(1) NOT NULL DEFAULT 1,
     PRIMARY KEY (`능력`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='에고 능력 기본값';
+) ENGINE=InnoDB DEFAULT CHARSET=euckr COLLATE=euckr_korean_ci COMMENT='에고 능력 기본값';
 
 INSERT INTO `에고능력기본`
 (`능력`, `이름`, `설명`, `기본확률`, `레벨확률`, `최대확률`, `최소레벨`, `쿨타임`, `이펙트`, `사용`)
@@ -159,9 +162,9 @@ CREATE TABLE IF NOT EXISTS `에고기록` (
     INDEX `아이템번호_idx` (`아이템번호`),
     INDEX `캐릭터번호_idx` (`캐릭터번호`),
     INDEX `기록일_idx` (`기록일`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='에고 능력 발동 기록';
+) ENGINE=InnoDB DEFAULT CHARSET=euckr COLLATE=euckr_korean_ci COMMENT='에고 능력 발동 기록';
 
-SELECT '에고 한글 테이블 설치 완료' AS result;
+SELECT '에고 한글 테이블 설치 완료 - euckr 저장 문자셋' AS result;
 SHOW TABLES LIKE '에고';
 SHOW TABLES LIKE '에고능력';
 SHOW TABLES LIKE '에고모양';
