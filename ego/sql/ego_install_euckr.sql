@@ -7,6 +7,21 @@
 
 SET NAMES utf8;
 
+-- ============================================================
+-- 에고 레벨별 필요 경험치
+-- Lv.0 -> Lv.1  : 100
+-- Lv.1 -> Lv.2  : 250
+-- Lv.2 -> Lv.3  : 500
+-- Lv.3 -> Lv.4  : 900
+-- Lv.4 -> Lv.5  : 1500  -- 피격 반격 개방
+-- Lv.5 -> Lv.6  : 2400  -- 자동반격 개방
+-- Lv.6 -> Lv.7  : 3600
+-- Lv.7 -> Lv.8  : 5200
+-- Lv.8 -> Lv.9  : 7500
+-- Lv.9 -> Lv.10 : 10000 -- 스턴 50% 개방
+-- Lv.10          : 0     -- 만렙
+-- ============================================================
+
 CREATE TABLE IF NOT EXISTS ego (
     item_id BIGINT NOT NULL COMMENT '에고무기 아이템 objectId',
     char_id BIGINT NOT NULL DEFAULT 0 COMMENT '소유 캐릭터 objectId',
@@ -102,7 +117,7 @@ CREATE TABLE IF NOT EXISTS ego_log (
     INDEX ego_log_date_idx (reg_date)
 ) ENGINE=InnoDB DEFAULT CHARSET=euckr COLLATE=euckr_korean_ci COMMENT='에고 능력 발동 기록';
 
-SELECT 'EGO_INSTALL_OK_EUCKR_LEVEL_0_10' AS result;
+SELECT 'EGO_INSTALL_OK_EUCKR_EXP_CURVE_0_10' AS result;
 SHOW TABLES LIKE 'ego';
 SHOW TABLES LIKE 'ego_skill';
 SHOW TABLES LIKE 'ego_skill_base';
