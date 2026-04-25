@@ -18,6 +18,7 @@ PcInstance 공격 로직 변경 금지
 DamageController 무기 타입/데미지 공식 변경 금지
 원본 item.type2 변경 금지
 원본 아이템 템플릿 변경 금지
+EgoCombat 없음, 만들지 않음
 에고는 별도 모듈로만 추가
 ```
 
@@ -38,7 +39,37 @@ DamageController 무기 타입/데미지 공식 변경 금지
 아이템정보 표시
 에고 전용 DB 상태
 에고 특별능력 보조 발동
+에고 경험치/레벨업
 상대 감지
+```
+
+---
+
+## 생성 조건
+
+에고 생성은 착용 중인 무기에만 가능합니다.
+
+```text
+착용 무기 필요
+무기 슬롯 아이템 필요
+원본 type2 지원 필요
+강화 수치 +0 필요
+이미 에고가 생성된 무기 재생성 불가
+```
+
+강화된 무기는 생성 불가입니다.
+
+```text
++0 무기     → 에고 생성 가능
++1 이상 무기 → 에고 생성 불가
+-1 등 특수 강화값 → 에고 생성 불가
+```
+
+이유:
+
+```text
+강화 무기까지 허용하면 에고 성장/기존 강화/운영 보정이 섞여 추적이 어려워집니다.
+에고 시스템은 +0 무기를 성장시키는 별도 성장축으로 사용합니다.
 ```
 
 ---
@@ -117,16 +148,22 @@ ego_log
 핵심 컬럼:
 
 ```text
-ego.item_id
-ego.char_id
-ego.use_yn
-ego.ego_name
-ego.ego_type
-ego.ego_lv
-ego.ego_exp
-ego.need_exp
-ego.form
-ego.prev_shield
+ego.item_id       에고가 생성된 아이템 objectId
+ego.char_id       소유 캐릭터 objectId
+ego.use_yn        사용 여부
+ego.ego_name      호출 이름
+ego.ego_type      성격
+ego.ego_lv        에고 레벨
+ego.ego_exp       현재 경험치
+ego.need_exp      다음 레벨 필요 경험치
+ego.form          표시형태
+ego.prev_shield   표시형태 변경 때문에 해제한 방패 objectId
+
+ego_skill.item_id
+ego_skill.skill
+ego_skill.skill_lv
+ego_skill.rate_bonus
+ego_skill.dmg_bonus
 
 ego_view.form
 ego_view.label
@@ -137,7 +174,22 @@ ego_view.memo
 
 ---
 
-## 인벤토리/바닥 이미지/아이템정보 처리
+## 인벤토리 표시
+
+에고 생성 후 인벤토리 이름 뒤에 색상 표식이 붙습니다.
+
+```text
+무기명 \fY[에고]\fW \fS(활 Lv.1 공명)\fW
+무기명 \fY[에고]\fW \fS(한손검 Lv.3 흡혈)\fW
+```
+
+실제 클라이언트에서는 색상코드가 적용되어 `[에고]`가 강조됩니다.
+
+아이템정보에는 에고 상태가 표시됩니다.
+
+```text
+에고형태: 활 / 레벨: 3 / 경험치: 15/300 / 능력: 공명
+```
 
 원본 아이템 템플릿은 절대 직접 수정하지 않습니다.
 
@@ -146,29 +198,6 @@ ego_view.memo
 원본 item.GroundGfx   변경 안 함
 원본 item.Type2       변경 안 함
 원본 item.NameId      변경 안 함
-```
-
-대신 `ego_view` 테이블에서 형태별 표시값을 관리합니다.
-
-```text
-ego_view.inv_gfx     = 인벤토리 아이콘 gfx
-ego_view.ground_gfx  = 바닥에 떨어졌을 때 gfx
-ego_view.label       = 표시 형태명
-ego_view.memo        = 아이템정보 보조 설명
-```
-
-값이 `0`이면 원본 이미지를 그대로 사용합니다.
-
-```text
-inv_gfx = 0     → 원본 InvGfx 사용
-ground_gfx = 0  → 원본 GroundGfx 사용
-```
-
-아이템정보 표시는 기존 옵션 구조를 크게 건드리지 않고 이름 뒤에 에고 정보를 붙입니다.
-
-```text
-+9 무기명 [에고:활 Lv.3 공명]
-+9 무기명 [에고:양손검 Lv.5 치명]
 ```
 
 ---
@@ -192,7 +221,68 @@ ground_gfx = 0  → 원본 GroundGfx 사용
 원본 창이면 계속 창 공격
 ```
 
-방패 처리도 기존 장착 시스템을 호출하는 보조 기능일 뿐, 공격 타입을 바꾸지 않습니다.
+---
+
+## 에고 경험치/레벨업
+
+에고 경험치와 레벨은 `ego` 테이블에 저장됩니다.
+
+```text
+ego.ego_lv   현재 에고 레벨
+ego.ego_exp  현재 누적 경험치
+ego.need_exp 다음 레벨 필요 경험치
+```
+
+기본값:
+
+```text
+생성 시 레벨: 1
+생성 시 경험치: 0
+생성 시 필요 경험치: 100
+최대 레벨: 30
+```
+
+경험치 획득:
+
+```text
+전투 중 에고 보조능력이 연결된 공격 → 3초마다 +1 경험치
+몬스터 처치 hook을 addKillExp에 연결한 경우 → 일반 몬스터 +5 경험치
+보스 몬스터 처치 hook을 addKillExp에 연결한 경우 → +55 경험치
+```
+
+레벨업 공식:
+
+```text
+현재 경험치 >= 필요 경험치가 되면 레벨 +1
+남은 경험치는 다음 레벨 경험치로 이월
+다음 필요 경험치 = 기존 필요 경험치 + 현재 레벨 * 100
+최대 레벨 30에서 더 이상 레벨업하지 않음
+```
+
+예시:
+
+```text
+Lv.1 필요 100
+Lv.2 필요 300
+Lv.3 필요 600
+Lv.4 필요 1000
+```
+
+레벨업 시:
+
+```text
+개인 메시지: [에고] 의식이 성장했습니다. Lv.N
+이펙트 출력 시도
+인벤토리 이름/아이템정보 즉시 갱신
+```
+
+주의:
+
+```text
+경험치/레벨은 무기 강화수치와 별개입니다.
+무기 강화수치가 오르는 기능이 아닙니다.
+에고 레벨만 올라갑니다.
+```
 
 ---
 
@@ -237,10 +327,12 @@ ego/sql/ego_install_euckr.sql
 6. DamageController 연결: EgoSkill.attack(...) 단 1회만 추가
 7. DB 시작 연결: EgoDB.init(con)
 8. 서버 빌드
-9. .에고생성 카르마
-10. 카르마 상태 / 카르마 활 / 카르마 양검 / 카르마 한검 테스트
-11. 인벤토리 아이콘/이름 변경 확인
-12. 실제 공격 타입은 원본 무기 기준인지 확인
+9. +0 무기 착용
+10. .에고생성 카르마
+11. 인벤토리 [에고] 색상 표식 확인
+12. .에고정보 확인
+13. 카르마 상태 / 카르마 활 / 카르마 양검 / 카르마 한검 테스트
+14. 실제 공격 타입은 원본 무기 기준인지 확인
 ```
 
 연결 예시:
@@ -265,7 +357,7 @@ if (EgoCmd.run(o, key, st)) {
 
 ```java
 // DamageController: 최종 return 직전, 기존 dmg 계산 이후 보조능력만 추가
-if (cha instanceof PcInstance && weapon != null) {
+if (cha instanceof PcInstance && weapon != null && dmg > 0) {
     dmg = EgoSkill.attack((Character) cha, target, weapon, (int) Math.round(dmg));
 }
 ```
@@ -283,27 +375,6 @@ PcInstance의 공격 사거리 변경 금지
 PcInstance의 화살 소비 로직 변경 금지
 DamageController의 weapon.getItem().getType2() 교체 금지
 EgoCombat 같은 전투 타입 우회 클래스 추가 금지
-```
-
----
-
-## Java 수정 없이 운영 생성/편집
-
-형태별 이미지 변경 예시:
-
-```sql
-UPDATE ego_view
-SET inv_gfx = 1001,
-    ground_gfx = 1002,
-    memo = '에고 활 전용 이미지'
-WHERE form = 'bow';
-```
-
-수정 후:
-
-```text
-.에고리로드
-또는 서버 재시작
 ```
 
 ---
@@ -348,6 +419,38 @@ WHERE form = 'bow';
 
 ---
 
+## 운영 SQL 예시
+
+형태별 이미지 변경:
+
+```sql
+UPDATE ego_view
+SET inv_gfx = 1001,
+    ground_gfx = 1002,
+    memo = '에고 활 전용 이미지'
+WHERE form = 'bow';
+```
+
+에고 경험치 보정:
+
+```sql
+UPDATE ego
+SET ego_lv = 5,
+    ego_exp = 0,
+    need_exp = 1000
+WHERE item_id = 123456789
+  AND use_yn = 1;
+```
+
+수정 후:
+
+```text
+.에고리로드
+또는 서버 재시작
+```
+
+---
+
 ## 주의
 
 ```text
@@ -356,4 +459,5 @@ WHERE form = 'bow';
 - Java 8 / UTF-8 기준으로 컴파일하세요.
 - 에고는 기존 서버 전투 코어를 변경하지 않습니다.
 - 인벤이미지/바닥이미지 값이 0이면 원본 아이템 이미지를 사용합니다.
+- 강화된 무기에는 에고를 생성할 수 없습니다.
 ```
