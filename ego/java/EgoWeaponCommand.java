@@ -74,7 +74,7 @@ public final class EgoWeaponCommand {
     private static void help(PcInstance pc) {
         info(pc, "========== 에고무기 명령어 ==========");
         msg(pc, Lineage.command + "에고생성 [이름] : 착용 중인 무기를 에고무기로 활성화");
-        msg(pc, Lineage.command + "에고삭제 확인 : 착용 에고무기 비활성화");
+        msg(pc, Lineage.command + "에고삭제 확인 : 착용 에고무기 완전삭제");
         msg(pc, Lineage.command + "에고정보 : 착용 에고무기 정보 확인");
         msg(pc, Lineage.command + "에고이름 [새이름] : 에고 호출 이름 변경");
         msg(pc, Lineage.command + "에고능력 [능력코드] : 에고 특별 능력 설정");
@@ -138,8 +138,8 @@ public final class EgoWeaponCommand {
             return;
         }
         if (st == null || !st.hasMoreTokens() || !"확인".equals(st.nextToken().trim())) {
-            danger(pc, Lineage.command + "에고삭제 확인 을 입력해야 삭제됩니다.");
-            info(pc, "삭제는 완전 삭제가 아니라 에고 비활성화입니다. 로그와 기존 기록은 운영 추적용으로 보존됩니다.");
+            danger(pc, Lineage.command + "에고삭제 확인 을 입력해야 완전삭제됩니다.");
+            info(pc, "주의: 에고삭제는 ego / ego_skill / ego_log 기록을 모두 삭제합니다. 복구가 불가능합니다.");
             return;
         }
 
@@ -147,7 +147,7 @@ public final class EgoWeaponCommand {
         if (EgoWeaponDatabase.disableEgo(weapon)) {
             EgoDB.reload(null);
             EgoView.refreshInventory(pc, weapon);
-            msg(pc, String.format("%s 의 에고가 잠들었습니다.", weaponName));
+            msg(pc, String.format("%s 의 에고가 완전삭제되었습니다.", weaponName));
         } else {
             danger(pc, "에고 삭제에 실패했습니다. DB 상태를 확인하세요.");
         }
