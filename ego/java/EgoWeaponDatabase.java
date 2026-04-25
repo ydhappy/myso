@@ -21,6 +21,7 @@ import lineage.world.object.instance.PcInstance;
  * - 영문 단순 테이블 ego / ego_skill 사용.
  * - 에고 레벨은 0~10 고정.
  * - Lv.0은 스킬/치명/반격/스턴 없음.
+ * - ego_type은 현재 말투 저장소로 사용: 예의 / 예의반대.
  * - 에고삭제는 ego/ego_skill/ego_log 완전삭제.
  */
 public final class EgoWeaponDatabase {
@@ -35,17 +36,7 @@ public final class EgoWeaponDatabase {
      * index 10 = Lv.10 만렙 표시용 0.
      */
     private static final long[] NEED_EXP_BY_LEVEL = new long[] {
-        100L,    // Lv.0 -> Lv.1: 기본 스킬/치명 개방
-        250L,    // Lv.1 -> Lv.2
-        500L,    // Lv.2 -> Lv.3
-        900L,    // Lv.3 -> Lv.4
-        1500L,   // Lv.4 -> Lv.5: 피격 반격 개방
-        2400L,   // Lv.5 -> Lv.6: 자동반격 개방
-        3600L,   // Lv.6 -> Lv.7
-        5200L,   // Lv.7 -> Lv.8
-        7500L,   // Lv.8 -> Lv.9
-        10000L,  // Lv.9 -> Lv.10: 스턴 50% 개방
-        0L       // Lv.10 만렙
+        100L, 250L, 500L, 900L, 1500L, 2400L, 3600L, 5200L, 7500L, 10000L, 0L
     };
 
     private static final Map<Long, EgoWeaponInfo> egoMap = new ConcurrentHashMap<Long, EgoWeaponInfo>();
@@ -89,7 +80,7 @@ public final class EgoWeaponDatabase {
                 info.chaObjId = rs.getLong("char_id");
                 info.enabled = rs.getBoolean("use_yn");
                 info.egoName = rs.getString("ego_name");
-                info.personality = rs.getString("ego_type");
+                info.personality = normalizeTone(rs.getString("ego_type"));
                 info.level = clampLevel(rs.getInt("ego_lv"));
                 info.exp = Math.max(0, rs.getLong("ego_exp"));
                 info.maxExp = getNeedExp(info.level);
@@ -182,6 +173,13 @@ public final class EgoWeaponDatabase {
         return defaultName;
     }
 
+    public static String getTone(ItemInstance item) {
+        EgoWeaponInfo info = find(item);
+        if (info == null)
+            return "예의";
+        return normalizeTone(info.personality);
+    }
+
     public static int getEgoLevel(ItemInstance item, int defaultLevel) {
         EgoWeaponInfo info = find(item);
         if (info != null)
@@ -225,10 +223,7 @@ public final class EgoWeaponDatabase {
         if (egoName == null || egoName.trim().length() == 0)
             egoName = "에고";
         egoName = egoName.trim();
-
-        if (personality == null || personality.trim().length() == 0)
-            personality = "수호";
-        personality = personality.trim();
+        personality = normalizeTone(personality);
 
         Connection con = null;
         PreparedStatement st = null;
@@ -347,6 +342,33 @@ public final class EgoWeaponDatabase {
         return false;
     }
 
+    public static boolean setTone(ItemInstance item, String tone) {
+        if (item == null)
+            return false;
+        tone = normalizeTone(tone);
+
+        Connection con = null;
+        PreparedStatement st = null;
+        try {
+            con = DatabaseConnection.getLineage();
+            st = con.prepareStatement("UPDATE ego SET ego_type=?, mod_date=NOW() WHERE item_id=? AND use_yn=1");
+            st.setString(1, tone);
+            st.setLong(2, item.getObjectId());
+            int count = st.executeUpdate();
+
+            EgoWeaponInfo info = find(item.getObjectId());
+            if (info != null)
+                info.personality = tone;
+            return count > 0;
+        } catch (Exception e) {
+            lineage.share.System.printf("%s : setTone(ItemInstance item, String tone)\r\n", EgoWeaponDatabase.class.toString());
+            lineage.share.System.println(e);
+        } finally {
+            DatabaseConnection.close(con, st);
+        }
+        return false;
+    }
+
     public static boolean setAbility(ItemInstance item, String abilityType) {
         if (item == null || abilityType == null || abilityType.trim().length() == 0)
             return false;
@@ -447,6 +469,17 @@ public final class EgoWeaponDatabase {
             DatabaseConnection.close(con, st);
         }
         return false;
+    }
+
+    public static String normalizeTone(String tone) {
+        if (tone == null)
+            return "예의";
+        String t = tone.trim();
+        if (t.length() == 0)
+            return "예의";
+        if ("예의반대".equals(t) || "반말".equals(t) || "막말".equals(t) || "싸가지".equals(t))
+            return "예의반대";
+        return "예의";
     }
 
     private static int clampLevel(int level) {
