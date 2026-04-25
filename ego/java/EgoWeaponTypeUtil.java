@@ -1,16 +1,16 @@
 package lineage.world.controller;
 
-import lineage.database.EgoWeaponDatabase;
 import lineage.share.Lineage;
 import lineage.world.object.instance.ItemInstance;
 
 /**
- * 에고무기 무기 종류 판정 유틸.
+ * 에고무기 원본 무기종류 판정 유틸.
  *
- * 핵심:
- * - 일반 아이템 원본 type2는 공유 템플릿이므로 직접 변경하면 위험하다.
- * - 에고무기는 DB에 저장된 ego_form_type을 우선 무기종류로 본다.
- * - ego_form_type이 없으면 원본 item.type2를 사용한다.
+ * 중요 원칙:
+ * - 에고는 원본 item.type2를 변형하지 않는다.
+ * - getType2(item)는 항상 원본 item.getItem().getType2()만 반환한다.
+ * - ego.form 값은 인벤토리 표시/대화/문서용 표시형태일 뿐, 무기 type2가 아니다.
+ * - PcInstance, DamageController, 공격 사거리, 화살 소비, 무기 공식은 기존 서버 코어를 따른다.
  */
 public final class EgoWeaponTypeUtil {
 
@@ -30,19 +30,16 @@ public final class EgoWeaponTypeUtil {
     public static String getOriginalType2(ItemInstance item) {
         if (item == null || item.getItem() == null || item.getItem().getType2() == null)
             return "";
-        return item.getItem().getType2().trim().toLowerCase();
+        return normalizeType(item.getItem().getType2());
     }
 
     /**
-     * 실제 에고 판정에 사용하는 type2.
-     * 에고 형태변환값이 있으면 그 값을 우선 사용한다.
+     * 원본 무기 type2.
+     *
+     * 이전 버전에서는 에고 표시형태를 type2처럼 우선 반환했지만,
+     * 기존 서버 코어 유지 정책에 따라 제거했다.
      */
     public static String getType2(ItemInstance item) {
-        if (item == null)
-            return "";
-        String formType = EgoWeaponDatabase.getFormType(item);
-        if (formType != null && formType.trim().length() > 0)
-            return normalizeType(formType);
         return getOriginalType2(item);
     }
 
@@ -72,11 +69,10 @@ public final class EgoWeaponTypeUtil {
         if (TYPE_FISHING_ROD.equals(originalType))
             return false;
 
-        String type = getType2(item);
-        if (type.length() == 0)
+        if (originalType.length() == 0)
             return false;
 
-        return isSupportedType(type);
+        return isSupportedType(originalType);
     }
 
     public static boolean isFishingRod(ItemInstance item) {
@@ -84,35 +80,35 @@ public final class EgoWeaponTypeUtil {
     }
 
     public static boolean isDagger(ItemInstance item) {
-        return TYPE_DAGGER.equals(getType2(item));
+        return TYPE_DAGGER.equals(getOriginalType2(item));
     }
 
     public static boolean isOneHandSword(ItemInstance item) {
-        return TYPE_SWORD.equals(getType2(item));
+        return TYPE_SWORD.equals(getOriginalType2(item));
     }
 
     public static boolean isTwoHandSword(ItemInstance item) {
-        return TYPE_TWO_HAND_SWORD.equals(getType2(item));
+        return TYPE_TWO_HAND_SWORD.equals(getOriginalType2(item));
     }
 
     public static boolean isAxe(ItemInstance item) {
-        return TYPE_AXE.equals(getType2(item));
+        return TYPE_AXE.equals(getOriginalType2(item));
     }
 
     public static boolean isSpear(ItemInstance item) {
-        return TYPE_SPEAR.equals(getType2(item));
+        return TYPE_SPEAR.equals(getOriginalType2(item));
     }
 
     public static boolean isBow(ItemInstance item) {
-        return TYPE_BOW.equals(getType2(item));
+        return TYPE_BOW.equals(getOriginalType2(item));
     }
 
     public static boolean isStaff(ItemInstance item) {
-        return TYPE_STAFF.equals(getType2(item));
+        return TYPE_STAFF.equals(getOriginalType2(item));
     }
 
     public static boolean isWand(ItemInstance item) {
-        return TYPE_WAND.equals(getType2(item));
+        return TYPE_WAND.equals(getOriginalType2(item));
     }
 
     public static boolean isMagicWeapon(ItemInstance item) {
@@ -128,7 +124,7 @@ public final class EgoWeaponTypeUtil {
     }
 
     public static String getDisplayTypeName(ItemInstance item) {
-        String type = getType2(item);
+        String type = getOriginalType2(item);
 
         if (TYPE_DAGGER.equals(type))
             return "단검";
@@ -216,12 +212,12 @@ public final class EgoWeaponTypeUtil {
         if (isFishingRod(item))
             return "낚싯대는 에고무기로 사용할 수 없습니다.";
         if (!isValidEgoBaseWeapon(item))
-            return "지원하지 않는 에고 형태입니다. originalType2=" + getOriginalType2(item) + ", egoFormType=" + EgoWeaponDatabase.getFormType(item);
-        return "이 능력은 현재 에고 형태(" + getDisplayTypeName(item) + ")에 사용할 수 없습니다.";
+            return "지원하지 않는 원본 무기 타입입니다. originalType2=" + getOriginalType2(item);
+        return "이 능력은 원본 무기 타입(" + getDisplayTypeName(item) + ")에 사용할 수 없습니다.";
     }
 
     public static String getSupportedWeaponTypesText() {
-        return "지원 에고 형태: 단검(dagger), 한손검(sword), 양손검(tohandsword), 도끼(axe), 창(spear), 활(bow), 지팡이(staff), 완드(wand) / 원본 낚싯대(fishing_rod)는 제외";
+        return "지원 원본 무기 타입: 단검(dagger), 한손검(sword), 양손검(tohandsword), 도끼(axe), 창(spear), 활(bow), 지팡이(staff), 완드(wand) / 원본 낚싯대(fishing_rod)는 제외";
     }
 
     private static String normalizeType(String type) {
