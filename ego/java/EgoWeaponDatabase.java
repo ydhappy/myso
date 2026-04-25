@@ -3,6 +3,7 @@ package lineage.database;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -15,16 +16,19 @@ import lineage.world.object.instance.PcInstance;
 /**
  * 에고무기 DB 헬퍼.
  *
- * 버그 방지 보강:
- * - 능력 변경 시 기존 능력을 모두 비활성화 후 신규 능력만 활성화한다.
- * - DB 캐시와 실제 DB 상태가 어긋나지 않도록 setAbility 성공 후 캐시를 교체한다.
- * - maxExp/level 기본값 보정.
- * - close(null) 호출 가능 구조이지만, 가독성을 위해 finally 구간을 단순화한다.
+ * 보강:
+ * - 능력 변경 시 기존 능력 모두 비활성화 후 신규 능력만 활성화.
+ * - 에고 형태변환 저장: ego_form_type.
+ * - 양손/활 형태 변신 시 해제했던 방패 objectId 저장: prev_shield_objid.
+ * - 구 DB에 신규 컬럼이 아직 없어도 로드가 터지지 않도록 컬럼 존재 여부를 확인한다.
  */
 public final class EgoWeaponDatabase {
 
     private static final Map<Long, EgoWeaponInfo> egoMap = new ConcurrentHashMap<Long, EgoWeaponInfo>();
     private static final Map<Long, List<EgoAbilityInfo>> abilityMap = new ConcurrentHashMap<Long, List<EgoAbilityInfo>>();
+
+    private static boolean hasFormColumn = true;
+    private static boolean hasPrevShieldColumn = true;
 
     private EgoWeaponDatabase() {
     }
@@ -51,6 +55,9 @@ public final class EgoWeaponDatabase {
                 closeCon = true;
             }
 
+            hasFormColumn = hasColumn(con, "character_item_ego", "ego_form_type");
+            hasPrevShieldColumn = hasColumn(con, "character_item_ego", "prev_shield_objid");
+
             st = con.prepareStatement("SELECT * FROM character_item_ego WHERE ego_enabled=1");
             rs = st.executeQuery();
 
@@ -68,6 +75,8 @@ public final class EgoWeaponDatabase {
                 info.controlLevel = Math.max(1, rs.getInt("ego_control_level"));
                 info.lastTalkTime = rs.getLong("ego_last_talk_time");
                 info.lastWarningTime = rs.getLong("ego_last_warning_time");
+                info.formType = hasFormColumn ? safe(rs.getString("ego_form_type")) : "";
+                info.prevShieldObjId = hasPrevShieldColumn ? Math.max(0, rs.getLong("prev_shield_objid")) : 0;
                 egoMap.put(info.itemObjId, info);
             }
         } catch (Exception e) {
@@ -146,6 +155,20 @@ public final class EgoWeaponDatabase {
         return defaultName;
     }
 
+    public static String getFormType(ItemInstance item) {
+        EgoWeaponInfo info = find(item);
+        if (info != null && info.formType != null)
+            return info.formType.trim();
+        return "";
+    }
+
+    public static long getPrevShieldObjId(ItemInstance item) {
+        EgoWeaponInfo info = find(item);
+        if (info != null)
+            return info.prevShieldObjId;
+        return 0;
+    }
+
     public static int getEgoLevel(ItemInstance item, int defaultLevel) {
         EgoWeaponInfo info = find(item);
         if (info != null && info.level > 0)
@@ -186,19 +209,38 @@ public final class EgoWeaponDatabase {
 
         try {
             con = DatabaseConnection.getLineage();
-            st = con.prepareStatement(
-                "INSERT INTO character_item_ego " +
-                "(item_objid, cha_objid, ego_enabled, ego_name, ego_personality, ego_level, ego_exp, ego_max_exp, ego_talk_level, ego_control_level) " +
-                "VALUES (?, ?, 1, ?, ?, 1, 0, 100, 1, 1) " +
-                "ON DUPLICATE KEY UPDATE cha_objid=?, ego_enabled=1, ego_name=?, ego_personality=?"
-            );
-            st.setLong(1, item.getObjectId());
-            st.setLong(2, pc.getObjectId());
-            st.setString(3, egoName);
-            st.setString(4, personality);
-            st.setLong(5, pc.getObjectId());
-            st.setString(6, egoName);
-            st.setString(7, personality);
+            boolean formColumn = hasColumn(con, "character_item_ego", "ego_form_type");
+            boolean shieldColumn = hasColumn(con, "character_item_ego", "prev_shield_objid");
+
+            if (formColumn && shieldColumn) {
+                st = con.prepareStatement(
+                    "INSERT INTO character_item_ego " +
+                    "(item_objid, cha_objid, ego_enabled, ego_name, ego_personality, ego_level, ego_exp, ego_max_exp, ego_talk_level, ego_control_level, ego_form_type, prev_shield_objid) " +
+                    "VALUES (?, ?, 1, ?, ?, 1, 0, 100, 1, 1, '', 0) " +
+                    "ON DUPLICATE KEY UPDATE cha_objid=?, ego_enabled=1, ego_name=?, ego_personality=?"
+                );
+                st.setLong(1, item.getObjectId());
+                st.setLong(2, pc.getObjectId());
+                st.setString(3, egoName);
+                st.setString(4, personality);
+                st.setLong(5, pc.getObjectId());
+                st.setString(6, egoName);
+                st.setString(7, personality);
+            } else {
+                st = con.prepareStatement(
+                    "INSERT INTO character_item_ego " +
+                    "(item_objid, cha_objid, ego_enabled, ego_name, ego_personality, ego_level, ego_exp, ego_max_exp, ego_talk_level, ego_control_level) " +
+                    "VALUES (?, ?, 1, ?, ?, 1, 0, 100, 1, 1) " +
+                    "ON DUPLICATE KEY UPDATE cha_objid=?, ego_enabled=1, ego_name=?, ego_personality=?"
+                );
+                st.setLong(1, item.getObjectId());
+                st.setLong(2, pc.getObjectId());
+                st.setString(3, egoName);
+                st.setString(4, personality);
+                st.setLong(5, pc.getObjectId());
+                st.setString(6, egoName);
+                st.setString(7, personality);
+            }
             st.executeUpdate();
 
             EgoWeaponInfo info = find(item.getObjectId());
@@ -209,6 +251,8 @@ public final class EgoWeaponDatabase {
             info.enabled = true;
             info.egoName = egoName;
             info.personality = personality;
+            if (info.formType == null)
+                info.formType = "";
             if (info.level <= 0)
                 info.level = 1;
             if (info.maxExp <= 0)
@@ -257,10 +301,54 @@ public final class EgoWeaponDatabase {
         return false;
     }
 
-    /**
-     * 능력은 기본 정책상 한 무기에 1개만 활성화한다.
-     * 기존 능력을 비활성화하고 신규 능력만 활성화하여 getFirstAbility()의 예전 능력 선택 버그를 방지한다.
-     */
+    public static boolean setForm(ItemInstance item, String formType, long prevShieldObjId) {
+        if (item == null || formType == null)
+            return false;
+
+        formType = formType.trim().toLowerCase();
+
+        Connection con = null;
+        PreparedStatement st = null;
+
+        try {
+            con = DatabaseConnection.getLineage();
+            if (!hasColumn(con, "character_item_ego", "ego_form_type")) {
+                hasFormColumn = false;
+                return false;
+            }
+
+            boolean shieldColumn = hasColumn(con, "character_item_ego", "prev_shield_objid");
+            if (shieldColumn) {
+                st = con.prepareStatement("UPDATE character_item_ego SET ego_form_type=?, prev_shield_objid=? WHERE item_objid=? AND ego_enabled=1");
+                st.setString(1, formType);
+                st.setLong(2, Math.max(0, prevShieldObjId));
+                st.setLong(3, item.getObjectId());
+            } else {
+                st = con.prepareStatement("UPDATE character_item_ego SET ego_form_type=? WHERE item_objid=? AND ego_enabled=1");
+                st.setString(1, formType);
+                st.setLong(2, item.getObjectId());
+            }
+
+            int count = st.executeUpdate();
+            if (count <= 0)
+                return false;
+
+            EgoWeaponInfo info = find(item.getObjectId());
+            if (info != null) {
+                info.formType = formType;
+                if (shieldColumn)
+                    info.prevShieldObjId = Math.max(0, prevShieldObjId);
+            }
+            return true;
+        } catch (Exception e) {
+            lineage.share.System.printf("%s : setForm(ItemInstance item, String formType, long prevShieldObjId)\r\n", EgoWeaponDatabase.class.toString());
+            lineage.share.System.println(e);
+        } finally {
+            DatabaseConnection.close(con, st);
+        }
+        return false;
+    }
+
     public static boolean setAbility(ItemInstance item, String abilityType) {
         if (item == null || abilityType == null || abilityType.trim().length() == 0)
             return false;
@@ -349,6 +437,24 @@ public final class EgoWeaponDatabase {
         return false;
     }
 
+    private static boolean hasColumn(Connection con, String table, String column) {
+        ResultSet rs = null;
+        try {
+            rs = con.getMetaData().getColumns(null, null, table, column);
+            if (rs != null && rs.next())
+                return true;
+        } catch (SQLException e) {
+            return false;
+        } finally {
+            try { if (rs != null) rs.close(); } catch (Exception e) {}
+        }
+        return false;
+    }
+
+    private static String safe(String value) {
+        return value == null ? "" : value;
+    }
+
     public static final class EgoWeaponInfo {
         public long itemObjId;
         public long chaObjId;
@@ -362,6 +468,8 @@ public final class EgoWeaponDatabase {
         public int controlLevel;
         public long lastTalkTime;
         public long lastWarningTime;
+        public String formType;
+        public long prevShieldObjId;
     }
 
     public static final class EgoAbilityInfo {
