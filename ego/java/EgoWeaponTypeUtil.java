@@ -6,10 +6,9 @@ import lineage.world.object.instance.ItemInstance;
 /**
  * 에고무기 원본 무기종류 판정 유틸.
  *
- * 중요 원칙:
+ * 원칙:
  * - 에고는 원본 item.type2를 변형하지 않는다.
  * - getType2(item)는 항상 원본 item.getItem().getType2()만 반환한다.
- * - ego.form 값은 인벤토리 표시/대화/문서용 표시형태일 뿐, 무기 type2가 아니다.
  * - PcInstance, DamageController, 공격 사거리, 화살 소비, 무기 공식은 기존 서버 코어를 따른다.
  */
 public final class EgoWeaponTypeUtil {
@@ -33,12 +32,6 @@ public final class EgoWeaponTypeUtil {
         return normalizeType(item.getItem().getType2());
     }
 
-    /**
-     * 원본 무기 type2.
-     *
-     * 이전 버전에서는 에고 표시형태를 type2처럼 우선 반환했지만,
-     * 기존 서버 코어 유지 정책에 따라 제거했다.
-     */
     public static String getType2(ItemInstance item) {
         return getOriginalType2(item);
     }
@@ -68,7 +61,6 @@ public final class EgoWeaponTypeUtil {
         String originalType = getOriginalType2(item);
         if (TYPE_FISHING_ROD.equals(originalType))
             return false;
-
         if (originalType.length() == 0)
             return false;
 
@@ -126,26 +118,16 @@ public final class EgoWeaponTypeUtil {
     public static String getDisplayTypeName(ItemInstance item) {
         String type = getOriginalType2(item);
 
-        if (TYPE_DAGGER.equals(type))
-            return "단검";
-        if (TYPE_SWORD.equals(type))
-            return "한손검";
-        if (TYPE_TWO_HAND_SWORD.equals(type))
-            return "양손검";
-        if (TYPE_AXE.equals(type))
-            return "도끼";
-        if (TYPE_SPEAR.equals(type))
-            return "창";
-        if (TYPE_BOW.equals(type))
-            return "활";
-        if (TYPE_STAFF.equals(type))
-            return "지팡이";
-        if (TYPE_WAND.equals(type))
-            return "완드";
-        if (TYPE_FISHING_ROD.equals(type))
-            return "낚싯대";
-        if (type.length() == 0)
-            return "알 수 없음";
+        if (TYPE_DAGGER.equals(type)) return "단검";
+        if (TYPE_SWORD.equals(type)) return "한손검";
+        if (TYPE_TWO_HAND_SWORD.equals(type)) return "양손검";
+        if (TYPE_AXE.equals(type)) return "도끼";
+        if (TYPE_SPEAR.equals(type)) return "창";
+        if (TYPE_BOW.equals(type)) return "활";
+        if (TYPE_STAFF.equals(type)) return "지팡이";
+        if (TYPE_WAND.equals(type)) return "완드";
+        if (TYPE_FISHING_ROD.equals(type)) return "낚싯대";
+        if (type.length() == 0) return "알 수 없음";
         return type;
     }
 
@@ -155,24 +137,15 @@ public final class EgoWeaponTypeUtil {
 
         String name = item.getName() == null ? "" : item.getName().toLowerCase();
 
-        if (name.contains("피") || name.contains("blood") || name.contains("흡혈"))
-            return "BLOOD_DRAIN";
-        if (name.contains("마나") || name.contains("지식") || name.contains("mana"))
-            return "MANA_DRAIN";
-        if (name.contains("화염") || name.contains("불") || name.contains("flame") || name.contains("fire"))
-            return "FLAME_BRAND";
-        if (name.contains("얼음") || name.contains("서리") || name.contains("frost") || name.contains("ice"))
-            return "FROST_BIND";
-        if (name.contains("수호") || name.contains("가디언") || name.contains("guardian"))
-            return "GUARDIAN_SHIELD";
-        if (isMagicWeapon(item))
-            return "MANA_DRAIN";
-        if (isSpear(item))
-            return "AREA_SLASH";
-        if (isHeavyMelee(item))
-            return "CRITICAL_BURST";
-        if (isBow(item))
-            return "EGO_BALANCE";
+        if (name.contains("피") || name.contains("blood") || name.contains("흡혈")) return "BLOOD_DRAIN";
+        if (name.contains("마나") || name.contains("지식") || name.contains("mana")) return "MANA_DRAIN";
+        if (name.contains("화염") || name.contains("불") || name.contains("flame") || name.contains("fire")) return "FLAME_BRAND";
+        if (name.contains("얼음") || name.contains("서리") || name.contains("frost") || name.contains("ice")) return "FROST_BIND";
+        if (name.contains("수호") || name.contains("가디언") || name.contains("guardian")) return "GUARDIAN_SHIELD";
+        if (isMagicWeapon(item)) return "MANA_DRAIN";
+        if (isSpear(item)) return "AREA_SLASH";
+        if (isHeavyMelee(item)) return "CRITICAL_BURST";
+        if (isBow(item)) return "EGO_BALANCE";
         return "EGO_BALANCE";
     }
 
@@ -182,24 +155,17 @@ public final class EgoWeaponTypeUtil {
 
         String type = abilityType.trim().toUpperCase();
 
-        if ("EGO_BALANCE".equals(type))
-            return true;
-        if ("BLOOD_DRAIN".equals(type))
-            return isMelee(item);
-        if ("MANA_DRAIN".equals(type))
-            return isMagicWeapon(item) || isDagger(item) || isOneHandSword(item);
-        if ("CRITICAL_BURST".equals(type))
-            return isMelee(item) || isBow(item);
-        if ("GUARDIAN_SHIELD".equals(type))
-            return true;
-        if ("AREA_SLASH".equals(type))
-            return isSpear(item) || isTwoHandSword(item) || isAxe(item);
-        if ("EXECUTION".equals(type))
-            return isDagger(item) || isOneHandSword(item) || isTwoHandSword(item) || isAxe(item);
-        if ("FLAME_BRAND".equals(type))
-            return isMelee(item) || isMagicWeapon(item);
-        if ("FROST_BIND".equals(type))
-            return isMagicWeapon(item) || isSpear(item) || isBow(item);
+        if ("EGO_BALANCE".equals(type)) return true;
+        if ("BLOOD_DRAIN".equals(type)) return isMelee(item);
+        if ("MANA_DRAIN".equals(type)) return isMagicWeapon(item) || isDagger(item) || isOneHandSword(item);
+        if ("CRITICAL_BURST".equals(type)) return isMelee(item) || isBow(item);
+        if ("GUARDIAN_SHIELD".equals(type)) return true;
+        if ("AREA_SLASH".equals(type)) return isSpear(item) || isTwoHandSword(item) || isAxe(item);
+        if ("EXECUTION".equals(type)) return isDagger(item) || isOneHandSword(item) || isTwoHandSword(item) || isAxe(item);
+        if ("FLAME_BRAND".equals(type)) return isMelee(item) || isMagicWeapon(item);
+        if ("FROST_BIND".equals(type)) return isMagicWeapon(item) || isSpear(item) || isBow(item);
+        if ("EGO_COUNTER".equals(type)) return true;
+        if ("EGO_REVENGE".equals(type)) return true;
 
         return false;
     }
