@@ -3,6 +3,7 @@ package lineage.network.packet.server;
 import lineage.network.packet.BasePacket;
 import lineage.network.packet.Opcodes;
 import lineage.share.Lineage;
+import lineage.world.controller.EgoView;
 import lineage.world.object.instance.ItemArmorInstance;
 import lineage.world.object.instance.ItemInstance;
 import lineage.world.object.instance.ItemWeaponInstance;
@@ -29,7 +30,7 @@ public class S_InventoryAdd extends S_Inventory {
 		writeD(item.getObjectId());
 		if (item instanceof ItemWeaponInstance || item instanceof ItemArmorInstance || item instanceof Arrow) {
 			writeH(item.getItem().getEquippedSlot());
-			writeH(item.getItem().getInvGfx());
+			writeH(EgoView.invGfx(item));
 			writeC(item.getBressPacket());
 			writeD((int) item.getCount());
 			writeC(item.isDefinite() ? 1 : 0);
@@ -47,7 +48,7 @@ public class S_InventoryAdd extends S_Inventory {
 			else
 				writeC(item.getItem().getAction1());
 			writeC(item.getQuantity());
-			writeH(item.getItem().getInvGfx());
+			writeH(EgoView.invGfx(item));
 			writeC(item.getBressPacket());
 			writeD((int) item.getCount());
 			writeC(item.isDefinite() ? 1 : 0);
