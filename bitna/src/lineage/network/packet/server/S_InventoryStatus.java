@@ -3,6 +3,7 @@ package lineage.network.packet.server;
 import lineage.bean.database.Item;
 import lineage.network.packet.BasePacket;
 import lineage.network.packet.Opcodes;
+import lineage.world.controller.EgoView;
 import lineage.world.object.instance.ItemArmorInstance;
 import lineage.world.object.instance.ItemInstance;
 import lineage.world.object.instance.ItemWeaponInstance;
@@ -44,5 +45,10 @@ public class S_InventoryStatus extends S_Inventory {
 		}else{
 			writeC(0x00);
 		}
+	}
+
+	@Override
+	protected String getName(ItemInstance item) {
+		return EgoView.name(item, super.getName(item));
 	}
 }
