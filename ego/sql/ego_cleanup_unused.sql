@@ -1,5 +1,5 @@
 -- ============================================================
--- 에고무기 미사용 DB 정리 + 레벨 0~10 보정 SQL
+-- 에고무기 미사용 DB 정리 + 레벨 0~10 경험치 보정 SQL
 -- 목적: type2 변형/이미지 커스터마이징 제거 후 남은 미사용 컬럼/테이블 삭제
 -- 대상: 기존에 구버전 에고 SQL을 이미 적용한 서버
 -- 주의: 실행 전 DB 백업 필수
@@ -26,12 +26,39 @@ ALTER TABLE ego DROP COLUMN form;
 ALTER TABLE ego DROP COLUMN prev_shield;
 
 -- ------------------------------------------------------------
--- 3. 에고 레벨 0~10 보정
+-- 3. 에고 레벨 0~10 및 레벨별 경험치 보정
 -- ------------------------------------------------------------
 ALTER TABLE ego MODIFY ego_lv INT NOT NULL DEFAULT 0 COMMENT '에고 레벨 0~10, 0은 전투능력 없음';
+ALTER TABLE ego MODIFY need_exp BIGINT NOT NULL DEFAULT 100 COMMENT '현재 레벨에서 다음 레벨 필요 경험치';
+
 UPDATE ego SET ego_lv = 0 WHERE ego_lv < 0;
 UPDATE ego SET ego_lv = 10 WHERE ego_lv > 10;
-UPDATE ego SET need_exp = 100 WHERE need_exp < 100;
+
+-- Lv.0 -> Lv.1  : 100
+-- Lv.1 -> Lv.2  : 250
+-- Lv.2 -> Lv.3  : 500
+-- Lv.3 -> Lv.4  : 900
+-- Lv.4 -> Lv.5  : 1500
+-- Lv.5 -> Lv.6  : 2400
+-- Lv.6 -> Lv.7  : 3600
+-- Lv.7 -> Lv.8  : 5200
+-- Lv.8 -> Lv.9  : 7500
+-- Lv.9 -> Lv.10 : 10000
+-- Lv.10          : 0
+UPDATE ego SET need_exp = 100 WHERE ego_lv = 0;
+UPDATE ego SET need_exp = 250 WHERE ego_lv = 1;
+UPDATE ego SET need_exp = 500 WHERE ego_lv = 2;
+UPDATE ego SET need_exp = 900 WHERE ego_lv = 3;
+UPDATE ego SET need_exp = 1500 WHERE ego_lv = 4;
+UPDATE ego SET need_exp = 2400 WHERE ego_lv = 5;
+UPDATE ego SET need_exp = 3600 WHERE ego_lv = 6;
+UPDATE ego SET need_exp = 5200 WHERE ego_lv = 7;
+UPDATE ego SET need_exp = 7500 WHERE ego_lv = 8;
+UPDATE ego SET need_exp = 10000 WHERE ego_lv = 9;
+UPDATE ego SET need_exp = 0, ego_exp = 0 WHERE ego_lv = 10;
+
+-- 현재 경험치가 새 필요 경험치를 초과하는 경우는 다음 사냥/공격 경험치 획득 시 Java 로직이 자동 레벨업 처리합니다.
+-- 단, 만렙은 경험치 0으로 고정합니다.
 
 -- ------------------------------------------------------------
 -- 4. 레벨별 해금 능력 기본값 추가/보정
@@ -70,8 +97,13 @@ SHOW TABLES LIKE 'ego_talk';
 SHOW TABLES LIKE 'ego_view';
 SHOW TABLES LIKE '에고모양';
 
+SELECT ego_lv, need_exp, COUNT(*) AS count
+FROM ego
+GROUP BY ego_lv, need_exp
+ORDER BY ego_lv;
+
 SELECT *
 FROM ego_skill_base
 WHERE skill IN ('EGO_COUNTER', 'EGO_REVENGE', 'CRITICAL_BURST');
 
-SELECT 'EGO_CLEANUP_LEVEL_0_10_OK' AS result;
+SELECT 'EGO_CLEANUP_EXP_CURVE_0_10_OK' AS result;
