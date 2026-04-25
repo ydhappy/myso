@@ -16,8 +16,14 @@ public final class EgoSkill {
     private EgoSkill() {
     }
 
+    /** 공격자 보조능력: DamageController.getDamage 최종 return 직전 연결. */
     public static int attack(Character cha, object target, ItemInstance weapon, int damage) {
         return EgoWeaponAbilityController.applyAttackAbility(cha, target, weapon, damage);
+    }
+
+    /** 피격자 보조능력: DamageController.toDamage HP 감소 직전 연결. */
+    public static int defense(Character defender, Character attacker, int damage) {
+        return EgoWeaponAbilityController.applyDefenseAbility(defender, attacker, damage);
     }
 
     public static void exp(PcInstance pc, MonsterInstance mon) {
