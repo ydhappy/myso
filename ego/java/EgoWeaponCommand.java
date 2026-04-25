@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.StringTokenizer;
 
 import lineage.bean.lineage.Inventory;
+import lineage.database.EgoDB;
 import lineage.database.EgoWeaponDatabase;
 import lineage.database.EgoWeaponDatabase.EgoAbilityInfo;
 import lineage.database.EgoWeaponDatabase.EgoWeaponInfo;
@@ -74,7 +75,7 @@ public final class EgoWeaponCommand {
         msg(pc, Lineage.command + "에고능력 [능력코드] : 에고 특별 능력 설정");
         msg(pc, Lineage.command + "에고상대 : 타겟 또는 가장 가까운 상대 캐릭터 분석");
         msg(pc, Lineage.command + "에고주변 : 주변 캐릭터 목록/위험도 감지");
-        msg(pc, Lineage.command + "에고리로드 : DB/이미지 캐시 리로드 및 온라인 인벤토리 즉시반영");
+        msg(pc, Lineage.command + "에고리로드 : DB/이미지/스킬베이스 캐시 리로드 및 온라인 인벤토리 즉시반영");
         msg(pc, "일반 채팅: 에고 상태 / 에고 조언 / 에고 선공 / 에고 상대 / 에고 주변캐릭 / 에고 공격 / 에고 멈춰");
         msg(pc, "능력코드: EGO_BALANCE, BLOOD_DRAIN, MANA_DRAIN, CRITICAL_BURST, GUARDIAN_SHIELD, AREA_SLASH, EXECUTION, FLAME_BRAND, FROST_BIND");
         info(pc, EgoWeaponTypeUtil.getSupportedWeaponTypesText());
@@ -111,7 +112,7 @@ public final class EgoWeaponCommand {
         if (ok) {
             String defaultAbility = EgoWeaponTypeUtil.getDefaultAbilityType(weapon);
             EgoWeaponDatabase.setAbility(weapon, defaultAbility);
-            EgoWeaponDatabase.reload(null);
+            EgoDB.reload(null);
             EgoView.refreshInventory(pc, weapon);
             msg(pc, String.format("%s 에고가 깨어났습니다. 호출명: %s", weapon.getName(), egoName));
             msg(pc, String.format("원본 무기타입: %s / 강화 %+d / 기본 능력: %s", EgoWeaponTypeUtil.getDisplayTypeName(weapon), weapon.getEnLevel(), defaultAbility));
@@ -173,7 +174,7 @@ public final class EgoWeaponCommand {
             return;
         }
         if (EgoWeaponDatabase.setEgoName(weapon, name)) {
-            EgoWeaponDatabase.reload(null);
+            EgoDB.reload(null);
             EgoView.refreshInventory(pc, weapon);
             msg(pc, String.format("에고 이름이 '%s' 로 변경되었습니다.", name));
         } else {
@@ -213,7 +214,7 @@ public final class EgoWeaponCommand {
             return;
         }
         if (EgoWeaponDatabase.setAbility(weapon, type)) {
-            EgoWeaponDatabase.reload(null);
+            EgoDB.reload(null);
             EgoView.refreshInventory(pc, weapon);
             msg(pc, String.format("특별 능력이 %s 로 설정되었습니다.", type));
         } else {
@@ -226,9 +227,9 @@ public final class EgoWeaponCommand {
             danger(pc, "운영자만 사용할 수 있습니다.");
             return;
         }
-        EgoWeaponDatabase.reload(null);
+        EgoDB.reload(null);
         int refreshed = EgoView.refreshOnlineInventories(pc);
-        msg(pc, String.format("에고 DB/이미지 캐시를 리로드하고 온라인 에고 아이템 %,d개를 즉시 갱신했습니다.", refreshed));
+        msg(pc, String.format("에고 DB/이미지/스킬베이스 캐시를 리로드하고 온라인 에고 아이템 %,d개를 즉시 갱신했습니다.", refreshed));
     }
 
     private static ItemInstance getWeapon(PcInstance pc) {
