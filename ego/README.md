@@ -21,15 +21,16 @@ ego/
 │  ├─ install_ego_windows.bat
 │  └─ install_ego_linux.sh
 ├─ java/
-│  ├─ EgoWeaponTypeUtil.java              # myso 무기종류 판정
-│  ├─ EgoWeaponControlController.java     # myso 대화/상태/선공/제어
-│  ├─ EgoWeaponAbilityController.java     # myso 특별능력
-│  ├─ EgoWeaponDatabase.java              # myso DB 로드/저장
-│  ├─ EgoWeaponCommand.java               # myso 명령어
-│  ├─ EgoWeaponDiagnostics.java           # myso 진단
-│  ├─ EgoOpponentScanController.java      # myso 상대감지
-│  ├─ EgoCoreAdapter.java                 # 다른 서버코어 포팅용
-│  └─ EgoPortableRules.java               # 다른 서버코어 공통 규칙
+│  ├─ EgoMessageUtil.java                # 개인 메시지/색상 통합
+│  ├─ EgoWeaponTypeUtil.java             # myso 무기종류 판정
+│  ├─ EgoWeaponControlController.java    # myso 대화/상태/선공/제어
+│  ├─ EgoWeaponAbilityController.java    # myso 특별능력
+│  ├─ EgoWeaponDatabase.java             # myso DB 로드/저장
+│  ├─ EgoWeaponCommand.java              # myso 명령어
+│  ├─ EgoWeaponDiagnostics.java          # myso 진단
+│  ├─ EgoOpponentScanController.java     # myso 상대감지
+│  ├─ EgoCoreAdapter.java                # 다른 서버코어 포팅용
+│  └─ EgoPortableRules.java              # 다른 서버코어 공통 규칙
 └─ sql/
    ├─ ego_oneclick_install.sql
    └─ ego_no_java_admin.sql
@@ -42,6 +43,7 @@ ego/
 ### myso 서버에 적용
 
 ```text
+ego/java/EgoMessageUtil.java
 ego/java/EgoWeapon*.java
 ego/java/EgoOpponentScanController.java
 ego/sql/ego_oneclick_install.sql
@@ -95,6 +97,9 @@ ego/sql/ego_oneclick_install.sql
 
 ```text
 - 에고 이름 호출 대화
+- 일반채팅으로 호출하되 호출 채팅은 주변에 방송하지 않음
+- 에고 응답은 본인에게만 보이는 개인 메시지로 출력
+- 에고 응답 색상 자동 주입
 - 캐릭터 HP/MP/무기/타겟 상태 인식
 - 선공 몬스터 감지
 - 상대 캐릭터 위험도 분석
@@ -108,12 +113,31 @@ ego/sql/ego_oneclick_install.sql
 
 ---
 
+## 대화 표시 정책
+
+```text
+입력: 일반 채팅으로 "카르마 상태" 입력
+처리: EgoWeaponControlController가 true를 반환하여 일반 채팅 방송 차단
+출력: EgoMessageUtil이 CHATTING_MODE_MESSAGE로 본인에게만 전송
+결과: 다른 캐릭터에게 에고 호출/응답이 보이지 않음
+```
+
+색상:
+
+```text
+일반/정상: \fY
+위험/실패: \fR
+정보/진단: \fS
+```
+
+---
+
 ## myso 빠른 적용 순서
 
 ```text
 1. DB 백업
 2. install/install_ego_windows.bat 또는 install/install_ego_linux.sh 실행
-3. java 파일 7개 복사
+3. java 파일 8개 복사
 4. ChattingController 연결
 5. CommandController 연결
 6. DamageController 연결
@@ -210,4 +234,5 @@ sql/ego_no_java_admin.sql
 - Java 8 / UTF-8 기준으로 컴파일하세요.
 - 운영 전 EgoWeaponAbilityController의 ENABLE_TEST_MODE 확인이 필요합니다.
 - 다른 서버코어는 EgoCoreAdapter/EgoPortableRules를 기준으로 포팅하세요.
+- ChattingController 연결 위치가 잘못되면 호출 채팅이 주변에 보일 수 있습니다.
 ```
