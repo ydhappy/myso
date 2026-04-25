@@ -1,6 +1,6 @@
 # 에고무기 시스템
 
-에고무기 기능을 적용하기 위한 최소 구성 폴더입니다. Java 파일은 전부 `ego/java/` 한 곳에 모았습니다. **적용할 때 쓰는 Java 이름은 짧게 단순화했습니다.** DB 테이블과 컬럼은 한글명입니다.
+에고무기 기능을 적용하기 위한 최소 구성 폴더입니다. Java 파일은 전부 `ego/java/` 한 곳에 모았습니다. 적용할 때 쓰는 Java 이름은 짧게 단순화했습니다. DB 테이블과 컬럼은 한글명입니다.
 
 Java 8 / UTF-8 기준입니다.
 
@@ -24,6 +24,7 @@ ego/
 │  ├─ EgoMsg.java       # 메시지, 색상, 개인출력
 │  ├─ EgoType.java      # 형태/무기종류
 │  ├─ EgoForm.java      # 형태변신
+│  ├─ EgoView.java      # 인벤토리/바닥 이미지, 아이템정보 표시
 │  ├─ EgoTalk.java      # 일반채팅 대화
 │  ├─ EgoSkill.java     # 전투 능력
 │  ├─ EgoDB.java        # DB 연결
@@ -55,6 +56,7 @@ ego/
 EgoMsg    메시지/색상/본인전용 출력
 EgoType   에고 형태/무기종류 판정
 EgoForm   에고무기 자체 형태변신
+EgoView   인벤토리/바닥 이미지, 아이템정보 표시
 EgoTalk   일반채팅 대화 처리
 EgoSkill  전투 능력 발동
 EgoDB     한글 DB 로드/저장
@@ -73,6 +75,7 @@ EgoWeaponFormController    → 적용 코드에서는 EgoForm 사용
 EgoWeaponCommand           → 적용 코드에서는 EgoCmd 사용
 EgoOpponentScanController  → 적용 코드에서는 EgoScan 사용
 EgoMessageUtil             → 적용 코드에서는 EgoMsg 사용
+EgoView                    → 표시 전용, 직접 호출은 보통 불필요
 ```
 
 ---
@@ -85,6 +88,7 @@ EgoMessageUtil             → 적용 코드에서는 EgoMsg 사용
 테이블:
 에고
 에고능력
+에고모양
 에고성격
 에고대화
 에고능력기본
@@ -104,7 +108,70 @@ EgoMessageUtil             → 적용 코드에서는 EgoMsg 사용
 에고.필요경험치
 에고.형태
 에고.이전방패
+
+에고모양.형태
+에고모양.표시
+에고모양.인벤이미지
+에고모양.바닥이미지
+에고모양.설명
 ```
+
+---
+
+## 인벤토리/바닥 이미지/아이템정보 처리
+
+원본 아이템 템플릿은 절대 직접 수정하지 않습니다.
+
+```text
+원본 item.InvGfx      변경 안 함
+원본 item.GroundGfx   변경 안 함
+원본 item.Type2       변경 안 함
+원본 item.NameId      변경 안 함
+```
+
+대신 `에고모양` 테이블에서 형태별 표시값을 관리합니다.
+
+```text
+에고모양.인벤이미지 = 인벤토리 아이콘 gfx
+에고모양.바닥이미지 = 바닥에 떨어졌을 때 gfx
+에고모양.표시       = 표시 형태명
+에고모양.설명       = 아이템정보 보조 설명
+```
+
+값이 `0`이면 원본 이미지를 그대로 사용합니다.
+
+```text
+인벤이미지 = 0 → 원본 InvGfx 사용
+바닥이미지 = 0 → 원본 GroundGfx 사용
+```
+
+패킷 반영 위치:
+
+```text
+S_InventoryAdd       → EgoView.invGfx(item)으로 인벤토리 아이콘 표시
+S_InventoryAdd       → EgoView.name(item, ...)으로 인벤토리 이름 표시
+S_InventoryStatus    → EgoView.name(item, ...)으로 아이템정보 이름 표시
+S_InventoryEquipped  → EgoView.name(item, ...)으로 장착 상태 이름 표시
+EgoWeaponFormController → 형태변신 직후 EgoView.refreshInventory(...) 호출
+```
+
+아이템정보 표시는 안정성을 위해 기존 옵션 코드 구조를 크게 건드리지 않고, 이름 뒤에 에고 정보를 붙입니다.
+
+```text
++9 무기명 [에고:활 Lv.3 공명]
++9 무기명 [에고:양손검 Lv.5 치명]
+```
+
+형태변신 직후에는 인벤토리 아이콘이 바로 바뀌도록 아래 흐름을 사용합니다.
+
+```text
+S_InventoryDelete
+→ S_InventoryAdd
+→ S_InventoryStatus
+→ S_InventoryEquipped
+```
+
+바닥 이미지는 `EgoView.applyGroundGfx(item)`로 현재 에고 형태에 맞는 `바닥이미지`를 아이템 객체의 바닥 gfx에 동기화합니다. 형태변신 직후에는 자동 실행됩니다.
 
 ---
 
@@ -170,7 +237,8 @@ ego/sql/ego_install_korean.sql
 8. 서버 빌드
 9. .에고생성 카르마
 10. 카르마 상태 / 카르마 활 / 카르마 양검 / 카르마 한검 테스트
-11. 카르마 상대 / .에고정보 테스트
+11. 인벤토리 아이콘/이름 변경 확인
+12. 카르마 상대 / .에고정보 테스트
 ```
 
 연결 예시:
@@ -205,31 +273,29 @@ EgoDB.init(con);
 
 ---
 
-## 기능 요약
-
-```text
-- 일반채팅으로 에고 호출
-- 호출 채팅 주변 방송 차단
-- 에고 응답 본인 전용 메시지 출력
-- 에고무기 자체 형태변환
-- 활/양손검 형태 시 방패 자동 해제
-- 한손검/단검/완드 형태 시 직전 방패 자동 복구 시도
-- 캐릭터 HP/MP/타겟 상태 인식
-- 선공 몬스터 감지
-- 상대 캐릭터 위험도 분석
-- 간단 자동공격 제어
-- 특별 능력 발동
-- 한글 DB로 이름/레벨/경험치/능력/형태 저장
-```
-
----
-
 ## Java 수정 없이 운영 생성/편집
 
 운영 중 생성/편집은 아래 한글 관리 SQL로 처리합니다.
 
 ```text
 sql/ego_no_java_admin.sql
+```
+
+형태별 이미지 변경 예시:
+
+```sql
+UPDATE `에고모양`
+SET `인벤이미지` = 1001,
+    `바닥이미지` = 1002,
+    `설명` = '에고 활 전용 이미지'
+WHERE `형태` = 'bow';
+```
+
+수정 후:
+
+```text
+.에고리로드
+또는 서버 재시작
 ```
 
 ---
@@ -281,7 +347,7 @@ sql/ego_no_java_admin.sql
 - 최초 1회는 서버코어에 Java 연결이 필요합니다.
 - Java 8 / UTF-8 기준으로 컴파일하세요.
 - 한글 테이블/컬럼명을 사용하므로 DB와 Java 파일 모두 UTF-8로 관리하세요.
-- 운영 전 EgoWeaponAbilityController의 ENABLE_TEST_MODE 확인이 필요합니다.
 - ChattingController 연결 위치가 잘못되면 호출 채팅이 주변에 보일 수 있습니다.
 - 에고 형태변환은 원본 아이템 DB type2를 바꾸지 않습니다.
+- 인벤이미지/바닥이미지 값이 0이면 원본 아이템 이미지를 사용합니다.
 ```
