@@ -1,17 +1,9 @@
 package lineage.world.controller;
 
-import java.lang.reflect.Field;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 import lineage.bean.lineage.Inventory;
-import lineage.database.DatabaseConnection;
 import lineage.database.EgoWeaponDatabase;
 import lineage.database.EgoWeaponDatabase.EgoAbilityInfo;
 import lineage.database.EgoWeaponDatabase.EgoWeaponInfo;
@@ -27,84 +19,21 @@ import lineage.world.object.instance.PcInstance;
 /**
  * 에고무기 표시 전용 유틸.
  *
- * 무기변형 제거 정책:
- * - ego.form은 사용하지 않는다.
- * - 인벤토리 이름/아이콘/바닥 이미지는 원본 item.type2 기준이다.
- * - 원본 item.type2, item template, PcInstance, DamageController를 바꾸지 않는다.
+ * 최종 정책:
+ * - type2 변형 없음.
+ * - 인벤토리/바닥 이미지 변경 없음.
+ * - 원본 아이템 템플릿의 inv_gfx / ground_gfx 그대로 사용.
+ * - 에고 표시는 아이템 이름 뒤 [에고] 표식과 정보 문구만 추가한다.
  */
 public final class EgoView {
 
     private static final String EGO_MARK = "\fY[에고]\fW";
 
-    private static final Map<String, ViewInfo> viewMap = new ConcurrentHashMap<String, ViewInfo>();
-    private static volatile boolean useEnglishSchema = true;
-
-    static {
-        resetDefaults();
-    }
-
     private EgoView() {
     }
 
-    public static void reload(Connection con) {
-        resetDefaults();
-
-        PreparedStatement st = null;
-        ResultSet rs = null;
-        boolean closeCon = false;
-
-        try {
-            if (con == null) {
-                con = DatabaseConnection.getLineage();
-                closeCon = true;
-            }
-
-            detectSchema(con);
-            if (useEnglishSchema)
-                st = con.prepareStatement("SELECT * FROM ego_view WHERE use_yn=1");
-            else
-                st = con.prepareStatement("SELECT * FROM `에고모양` WHERE `사용`=1");
-            rs = st.executeQuery();
-
-            while (rs.next()) {
-                ViewInfo info = new ViewInfo();
-                if (useEnglishSchema) {
-                    info.form = normalize(rs.getString("form"));
-                    info.label = safe(rs.getString("label"));
-                    info.invGfx = Math.max(0, rs.getInt("inv_gfx"));
-                    info.groundGfx = Math.max(0, rs.getInt("ground_gfx"));
-                    info.info = safe(rs.getString("memo"));
-                } else {
-                    info.form = normalize(rs.getString("형태"));
-                    info.label = safe(rs.getString("표시"));
-                    info.invGfx = Math.max(0, rs.getInt("인벤이미지"));
-                    info.groundGfx = Math.max(0, rs.getInt("바닥이미지"));
-                    info.info = safe(rs.getString("설명"));
-                }
-
-                if (info.form.length() > 0)
-                    viewMap.put(info.form, info);
-            }
-        } catch (Exception e) {
-            lineage.share.System.println("EgoView reload skip: " + e.getMessage());
-        } finally {
-            if (closeCon)
-                DatabaseConnection.close(con, st, rs);
-            else
-                DatabaseConnection.close(st, rs);
-        }
-    }
-
-    private static void detectSchema(Connection con) {
-        if (tableExists(con, "ego_view")) {
-            useEnglishSchema = true;
-            return;
-        }
-        if (tableExists(con, "에고모양")) {
-            useEnglishSchema = false;
-            return;
-        }
-        useEnglishSchema = true;
+    /** DB 이미지 캐시 없음. 호환용 no-op. */
+    public static void reload(java.sql.Connection con) {
     }
 
     public static boolean isEgo(ItemInstance item) {
@@ -115,41 +44,22 @@ public final class EgoView {
         return EgoWeaponTypeUtil.getType2(item);
     }
 
+    /** 원본 인벤토리 이미지 그대로 사용. */
     public static int invGfx(ItemInstance item) {
         if (item == null || item.getItem() == null)
             return 0;
-        if (!isEgo(item))
-            return item.getItem().getInvGfx();
-
-        ViewInfo info = getView(item);
-        if (info != null && info.invGfx > 0)
-            return info.invGfx;
-
         return item.getItem().getInvGfx();
     }
 
+    /** 원본 바닥 이미지 그대로 사용. */
     public static int groundGfx(ItemInstance item) {
         if (item == null || item.getItem() == null)
             return 0;
-        if (!isEgo(item))
-            return item.getItem().getGroundGfx();
-
-        ViewInfo info = getView(item);
-        if (info != null && info.groundGfx > 0)
-            return info.groundGfx;
-
         return item.getItem().getGroundGfx();
     }
 
+    /** 원본 바닥 이미지 그대로 사용하므로 별도 적용하지 않는다. */
     public static void applyGroundGfx(ItemInstance item) {
-        if (item == null)
-            return;
-        try {
-            Field field = lineage.world.object.object.class.getDeclaredField("gfx");
-            field.setAccessible(true);
-            field.setInt(item, groundGfx(item));
-        } catch (Throwable e) {
-        }
     }
 
     public static String name(ItemInstance item, String baseName) {
@@ -178,9 +88,7 @@ public final class EgoView {
     public static String info(ItemInstance item) {
         if (item == null || !isEgo(item))
             return "";
-        ViewInfo view = getView(item);
         String label = label(item);
-        String text = view == null ? "" : safe(view.info);
         EgoWeaponInfo ego = EgoWeaponDatabase.find(item);
         int level = ego == null ? 1 : Math.max(1, ego.level);
         long exp = ego == null ? 0 : Math.max(0, ego.exp);
@@ -192,8 +100,6 @@ public final class EgoView {
         sb.append(" / 경험치: ").append(exp).append("/").append(need);
         if (skill.length() > 0)
             sb.append(" / 능력: ").append(skill);
-        if (text.length() > 0)
-            sb.append(" / ").append(text);
         return sb.toString();
     }
 
@@ -201,7 +107,6 @@ public final class EgoView {
         if (pc == null || item == null)
             return;
         try {
-            applyGroundGfx(item);
             pc.toSender(S_InventoryDelete.clone(BasePacketPooling.getPool(S_InventoryDelete.class), item));
             pc.toSender(S_InventoryAdd.clone(BasePacketPooling.getPool(S_InventoryAdd.class), item));
             pc.toSender(S_InventoryStatus.clone(BasePacketPooling.getPool(S_InventoryStatus.class), item));
@@ -229,35 +134,21 @@ public final class EgoView {
         return count;
     }
 
-    @SuppressWarnings("unchecked")
     public static int refreshOnlineInventories(PcInstance caller) {
         int count = 0;
         List<PcInstance> pcs = new ArrayList<PcInstance>();
-
         try {
-            Field field = World.class.getDeclaredField("pc_list");
-            field.setAccessible(true);
-            Object value = field.get(null);
-            if (value instanceof List<?>) {
-                synchronized (value) {
-                    pcs.addAll((List<PcInstance>) value);
-                }
-            }
+            pcs.addAll(World.getPcList());
         } catch (Throwable e) {
             if (caller != null)
                 pcs.add(caller);
         }
-
-        for (PcInstance pc : pcs) {
+        for (PcInstance pc : pcs)
             count += refreshPcInventory(pc);
-        }
         return count;
     }
 
     public static String label(ItemInstance item) {
-        ViewInfo info = getView(item);
-        if (info != null && info.label.length() > 0)
-            return info.label;
         return EgoWeaponTypeUtil.getDisplayTypeName(item);
     }
 
@@ -301,65 +192,7 @@ public final class EgoView {
         return type;
     }
 
-    private static ViewInfo getView(ItemInstance item) {
-        String form = form(item);
-        if (form == null || form.length() == 0)
-            return null;
-        return viewMap.get(normalize(form));
-    }
-
-    private static void resetDefaults() {
-        viewMap.clear();
-        putDefault("dagger", "단검");
-        putDefault("sword", "한손검");
-        putDefault("tohandsword", "양손검");
-        putDefault("axe", "도끼");
-        putDefault("spear", "창");
-        putDefault("bow", "활");
-        putDefault("staff", "지팡이");
-        putDefault("wand", "완드");
-    }
-
-    private static void putDefault(String form, String label) {
-        ViewInfo info = new ViewInfo();
-        info.form = form;
-        info.label = label;
-        info.info = "";
-        viewMap.put(form, info);
-    }
-
-    private static boolean tableExists(Connection con, String table) {
-        ResultSet rs = null;
-        try {
-            rs = con.getMetaData().getTables(null, null, table, null);
-            if (rs != null && rs.next())
-                return true;
-        } catch (SQLException e) {
-            return false;
-        } finally {
-            try { if (rs != null) rs.close(); } catch (Exception e) {}
-        }
-        return false;
-    }
-
-    private static String normalize(String value) {
-        if (value == null)
-            return "";
-        value = value.trim().toLowerCase();
-        if ("twohand_sword".equals(value) || "two_handed_sword".equals(value))
-            return "tohandsword";
-        return value;
-    }
-
     private static String safe(String value) {
         return value == null ? "" : value.trim();
-    }
-
-    private static final class ViewInfo {
-        String form;
-        String label;
-        String info;
-        int invGfx;
-        int groundGfx;
     }
 }
