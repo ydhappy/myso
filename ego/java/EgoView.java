@@ -4,6 +4,7 @@ import java.lang.reflect.Field;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -26,22 +27,14 @@ import lineage.world.object.instance.PcInstance;
 /**
  * 에고무기 표시 전용 유틸.
  *
- * 처리 범위:
- * - 인벤토리 아이콘: 에고모양.인벤이미지
- * - 바닥 이미지: 에고모양.바닥이미지
- * - 인벤토리 이름/아이템정보: [에고:형태 Lv.n 능력] suffix
- * - 형태변신 직후 인벤토리 아이콘 재전송
- * - 형태변신 직후 바닥 표시 gfx 동기화
- * - 리로드 직후 접속자 인벤토리 에고 아이템 즉시 재전송
- *
- * 안전 원칙:
- * - 원본 Item 템플릿의 InvGfx/GroundGfx/NameId/type2는 변경하지 않는다.
- * - 에고 아이템 1개에 대해서만 표시값을 계산한다.
- * - 에고모양 테이블에 이미지값이 0이면 원본 이미지를 사용한다.
+ * EUC-KR 안전 정책:
+ * - 우선 영문 단순 테이블 ego_view 사용.
+ * - 기존 한글 테이블 `에고모양`이 있으면 fallback으로 읽는다.
  */
 public final class EgoView {
 
     private static final Map<String, ViewInfo> viewMap = new ConcurrentHashMap<String, ViewInfo>();
+    private static volatile boolean useEnglishSchema = true;
 
     static {
         resetDefaults();
@@ -63,22 +56,33 @@ public final class EgoView {
                 closeCon = true;
             }
 
-            st = con.prepareStatement("SELECT * FROM `에고모양` WHERE `사용`=1");
+            detectSchema(con);
+            if (useEnglishSchema)
+                st = con.prepareStatement("SELECT * FROM ego_view WHERE use_yn=1");
+            else
+                st = con.prepareStatement("SELECT * FROM `에고모양` WHERE `사용`=1");
             rs = st.executeQuery();
 
             while (rs.next()) {
                 ViewInfo info = new ViewInfo();
-                info.form = normalize(rs.getString("형태"));
-                info.label = safe(rs.getString("표시"));
-                info.invGfx = Math.max(0, rs.getInt("인벤이미지"));
-                info.groundGfx = Math.max(0, rs.getInt("바닥이미지"));
-                info.info = safe(rs.getString("설명"));
+                if (useEnglishSchema) {
+                    info.form = normalize(rs.getString("form"));
+                    info.label = safe(rs.getString("label"));
+                    info.invGfx = Math.max(0, rs.getInt("inv_gfx"));
+                    info.groundGfx = Math.max(0, rs.getInt("ground_gfx"));
+                    info.info = safe(rs.getString("memo"));
+                } else {
+                    info.form = normalize(rs.getString("형태"));
+                    info.label = safe(rs.getString("표시"));
+                    info.invGfx = Math.max(0, rs.getInt("인벤이미지"));
+                    info.groundGfx = Math.max(0, rs.getInt("바닥이미지"));
+                    info.info = safe(rs.getString("설명"));
+                }
 
                 if (info.form.length() > 0)
                     viewMap.put(info.form, info);
             }
         } catch (Exception e) {
-            // 에고모양 테이블이 없어도 서버는 원본 이미지로 동작해야 한다.
             lineage.share.System.println("EgoView reload skip: " + e.getMessage());
         } finally {
             if (closeCon)
@@ -86,6 +90,18 @@ public final class EgoView {
             else
                 DatabaseConnection.close(st, rs);
         }
+    }
+
+    private static void detectSchema(Connection con) {
+        if (tableExists(con, "ego_view")) {
+            useEnglishSchema = true;
+            return;
+        }
+        if (tableExists(con, "에고모양")) {
+            useEnglishSchema = false;
+            return;
+        }
+        useEnglishSchema = true;
     }
 
     public static boolean isEgo(ItemInstance item) {
@@ -129,10 +145,6 @@ public final class EgoView {
         return item.getItem().getGroundGfx();
     }
 
-    /**
-     * 아이템 객체의 바닥 표시 gfx를 현재 에고 형태에 맞춰 동기화한다.
-     * object.gfx 필드가 protected라 reflection으로 안전하게 접근한다.
-     */
     public static void applyGroundGfx(ItemInstance item) {
         if (item == null)
             return;
@@ -141,7 +153,6 @@ public final class EgoView {
             field.setAccessible(true);
             field.setInt(item, groundGfx(item));
         } catch (Throwable e) {
-            // 바닥 이미지 동기화 실패가 게임 진행을 막으면 안 된다.
         }
     }
 
@@ -185,9 +196,6 @@ public final class EgoView {
         return sb.toString();
     }
 
-    /**
-     * 단일 에고 아이템의 인벤토리 아이콘/이름/상태와 바닥 gfx를 즉시 갱신한다.
-     */
     public static void refreshInventory(PcInstance pc, ItemInstance item) {
         if (pc == null || item == null)
             return;
@@ -203,10 +211,6 @@ public final class EgoView {
         }
     }
 
-    /**
-     * 한 캐릭터 인벤토리 안의 모든 에고 아이템 표시를 갱신한다.
-     * .에고리로드 후 서버 재시작 없이 즉시 반영하기 위한 메서드다.
-     */
     public static int refreshPcInventory(PcInstance pc) {
         if (pc == null)
             return 0;
@@ -224,10 +228,6 @@ public final class EgoView {
         return count;
     }
 
-    /**
-     * 접속 중인 전체 유저 인벤토리의 에고 아이템 표시를 갱신한다.
-     * World.pc_list가 private라 reflection으로 읽는다. 실패 시 caller만 갱신한다.
-     */
     @SuppressWarnings("unchecked")
     public static int refreshOnlineInventories(PcInstance caller) {
         int count = 0;
@@ -265,24 +265,15 @@ public final class EgoView {
         if (skill == null || skill.abilityType == null)
             return "";
         String type = skill.abilityType;
-        if ("EGO_BALANCE".equals(type))
-            return "공명";
-        if ("BLOOD_DRAIN".equals(type))
-            return "흡혈";
-        if ("MANA_DRAIN".equals(type))
-            return "흡마";
-        if ("CRITICAL_BURST".equals(type))
-            return "치명";
-        if ("GUARDIAN_SHIELD".equals(type))
-            return "수호";
-        if ("AREA_SLASH".equals(type))
-            return "광역";
-        if ("EXECUTION".equals(type))
-            return "처형";
-        if ("FLAME_BRAND".equals(type))
-            return "화염";
-        if ("FROST_BIND".equals(type))
-            return "서리";
+        if ("EGO_BALANCE".equals(type)) return "공명";
+        if ("BLOOD_DRAIN".equals(type)) return "흡혈";
+        if ("MANA_DRAIN".equals(type)) return "흡마";
+        if ("CRITICAL_BURST".equals(type)) return "치명";
+        if ("GUARDIAN_SHIELD".equals(type)) return "수호";
+        if ("AREA_SLASH".equals(type)) return "광역";
+        if ("EXECUTION".equals(type)) return "처형";
+        if ("FLAME_BRAND".equals(type)) return "화염";
+        if ("FROST_BIND".equals(type)) return "서리";
         return type;
     }
 
@@ -311,6 +302,20 @@ public final class EgoView {
         info.label = label;
         info.info = "";
         viewMap.put(form, info);
+    }
+
+    private static boolean tableExists(Connection con, String table) {
+        ResultSet rs = null;
+        try {
+            rs = con.getMetaData().getTables(null, null, table, null);
+            if (rs != null && rs.next())
+                return true;
+        } catch (SQLException e) {
+            return false;
+        } finally {
+            try { if (rs != null) rs.close(); } catch (Exception e) {}
+        }
+        return false;
     }
 
     private static String normalize(String value) {
