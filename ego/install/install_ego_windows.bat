@@ -25,7 +25,7 @@ if "%DB_USER%"=="" set DB_USER=root
 
 set /p DB_PASS=DB PASSWORD 입력: 
 
-set SQL_FILE=%~dp0..\sql\ego_oneclick_install.sql
+set SQL_FILE=%~dp0..\sql\ego_install_korean.sql
 
 if not exist "%SQL_FILE%" (
     echo [ERROR] SQL 파일을 찾을 수 없습니다: %SQL_FILE%
@@ -34,7 +34,7 @@ if not exist "%SQL_FILE%" (
 )
 
 echo.
-echo [INFO] 설치 SQL 실행 중...
+echo [INFO] 한글 에고 테이블 설치 SQL 실행 중...
 echo mysql -h %DB_HOST% -P %DB_PORT% -u %DB_USER% -p**** %DB_NAME% ^< %SQL_FILE%
 echo.
 
@@ -53,11 +53,12 @@ if errorlevel 1 (
 )
 
 echo.
-echo [OK] 에고무기 DB 설치 완료
+echo [OK] 에고무기 한글 DB 설치 완료
+echo 생성 테이블: 에고, 에고능력, 에고성격, 에고대화, 에고능력기본, 에고기록
 echo 다음 단계:
 echo 1. 서버가 실행 중이면 .에고리로드 실행
 echo 2. 또는 서버 재시작
-echo 3. Java 연결이 없는 서버는 docs\EGO_SYSTEM_MANUAL.md 또는 docs\EGO_PORTING_GUIDE.md 참고
+echo 3. docs\EGO_SYSTEM_MANUAL.md 확인
 echo.
 pause
 exit /b 0
