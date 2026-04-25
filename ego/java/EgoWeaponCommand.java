@@ -47,6 +47,10 @@ public final class EgoWeaponCommand {
             create(pc, st);
             return true;
         }
+        if (key.equalsIgnoreCase(Lineage.command + "에고삭제")) {
+            delete(pc, st);
+            return true;
+        }
         if (key.equalsIgnoreCase(Lineage.command + "에고정보")) {
             info(pc);
             return true;
@@ -70,6 +74,7 @@ public final class EgoWeaponCommand {
     private static void help(PcInstance pc) {
         info(pc, "========== 에고무기 명령어 ==========");
         msg(pc, Lineage.command + "에고생성 [이름] : 착용 중인 무기를 에고무기로 활성화");
+        msg(pc, Lineage.command + "에고삭제 확인 : 착용 에고무기 비활성화");
         msg(pc, Lineage.command + "에고정보 : 착용 에고무기 정보 확인");
         msg(pc, Lineage.command + "에고이름 [새이름] : 에고 호출 이름 변경");
         msg(pc, Lineage.command + "에고능력 [능력코드] : 에고 특별 능력 설정");
@@ -114,11 +119,37 @@ public final class EgoWeaponCommand {
             EgoWeaponDatabase.setAbility(weapon, defaultAbility);
             EgoDB.reload(null);
             EgoView.refreshInventory(pc, weapon);
-            msg(pc, String.format("%s 에고가 깨어났습니다. 호출명: %s", weapon.getName(), egoName));
+            msg(pc, String.format("%s 에고가 깨어났습니다. 호출명: %s", EgoView.displayName(weapon), egoName));
             msg(pc, String.format("원본 무기타입: %s / 강화 %+d / 기본 능력: %s", EgoWeaponTypeUtil.getDisplayTypeName(weapon), weapon.getEnLevel(), defaultAbility));
             msg(pc, String.format("일반 채팅 예: '%s 상태', '%s 조언', '%s 선공', '%s 상대'", egoName, egoName, egoName, egoName));
         } else {
             danger(pc, "에고 생성에 실패했습니다. DB 적용 여부를 확인하세요.");
+        }
+    }
+
+    private static void delete(PcInstance pc, StringTokenizer st) {
+        ItemInstance weapon = getWeapon(pc);
+        if (weapon == null) {
+            danger(pc, "무기를 착용한 뒤 사용하세요.");
+            return;
+        }
+        if (!EgoWeaponDatabase.isEgoWeapon(weapon)) {
+            danger(pc, "현재 착용 무기는 에고무기가 아닙니다.");
+            return;
+        }
+        if (st == null || !st.hasMoreTokens() || !"확인".equals(st.nextToken().trim())) {
+            danger(pc, Lineage.command + "에고삭제 확인 을 입력해야 삭제됩니다.");
+            info(pc, "삭제는 완전 삭제가 아니라 에고 비활성화입니다. 로그와 기존 기록은 운영 추적용으로 보존됩니다.");
+            return;
+        }
+
+        String weaponName = EgoView.displayName(weapon);
+        if (EgoWeaponDatabase.disableEgo(weapon)) {
+            EgoDB.reload(null);
+            EgoView.refreshInventory(pc, weapon);
+            msg(pc, String.format("%s 의 에고가 잠들었습니다.", weaponName));
+        } else {
+            danger(pc, "에고 삭제에 실패했습니다. DB 상태를 확인하세요.");
         }
     }
 
@@ -138,7 +169,7 @@ public final class EgoWeaponCommand {
         }
 
         info(pc, "========== 에고무기 정보 ==========");
-        msg(pc, String.format("무기: %s", weapon.getName()));
+        msg(pc, String.format("무기: %s", EgoView.displayName(weapon)));
         msg(pc, String.format("표시: %s", EgoView.info(weapon)));
         msg(pc, String.format("이름: %s / 성격: %s", safe(egoInfo.egoName), safe(egoInfo.personality)));
         msg(pc, String.format("원본 type2: %s / 원본 타입: %s / 강화 %+d", EgoWeaponTypeUtil.getOriginalType2(weapon), EgoWeaponTypeUtil.getDisplayTypeName(weapon), weapon.getEnLevel()));
