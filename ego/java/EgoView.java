@@ -4,9 +4,12 @@ import java.lang.reflect.Field;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+import lineage.bean.lineage.Inventory;
 import lineage.database.DatabaseConnection;
 import lineage.database.EgoWeaponDatabase;
 import lineage.database.EgoWeaponDatabase.EgoAbilityInfo;
@@ -16,6 +19,7 @@ import lineage.network.packet.server.S_InventoryAdd;
 import lineage.network.packet.server.S_InventoryDelete;
 import lineage.network.packet.server.S_InventoryEquipped;
 import lineage.network.packet.server.S_InventoryStatus;
+import lineage.world.World;
 import lineage.world.object.instance.ItemInstance;
 import lineage.world.object.instance.PcInstance;
 
@@ -28,6 +32,7 @@ import lineage.world.object.instance.PcInstance;
  * - 인벤토리 이름/아이템정보: [에고:형태 Lv.n 능력] suffix
  * - 형태변신 직후 인벤토리 아이콘 재전송
  * - 형태변신 직후 바닥 표시 gfx 동기화
+ * - 리로드 직후 접속자 인벤토리 에고 아이템 즉시 재전송
  *
  * 안전 원칙:
  * - 원본 Item 템플릿의 InvGfx/GroundGfx/NameId/type2는 변경하지 않는다.
@@ -181,7 +186,7 @@ public final class EgoView {
     }
 
     /**
-     * 형태변신 후 인벤토리 아이콘/이름/상태와 바닥 gfx를 즉시 갱신한다.
+     * 단일 에고 아이템의 인벤토리 아이콘/이름/상태와 바닥 gfx를 즉시 갱신한다.
      */
     public static void refreshInventory(PcInstance pc, ItemInstance item) {
         if (pc == null || item == null)
@@ -196,6 +201,56 @@ public final class EgoView {
         } catch (Throwable e) {
             EgoMessageUtil.danger(pc, "에고 인벤토리 표시 갱신 중 오류가 발생했습니다.");
         }
+    }
+
+    /**
+     * 한 캐릭터 인벤토리 안의 모든 에고 아이템 표시를 갱신한다.
+     * .에고리로드 후 서버 재시작 없이 즉시 반영하기 위한 메서드다.
+     */
+    public static int refreshPcInventory(PcInstance pc) {
+        if (pc == null)
+            return 0;
+        Inventory inv = pc.getInventory();
+        if (inv == null)
+            return 0;
+
+        int count = 0;
+        for (ItemInstance item : inv.getList()) {
+            if (isEgo(item)) {
+                refreshInventory(pc, item);
+                count++;
+            }
+        }
+        return count;
+    }
+
+    /**
+     * 접속 중인 전체 유저 인벤토리의 에고 아이템 표시를 갱신한다.
+     * World.pc_list가 private라 reflection으로 읽는다. 실패 시 caller만 갱신한다.
+     */
+    @SuppressWarnings("unchecked")
+    public static int refreshOnlineInventories(PcInstance caller) {
+        int count = 0;
+        List<PcInstance> pcs = new ArrayList<PcInstance>();
+
+        try {
+            Field field = World.class.getDeclaredField("pc_list");
+            field.setAccessible(true);
+            Object value = field.get(null);
+            if (value instanceof List<?>) {
+                synchronized (value) {
+                    pcs.addAll((List<PcInstance>) value);
+                }
+            }
+        } catch (Throwable e) {
+            if (caller != null)
+                pcs.add(caller);
+        }
+
+        for (PcInstance pc : pcs) {
+            count += refreshPcInventory(pc);
+        }
+        return count;
     }
 
     public static String label(ItemInstance item) {
