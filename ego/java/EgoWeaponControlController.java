@@ -23,7 +23,8 @@ import lineage.world.object.instance.RobotInstance;
  * 대화 정책:
  * - 사용자는 일반 채팅으로 에고를 호출한다.
  * - 에고 호출 채팅은 consume 처리하여 주변 일반채팅으로 방송되지 않게 한다.
- * - 에고 응답은 EgoMessageUtil을 통해 본인에게만 보이는 개인 시스템 메시지로 전송한다.
+ * - 짧은 에고 응답은 본인에게만 보이는 말풍선으로 출력한다.
+ * - 긴 응답은 편지형 HTML로 출력한다.
  */
 public final class EgoWeaponControlController {
 
@@ -234,7 +235,7 @@ public final class EgoWeaponControlController {
         if (!aggroList.isEmpty())
             return "듣고 있습니다. 근처에 선공 몬스터 기척이 있습니다.";
 
-        return String.format("부르셨습니까, 주인님. 원본 무기 타입은 %s입니다.", EgoWeaponTypeUtil.getDisplayTypeName(weapon));
+        return String.format("부르셨습니까, 주인님. 현재 무기는 %s, 원본 타입은 %s입니다.", EgoView.displayName(weapon), EgoWeaponTypeUtil.getDisplayTypeName(weapon));
     }
 
     private static String buildStatus(PcInstance pc, ItemInstance weapon) {
@@ -242,7 +243,7 @@ public final class EgoWeaponControlController {
         int mpRate = getMpRate(pc);
 
         return String.format("Lv.%d / HP %d%%(%d/%d) / MP %d%%(%d/%d) / 에고 +%d %s / 원본 %s",
-            pc.getLevel(), hpRate, pc.getNowHp(), pc.getTotalHp(), mpRate, pc.getNowMp(), pc.getTotalMp(), weapon.getEnLevel(), weapon.getName(), EgoWeaponTypeUtil.getOriginalType2(weapon));
+            pc.getLevel(), hpRate, pc.getNowHp(), pc.getTotalHp(), mpRate, pc.getNowMp(), pc.getTotalMp(), weapon.getEnLevel(), EgoView.displayName(weapon), EgoWeaponTypeUtil.getOriginalType2(weapon));
     }
 
     private static String buildAdvice(PcInstance pc, ItemInstance weapon) {
