@@ -1,8 +1,7 @@
 -- ============================================================
--- 에고무기 무자바 생성/편집 관리 SQL
--- 목적: Java 소스 수정 없이 DB에서 에고무기 생성/편집/형태변경/조회/비활성화
--- 전제: ego_oneclick_install.sql 적용 완료
--- 주의: 서버코어가 에고 DB를 로드/사용하는 Java 연결은 이미 되어 있어야 실제 게임 기능으로 반영됩니다.
+-- 에고무기 한글 관리 SQL
+-- 목적: Java 수정 없이 DB에서 에고 생성/편집/형태변경/조회
+-- 전제: ego_install_korean.sql 적용 완료
 -- ============================================================
 
 SET NAMES utf8;
@@ -10,280 +9,163 @@ SET NAMES utf8;
 -- ------------------------------------------------------------
 -- 0. 기본 변수
 -- ------------------------------------------------------------
-SET @CHA_OBJID := 100001;              -- 캐릭터 objectId
-SET @ITEM_OBJID := 123456789;          -- 착용 무기 item objectId
-SET @EGO_NAME := '카르마';             -- 에고 호출 이름
-SET @EGO_PERSONALITY := 'guardian';    -- guardian / berserker / calm / sage
-SET @EGO_ABILITY := 'EGO_BALANCE';     -- 능력 코드
-SET @EGO_FORM := 'sword';              -- dagger/sword/tohandsword/axe/spear/bow/staff/wand
+SET @캐릭터번호 := 100001;
+SET @아이템번호 := 123456789;
+SET @이름 := '카르마';
+SET @성격 := '수호';
+SET @형태 := 'sword';
+SET @능력 := 'EGO_BALANCE';
+
+-- 형태: dagger 단검 / sword 한손검 / tohandsword 양손검 / axe 도끼 / spear 창 / bow 활 / staff 지팡이 / wand 완드
+-- 능력: EGO_BALANCE 공명 / BLOOD_DRAIN 흡혈 / MANA_DRAIN 흡마 / CRITICAL_BURST 치명 / GUARDIAN_SHIELD 수호 / AREA_SLASH 광역 / EXECUTION 처형 / FLAME_BRAND 화염 / FROST_BIND 서리
 
 -- ------------------------------------------------------------
--- 1. 형태변환 컬럼 보정, 기존 DB용
+-- 1. 에고 생성 또는 재활성화
 -- ------------------------------------------------------------
-SET @db_name := DATABASE();
-SET @sql := IF(
-    (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=@db_name AND TABLE_NAME='character_item_ego' AND COLUMN_NAME='ego_form_type') = 0,
-    'ALTER TABLE character_item_ego ADD COLUMN ego_form_type VARCHAR(40) NOT NULL DEFAULT '''' COMMENT ''에고 현재 변신 형태'' AFTER ego_last_warning_time',
-    'SELECT ''ego_form_type column exists'''
-);
-PREPARE stmt FROM @sql;
-EXECUTE stmt;
-DEALLOCATE PREPARE stmt;
-
-SET @sql := IF(
-    (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=@db_name AND TABLE_NAME='character_item_ego' AND COLUMN_NAME='prev_shield_objid') = 0,
-    'ALTER TABLE character_item_ego ADD COLUMN prev_shield_objid BIGINT NOT NULL DEFAULT 0 COMMENT ''형태변신 때문에 해제한 방패 objectId'' AFTER ego_form_type',
-    'SELECT ''prev_shield_objid column exists'''
-);
-PREPARE stmt FROM @sql;
-EXECUTE stmt;
-DEALLOCATE PREPARE stmt;
-
--- ------------------------------------------------------------
--- 2. 현재 에고 상태 조회
--- ------------------------------------------------------------
-SELECT
-    e.item_objid,
-    e.cha_objid,
-    e.ego_enabled,
-    e.ego_name,
-    e.ego_personality,
-    e.ego_form_type,
-    e.prev_shield_objid,
-    e.ego_level,
-    e.ego_exp,
-    e.ego_max_exp,
-    e.ego_talk_level,
-    e.ego_control_level,
-    e.updated_at
-FROM character_item_ego e
-WHERE e.item_objid = @ITEM_OBJID;
-
-SELECT
-    a.uid,
-    a.item_objid,
-    a.ability_type,
-    a.ability_level,
-    a.proc_chance_bonus,
-    a.damage_bonus,
-    a.enabled,
-    a.updated_at
-FROM character_item_ego_ability a
-WHERE a.item_objid = @ITEM_OBJID
-ORDER BY a.enabled DESC, a.uid DESC;
-
--- ------------------------------------------------------------
--- 3. 에고 생성 또는 재활성화
--- ------------------------------------------------------------
-INSERT INTO character_item_ego
-(
-    item_objid,
-    cha_objid,
-    ego_enabled,
-    ego_name,
-    ego_personality,
-    ego_level,
-    ego_exp,
-    ego_max_exp,
-    ego_talk_level,
-    ego_control_level,
-    ego_last_talk_time,
-    ego_last_warning_time,
-    ego_form_type,
-    prev_shield_objid
-)
+INSERT INTO `에고`
+(`아이템번호`, `캐릭터번호`, `사용`, `이름`, `성격`, `레벨`, `경험치`, `필요경험치`, `대화단계`, `제어단계`, `마지막대화`, `마지막경고`, `형태`, `이전방패`)
 VALUES
-(
-    @ITEM_OBJID,
-    @CHA_OBJID,
-    1,
-    @EGO_NAME,
-    @EGO_PERSONALITY,
-    1,
-    0,
-    100,
-    1,
-    1,
-    0,
-    0,
-    @EGO_FORM,
-    0
-)
+(@아이템번호, @캐릭터번호, 1, @이름, @성격, 1, 0, 100, 1, 1, 0, 0, @형태, 0)
 ON DUPLICATE KEY UPDATE
-    cha_objid = VALUES(cha_objid),
-    ego_enabled = 1,
-    ego_name = VALUES(ego_name),
-    ego_personality = VALUES(ego_personality),
-    ego_form_type = VALUES(ego_form_type),
-    ego_level = IF(ego_level < 1, 1, ego_level),
-    ego_max_exp = IF(ego_max_exp < 1, 100, ego_max_exp),
-    ego_talk_level = IF(ego_talk_level < 1, 1, ego_talk_level),
-    ego_control_level = IF(ego_control_level < 1, 1, ego_control_level);
+    `캐릭터번호` = VALUES(`캐릭터번호`),
+    `사용` = 1,
+    `이름` = VALUES(`이름`),
+    `성격` = VALUES(`성격`),
+    `형태` = VALUES(`형태`),
+    `레벨` = IF(`레벨` < 1, 1, `레벨`),
+    `필요경험치` = IF(`필요경험치` < 1, 100, `필요경험치`),
+    `대화단계` = IF(`대화단계` < 1, 1, `대화단계`),
+    `제어단계` = IF(`제어단계` < 1, 1, `제어단계`);
 
 -- ------------------------------------------------------------
--- 4. 능력 설정
+-- 2. 능력 설정, 한 무기당 활성 능력 1개
 -- ------------------------------------------------------------
-UPDATE character_item_ego_ability
-SET enabled = 0
-WHERE item_objid = @ITEM_OBJID;
+UPDATE `에고능력`
+SET `사용` = 0
+WHERE `아이템번호` = @아이템번호;
 
-INSERT INTO character_item_ego_ability
-(
-    item_objid,
-    ability_type,
-    ability_level,
-    proc_chance_bonus,
-    damage_bonus,
-    last_proc_time,
-    enabled
-)
+INSERT INTO `에고능력`
+(`아이템번호`, `능력`, `레벨`, `확률보너스`, `피해보너스`, `마지막발동`, `사용`)
 VALUES
-(
-    @ITEM_OBJID,
-    @EGO_ABILITY,
-    1,
-    0,
-    0,
-    0,
-    1
-)
+(@아이템번호, @능력, 1, 0, 0, 0, 1)
 ON DUPLICATE KEY UPDATE
-    enabled = 1,
-    ability_level = IF(ability_level < 1, 1, ability_level);
+    `사용` = 1,
+    `레벨` = IF(`레벨` < 1, 1, `레벨`);
 
 -- ------------------------------------------------------------
--- 5. 형태만 변경
--- ------------------------------------------------------------
--- SET @EGO_FORM := 'bow';         -- 활
--- SET @EGO_FORM := 'tohandsword'; -- 양손검
--- SET @EGO_FORM := 'sword';       -- 한손검
--- SET @EGO_FORM := 'dagger';      -- 단검
--- SET @EGO_FORM := 'spear';       -- 창
--- SET @EGO_FORM := 'axe';         -- 도끼
--- SET @EGO_FORM := 'staff';       -- 지팡이
--- SET @EGO_FORM := 'wand';        -- 완드
--- UPDATE character_item_ego
--- SET ego_form_type = @EGO_FORM
--- WHERE item_objid = @ITEM_OBJID
---   AND ego_enabled = 1;
-
--- ------------------------------------------------------------
--- 6. 이름/성격 변경
--- ------------------------------------------------------------
--- UPDATE character_item_ego
--- SET ego_name = @EGO_NAME
--- WHERE item_objid = @ITEM_OBJID
---   AND ego_enabled = 1;
---
--- UPDATE character_item_ego
--- SET ego_personality = @EGO_PERSONALITY
--- WHERE item_objid = @ITEM_OBJID
---   AND ego_enabled = 1;
-
--- ------------------------------------------------------------
--- 7. 레벨/경험치 직접 보정
--- ------------------------------------------------------------
--- UPDATE character_item_ego
--- SET ego_level = 5,
---     ego_exp = 0,
---     ego_max_exp = 500
--- WHERE item_objid = @ITEM_OBJID
---   AND ego_enabled = 1;
-
--- ------------------------------------------------------------
--- 8. 능력 레벨/확률/피해 보정
--- ------------------------------------------------------------
--- UPDATE character_item_ego_ability
--- SET ability_level = 3,
---     proc_chance_bonus = 2,
---     damage_bonus = 5
--- WHERE item_objid = @ITEM_OBJID
---   AND ability_type = @EGO_ABILITY
---   AND enabled = 1;
-
--- ------------------------------------------------------------
--- 9. 에고 비활성화
--- ------------------------------------------------------------
--- UPDATE character_item_ego SET ego_enabled = 0 WHERE item_objid = @ITEM_OBJID;
--- UPDATE character_item_ego_ability SET enabled = 0 WHERE item_objid = @ITEM_OBJID;
-
--- ------------------------------------------------------------
--- 10. 에고 완전 삭제
--- ------------------------------------------------------------
--- DELETE FROM character_item_ego_ability WHERE item_objid = @ITEM_OBJID;
--- DELETE FROM character_item_ego WHERE item_objid = @ITEM_OBJID;
-
--- ------------------------------------------------------------
--- 11. 전체 에고 목록 조회
+-- 3. 현재 상태 조회
 -- ------------------------------------------------------------
 SELECT
-    e.cha_objid,
-    e.item_objid,
-    e.ego_enabled,
-    e.ego_name,
-    e.ego_personality,
-    e.ego_form_type,
-    e.prev_shield_objid,
-    e.ego_level,
-    e.ego_exp,
-    e.ego_max_exp,
-    a.ability_type,
-    a.ability_level,
-    a.proc_chance_bonus,
-    a.damage_bonus,
-    a.enabled AS ability_enabled,
-    e.updated_at
-FROM character_item_ego e
-LEFT JOIN character_item_ego_ability a
-       ON a.item_objid = e.item_objid
-      AND a.enabled = 1
-ORDER BY e.updated_at DESC, e.item_objid DESC;
+    e.`아이템번호`,
+    e.`캐릭터번호`,
+    e.`사용`,
+    e.`이름`,
+    e.`성격`,
+    e.`형태`,
+    e.`이전방패`,
+    e.`레벨`,
+    e.`경험치`,
+    e.`필요경험치`,
+    e.`대화단계`,
+    e.`제어단계`,
+    a.`능력`,
+    a.`레벨` AS `능력레벨`,
+    a.`확률보너스`,
+    a.`피해보너스`,
+    e.`수정일`
+FROM `에고` e
+LEFT JOIN `에고능력` a
+       ON a.`아이템번호` = e.`아이템번호`
+      AND a.`사용` = 1
+WHERE e.`아이템번호` = @아이템번호;
 
 -- ------------------------------------------------------------
--- 12. 이상 데이터 점검
+-- 4. 자주 쓰는 편집 SQL
 -- ------------------------------------------------------------
+-- 이름 변경
+-- UPDATE `에고` SET `이름` = '루나' WHERE `아이템번호` = @아이템번호 AND `사용` = 1;
+
+-- 성격 변경
+-- UPDATE `에고` SET `성격` = '현자' WHERE `아이템번호` = @아이템번호 AND `사용` = 1;
+
+-- 형태 변경
+-- UPDATE `에고` SET `형태` = 'bow' WHERE `아이템번호` = @아이템번호 AND `사용` = 1;
+-- UPDATE `에고` SET `형태` = 'tohandsword' WHERE `아이템번호` = @아이템번호 AND `사용` = 1;
+-- UPDATE `에고` SET `형태` = 'sword' WHERE `아이템번호` = @아이템번호 AND `사용` = 1;
+
+-- 레벨/경험치 보정
+-- UPDATE `에고`
+-- SET `레벨` = 5,
+--     `경험치` = 0,
+--     `필요경험치` = 500
+-- WHERE `아이템번호` = @아이템번호 AND `사용` = 1;
+
+-- 능력 보정
+-- UPDATE `에고능력`
+-- SET `레벨` = 3,
+--     `확률보너스` = 2,
+--     `피해보너스` = 5
+-- WHERE `아이템번호` = @아이템번호
+--   AND `능력` = @능력
+--   AND `사용` = 1;
+
+-- ------------------------------------------------------------
+-- 5. 비활성화 / 삭제
+-- ------------------------------------------------------------
+-- 비활성화, 데이터 유지
+-- UPDATE `에고` SET `사용` = 0 WHERE `아이템번호` = @아이템번호;
+-- UPDATE `에고능력` SET `사용` = 0 WHERE `아이템번호` = @아이템번호;
+
+-- 완전 삭제
+-- DELETE FROM `에고능력` WHERE `아이템번호` = @아이템번호;
+-- DELETE FROM `에고` WHERE `아이템번호` = @아이템번호;
+
+-- ------------------------------------------------------------
+-- 6. 전체 목록
+-- ------------------------------------------------------------
+SELECT
+    e.`캐릭터번호`,
+    e.`아이템번호`,
+    e.`사용`,
+    e.`이름`,
+    e.`성격`,
+    e.`형태`,
+    e.`레벨`,
+    e.`경험치`,
+    e.`필요경험치`,
+    a.`능력`,
+    a.`레벨` AS `능력레벨`,
+    a.`사용` AS `능력사용`,
+    e.`수정일`
+FROM `에고` e
+LEFT JOIN `에고능력` a
+       ON a.`아이템번호` = e.`아이템번호`
+      AND a.`사용` = 1
+ORDER BY e.`수정일` DESC, e.`아이템번호` DESC;
+
+-- ------------------------------------------------------------
+-- 7. 이상 데이터 점검
+-- ------------------------------------------------------------
+-- 에고는 켜져 있는데 능력이 없음
 SELECT e.*
-FROM character_item_ego e
-LEFT JOIN character_item_ego_ability a
-       ON a.item_objid = e.item_objid
-      AND a.enabled = 1
-WHERE e.ego_enabled = 1
-  AND a.uid IS NULL;
+FROM `에고` e
+LEFT JOIN `에고능력` a
+       ON a.`아이템번호` = e.`아이템번호`
+      AND a.`사용` = 1
+WHERE e.`사용` = 1
+  AND a.`번호` IS NULL;
 
-SELECT item_objid, COUNT(*) AS enabled_ability_count
-FROM character_item_ego_ability
-WHERE enabled = 1
-GROUP BY item_objid
+-- 활성 능력이 2개 이상
+SELECT `아이템번호`, COUNT(*) AS `활성능력수`
+FROM `에고능력`
+WHERE `사용` = 1
+GROUP BY `아이템번호`
 HAVING COUNT(*) > 1;
 
+-- 비정상 값
 SELECT *
-FROM character_item_ego
-WHERE ego_level < 1
-   OR ego_max_exp < 1
-   OR ego_exp < 0
-   OR ego_form_type NOT IN ('', 'dagger', 'sword', 'tohandsword', 'axe', 'spear', 'bow', 'staff', 'wand');
-
--- ------------------------------------------------------------
--- 13. 적용 후 확인
--- ------------------------------------------------------------
-SELECT
-    e.item_objid,
-    e.cha_objid,
-    e.ego_enabled,
-    e.ego_name,
-    e.ego_personality,
-    e.ego_form_type,
-    e.prev_shield_objid,
-    e.ego_level,
-    e.ego_exp,
-    e.ego_max_exp,
-    a.ability_type,
-    a.ability_level,
-    a.proc_chance_bonus,
-    a.damage_bonus,
-    a.enabled AS ability_enabled
-FROM character_item_ego e
-LEFT JOIN character_item_ego_ability a
-       ON a.item_objid = e.item_objid
-      AND a.enabled = 1
-WHERE e.item_objid = @ITEM_OBJID;
+FROM `에고`
+WHERE `레벨` < 1
+   OR `필요경험치` < 1
+   OR `경험치` < 0
+   OR `형태` NOT IN ('', 'dagger', 'sword', 'tohandsword', 'axe', 'spear', 'bow', 'staff', 'wand');
