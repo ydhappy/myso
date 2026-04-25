@@ -3,7 +3,7 @@ chcp 65001 > nul
 setlocal enabledelayedexpansion
 
 echo ============================================================
-echo 에고무기 원클릭 설치 - Windows
+echo 에고무기 원클릭 설치 - Windows / EUC-KR DB 안전버전
 echo ============================================================
 echo.
 
@@ -25,7 +25,7 @@ if "%DB_USER%"=="" set DB_USER=root
 
 set /p DB_PASS=DB PASSWORD 입력: 
 
-set SQL_FILE=%~dp0..\sql\ego_install_korean.sql
+set SQL_FILE=%~dp0..\sql\ego_install_euckr.sql
 
 if not exist "%SQL_FILE%" (
     echo [ERROR] SQL 파일을 찾을 수 없습니다: %SQL_FILE%
@@ -34,8 +34,10 @@ if not exist "%SQL_FILE%" (
 )
 
 echo.
-echo [INFO] 한글 에고 테이블 설치 SQL 실행 중...
-echo mysql -h %DB_HOST% -P %DB_PORT% -u %DB_USER% -p**** %DB_NAME% ^< %SQL_FILE%
+echo [INFO] EUC-KR DB 안전 에고 테이블 설치 SQL 실행 중...
+echo [INFO] 파일 인코딩 UTF-8 / 접속 인코딩 UTF-8 / 테이블 문자셋 EUC-KR
+echo [INFO] 테이블명은 ego, ego_skill, ego_view 등 영문 단순명으로 생성됩니다.
+echo mysql -h %DB_HOST% -P %DB_PORT% -u %DB_USER% -p**** --default-character-set=utf8 %DB_NAME% ^< %SQL_FILE%
 echo.
 
 mysql -h %DB_HOST% -P %DB_PORT% -u %DB_USER% -p%DB_PASS% --default-character-set=utf8 %DB_NAME% < "%SQL_FILE%"
@@ -47,14 +49,15 @@ if errorlevel 1 (
     echo 1. mysql 명령어가 PATH에 등록되어 있는지 확인
     echo 2. DB 접속정보가 맞는지 확인
     echo 3. DB 권한이 있는지 확인
-    echo 4. SQL 파일 인코딩이 UTF-8인지 확인
+    echo 4. SQL 파일은 UTF-8로 저장되어 있어야 합니다.
+    echo 5. DB가 EUC-KR이어도 접속은 --default-character-set=utf8 로 실행합니다.
     pause
     exit /b 1
 )
 
 echo.
-echo [OK] 에고무기 한글 DB 설치 완료
-echo 생성 테이블: 에고, 에고능력, 에고성격, 에고대화, 에고능력기본, 에고기록
+echo [OK] 에고무기 DB 설치 완료
+echo 생성 테이블: ego, ego_skill, ego_view, ego_type, ego_talk, ego_skill_base, ego_log
 echo 다음 단계:
 echo 1. 서버가 실행 중이면 .에고리로드 실행
 echo 2. 또는 서버 재시작
