@@ -1,7 +1,7 @@
 -- ============================================================
 -- 에고무기 미사용 DB 정리 SQL
--- 목적: 무기변형 제거 후 남은 미사용 컬럼/인덱스/테이블 삭제
--- 대상: 기존에 ego_install_euckr.sql 구버전을 이미 적용한 서버
+-- 목적: type2 변형/이미지 커스터마이징 제거 후 남은 미사용 컬럼/테이블 삭제
+-- 대상: 기존에 구버전 에고 SQL을 이미 적용한 서버
 -- 주의: 실행 전 DB 백업 필수
 -- 파일 인코딩: UTF-8
 -- ============================================================
@@ -13,16 +13,15 @@ SET NAMES utf8;
 -- ------------------------------------------------------------
 DROP TABLE IF EXISTS ego_talk;
 DROP TABLE IF EXISTS ego_type;
+DROP TABLE IF EXISTS ego_view;
+DROP TABLE IF EXISTS `에고모양`;
 
 -- ------------------------------------------------------------
 -- 2. ego 테이블의 무기변형 잔여 인덱스/컬럼 삭제
 -- MySQL 버전별 IF EXISTS 지원 차이가 있으므로 실패하면 해당 줄은 이미 없는 것으로 보면 됩니다.
 -- ------------------------------------------------------------
 
--- ego.form 인덱스 제거
 ALTER TABLE ego DROP INDEX ego_form_idx;
-
--- 무기변형 잔여 컬럼 제거
 ALTER TABLE ego DROP COLUMN form;
 ALTER TABLE ego DROP COLUMN prev_shield;
 
@@ -51,6 +50,8 @@ ON DUPLICATE KEY UPDATE
 DESC ego;
 SHOW TABLES LIKE 'ego_type';
 SHOW TABLES LIKE 'ego_talk';
+SHOW TABLES LIKE 'ego_view';
+SHOW TABLES LIKE '에고모양';
 
 SELECT *
 FROM ego_skill_base
