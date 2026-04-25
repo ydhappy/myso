@@ -59,4 +59,9 @@ public class S_InventoryAdd extends S_Inventory {
 		}
 		writeC(0x00);
 	}
+
+	@Override
+	protected String getName(ItemInstance item) {
+		return EgoView.name(item, super.getName(item));
+	}
 }
