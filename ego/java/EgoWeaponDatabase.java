@@ -236,6 +236,47 @@ public final class EgoWeaponDatabase {
         return false;
     }
 
+    /**
+     * 에고 삭제는 데이터 완전삭제가 아니라 use_yn=0 비활성화로 처리한다.
+     * 로그와 과거 성장 기록은 운영 추적을 위해 보존한다.
+     */
+    public static boolean disableEgo(ItemInstance item) {
+        if (item == null)
+            return false;
+
+        Connection con = null;
+        PreparedStatement ego = null;
+        PreparedStatement skill = null;
+
+        try {
+            con = DatabaseConnection.getLineage();
+            con.setAutoCommit(false);
+
+            ego = con.prepareStatement("UPDATE ego SET use_yn=0, mod_date=NOW() WHERE item_id=? AND use_yn=1");
+            ego.setLong(1, item.getObjectId());
+            int count = ego.executeUpdate();
+
+            skill = con.prepareStatement("UPDATE ego_skill SET use_yn=0, mod_date=NOW() WHERE item_id=?");
+            skill.setLong(1, item.getObjectId());
+            skill.executeUpdate();
+
+            con.commit();
+
+            egoMap.remove(item.getObjectId());
+            abilityMap.remove(item.getObjectId());
+            return count > 0;
+        } catch (Exception e) {
+            try { if (con != null) con.rollback(); } catch (Exception ignore) {}
+            lineage.share.System.printf("%s : disableEgo(ItemInstance item)\r\n", EgoWeaponDatabase.class.toString());
+            lineage.share.System.println(e);
+        } finally {
+            try { if (con != null) con.setAutoCommit(true); } catch (Exception ignore) {}
+            DatabaseConnection.close(ego);
+            DatabaseConnection.close(con, skill);
+        }
+        return false;
+    }
+
     public static boolean setEgoName(ItemInstance item, String egoName) {
         if (item == null || egoName == null || egoName.trim().length() == 0)
             return false;
