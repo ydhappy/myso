@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+import lineage.world.controller.EgoView;
 import lineage.world.object.instance.ItemInstance;
 import lineage.world.object.instance.PcInstance;
 
@@ -44,6 +45,7 @@ public final class EgoWeaponDatabase {
         abilityMap.clear();
         loadEgoInfo(con);
         loadAbilityInfo(con);
+        EgoView.reload(con);
     }
 
     private static void loadEgoInfo(Connection con) {
