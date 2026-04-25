@@ -45,32 +45,6 @@ CREATE TABLE IF NOT EXISTS ego_skill (
     INDEX ego_skill_idx (skill)
 ) ENGINE=InnoDB DEFAULT CHARSET=euckr COLLATE=euckr_korean_ci COMMENT='에고무기 능력 정보';
 
-CREATE TABLE IF NOT EXISTS ego_view (
-    form VARCHAR(40) NOT NULL COMMENT '원본 type2: dagger/sword/tohandsword/axe/spear/bow/staff/wand',
-    label VARCHAR(50) NOT NULL DEFAULT '' COMMENT '표시 이름',
-    inv_gfx INT NOT NULL DEFAULT 0 COMMENT '인벤토리 아이콘 gfx, 0이면 원본 사용',
-    ground_gfx INT NOT NULL DEFAULT 0 COMMENT '바닥 드랍 gfx, 0이면 원본 사용',
-    memo VARCHAR(255) NOT NULL DEFAULT '' COMMENT '아이템정보 보조 설명',
-    use_yn TINYINT(1) NOT NULL DEFAULT 1 COMMENT '사용 여부',
-    PRIMARY KEY (form)
-) ENGINE=InnoDB DEFAULT CHARSET=euckr COLLATE=euckr_korean_ci COMMENT='에고 원본 무기타입별 인벤토리/바닥 표시';
-
-INSERT INTO ego_view
-(form, label, inv_gfx, ground_gfx, memo, use_yn)
-VALUES
-('dagger', '단검', 0, 0, '에고 단검 원본 타입', 1),
-('sword', '한손검', 0, 0, '에고 한손검 원본 타입', 1),
-('tohandsword', '양손검', 0, 0, '에고 양손검 원본 타입', 1),
-('axe', '도끼', 0, 0, '에고 도끼 원본 타입', 1),
-('spear', '창', 0, 0, '에고 창 원본 타입', 1),
-('bow', '활', 0, 0, '에고 활 원본 타입', 1),
-('staff', '지팡이', 0, 0, '에고 지팡이 원본 타입', 1),
-('wand', '완드', 0, 0, '에고 완드 원본 타입', 1)
-ON DUPLICATE KEY UPDATE
-    label = VALUES(label),
-    memo = VALUES(memo),
-    use_yn = VALUES(use_yn);
-
 CREATE TABLE IF NOT EXISTS ego_skill_base (
     skill VARCHAR(40) NOT NULL COMMENT '능력 코드',
     label VARCHAR(50) NOT NULL COMMENT '표시명',
@@ -128,9 +102,8 @@ CREATE TABLE IF NOT EXISTS ego_log (
     INDEX ego_log_date_idx (reg_date)
 ) ENGINE=InnoDB DEFAULT CHARSET=euckr COLLATE=euckr_korean_ci COMMENT='에고 능력 발동 기록';
 
-SELECT 'EGO_INSTALL_OK_EUCKR_CLEAN' AS result;
+SELECT 'EGO_INSTALL_OK_EUCKR_MINIMAL' AS result;
 SHOW TABLES LIKE 'ego';
 SHOW TABLES LIKE 'ego_skill';
-SHOW TABLES LIKE 'ego_view';
 SHOW TABLES LIKE 'ego_skill_base';
 SHOW TABLES LIKE 'ego_log';
