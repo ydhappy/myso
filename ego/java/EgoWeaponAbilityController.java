@@ -26,10 +26,9 @@ import lineage.world.object.instance.PcInstance;
 /**
  * 에고무기 특별 능력 컨트롤러.
  *
- * 기존 서버 전투 코어는 변경하지 않는다.
- * DamageController의 기존 계산이 끝난 뒤 보조능력만 추가한다.
- * ego_skill_base의 확률/레벨/쿨타임/이펙트를 전투 계산에 사용한다.
- * ego_log에 능력 발동/레벨업 기록을 저장한다.
+ * 기존 전투 공식은 변경하지 않고, DamageController에서 계산된 최종 피해에 보조능력만 더한다.
+ * 공격 훅: DamageController.getDamage 최종 return 직전 EgoSkill.attack(...)
+ * 피격 훅: DamageController.toDamage HP 감소 직전 EgoSkill.defense(...)
  */
 public final class EgoWeaponAbilityController {
 
@@ -50,6 +49,7 @@ public final class EgoWeaponAbilityController {
     private static final Map<String, Long> expDelayMap = new ConcurrentHashMap<String, Long>();
     private static final Map<String, Long> procCoolMap = new ConcurrentHashMap<String, Long>();
     private static final Map<String, SkillBaseInfo> skillBaseMap = new ConcurrentHashMap<String, SkillBaseInfo>();
+    private static final ThreadLocal<Boolean> DEFENSE_RECURSION_GUARD = new ThreadLocal<Boolean>();
 
     private EgoWeaponAbilityController() {
     }
@@ -59,12 +59,11 @@ public final class EgoWeaponAbilityController {
         loadSkillBase();
     }
 
+    /** 공격 시 에고 보조능력. */
     public static int applyAttackAbility(Character cha, object target, ItemInstance weapon, int damage) {
         if (!(cha instanceof PcInstance))
             return damage;
-        if (damage <= 0)
-            return damage;
-        if (target == null || target.isDead())
+        if (damage <= 0 || target == null || target.isDead())
             return damage;
         if (weapon == null || !isEgoWeapon(weapon))
             return damage;
@@ -95,45 +94,83 @@ public final class EgoWeaponAbilityController {
 
         markProc(weapon, type.name());
 
-        int effect = base.effect;
-        int result;
-        switch (type) {
-            case BLOOD_DRAIN:
-                result = applyBloodDrain(pc, target, damage, effectiveLevel, effect);
-                break;
-            case MANA_DRAIN:
-                result = applyManaDrain(pc, target, damage, effectiveLevel, effect);
-                break;
-            case CRITICAL_BURST:
-                result = applyCriticalBurst(pc, target, damage, effectiveLevel, effect);
-                break;
-            case GUARDIAN_SHIELD:
-                result = applyGuardianShield(pc, target, damage, effectiveLevel, effect);
-                break;
-            case AREA_SLASH:
-                result = applyAreaSlash(pc, target, damage, effectiveLevel, effect);
-                break;
-            case EXECUTION:
-                result = applyExecution(pc, target, damage, effectiveLevel, effect);
-                break;
-            case FLAME_BRAND:
-                result = applyFlameBrand(pc, target, damage, effectiveLevel, effect);
-                break;
-            case FROST_BIND:
-                result = applyFrostBind(pc, target, damage, effectiveLevel, effect);
-                break;
-            case EGO_BALANCE:
-            default:
-                result = applyBalanced(pc, target, damage, effectiveLevel, effect);
-                break;
-        }
-
+        int result = applyAttackByType(pc, target, damage, effectiveLevel, base.effect, type);
         int bonusDamage = abilityInfo == null ? 0 : Math.max(0, abilityInfo.damageBonus);
         if (bonusDamage > 0 && result > 0)
             result += bonusDamage;
 
         writeLog(pc, target, weapon, type.name(), damage, result);
         return result;
+    }
+
+    /**
+     * 피격 시 에고 레벨별 해금 능력.
+     * Lv.5  : 에고 방어본능, 받는 피해 소폭 감소
+     * Lv.10 : 에고 반격, 공격자에게 반격 피해
+     * Lv.20 : 에고 복수, 저체력 피격 시 강한 반격 + 소량 회복
+     */
+    public static int applyDefenseAbility(Character defender, Character attacker, int damage) {
+        if (!(defender instanceof PcInstance))
+            return damage;
+        if (attacker == null || damage <= 0 || attacker.isDead() || defender.isDead())
+            return damage;
+        if (Boolean.TRUE.equals(DEFENSE_RECURSION_GUARD.get()))
+            return damage;
+
+        PcInstance pc = (PcInstance) defender;
+        Inventory inv = pc.getInventory();
+        if (inv == null)
+            return damage;
+
+        ItemInstance weapon = inv.getSlot(Lineage.SLOT_WEAPON);
+        if (weapon == null || !isEgoWeapon(weapon))
+            return damage;
+
+        int egoLevel = getEgoLevel(weapon);
+        int newDamage = damage;
+
+        // Lv.5 해금: 방어본능. 피격 피해 소폭 감소.
+        if (egoLevel >= 5) {
+            int reduce = Math.max(1, Math.min(10, egoLevel / 3));
+            newDamage = Math.max(1, newDamage - reduce);
+        }
+
+        // Lv.10 해금: 반격.
+        if (egoLevel >= 10) {
+            SkillBaseInfo counter = getSkillBase("EGO_COUNTER");
+            if (checkCooldown(weapon, "EGO_COUNTER", counter.coolMs)) {
+                int chance = Math.min(counter.maxRate, counter.baseRate + (egoLevel - 10) * Math.max(0, counter.levelRate));
+                if (Util.random(1, 100) <= Math.max(1, chance)) {
+                    int reflect = Math.max(1, newDamage * (10 + egoLevel) / 100);
+                    markProc(weapon, "EGO_COUNTER");
+                    sendEffect(attacker, counter.effect > 0 ? counter.effect : 10710);
+                    safeCounterDamage(pc, attacker, reflect);
+                    say(pc, "EGO_COUNTER", String.format("\fY[에고] 반격 발동. 반격 피해 +%d", reflect));
+                    writeLog(pc, attacker, weapon, "EGO_COUNTER", damage, newDamage);
+                }
+            }
+        }
+
+        // Lv.20 해금: 저체력 복수 특수스킬.
+        if (egoLevel >= 20) {
+            int hpRate = pc.getNowHp() * 100 / Math.max(1, pc.getTotalHp());
+            SkillBaseInfo revenge = getSkillBase("EGO_REVENGE");
+            if (hpRate <= 35 && checkCooldown(weapon, "EGO_REVENGE", revenge.coolMs)) {
+                int chance = Math.min(revenge.maxRate, revenge.baseRate + (egoLevel - 20) * Math.max(0, revenge.levelRate));
+                if (Util.random(1, 100) <= Math.max(1, chance)) {
+                    int revengeDmg = Math.max(5, egoLevel * 2);
+                    int heal = Math.max(3, egoLevel / 2);
+                    markProc(weapon, "EGO_REVENGE");
+                    sendEffect(pc, revenge.effect > 0 ? revenge.effect : 6321);
+                    safeCounterDamage(pc, attacker, revengeDmg);
+                    pc.setNowHp(Math.min(pc.getTotalHp(), pc.getNowHp() + heal));
+                    say(pc, "EGO_REVENGE", String.format("\fR[에고] 복수 각성. 반격 +%d / HP +%d", revengeDmg, heal));
+                    writeLog(pc, attacker, weapon, "EGO_REVENGE", damage, newDamage);
+                }
+            }
+        }
+
+        return newDamage;
     }
 
     public static void addKillExp(PcInstance pc, MonsterInstance mon) {
@@ -183,6 +220,92 @@ public final class EgoWeaponAbilityController {
         }
     }
 
+    private static int applyAttackByType(PcInstance pc, object target, int damage, int egoLevel, int effect, EgoAbilityType type) {
+        switch (type) {
+            case BLOOD_DRAIN:
+                int heal = Math.max(1, damage * (3 + egoLevel / 3) / 100);
+                pc.setNowHp(Math.min(pc.getTotalHp(), pc.getNowHp() + heal));
+                sendEffect(target, effect > 0 ? effect : 8150);
+                say(pc, "BLOOD_DRAIN", String.format("\fR[에고] 생명 흡수 발동. HP +%d", heal));
+                return damage + Math.max(1, egoLevel / 2);
+            case MANA_DRAIN:
+                int mp = Math.max(1, 1 + egoLevel / 4);
+                pc.setNowMp(Math.min(pc.getTotalMp(), pc.getNowMp() + mp));
+                sendEffect(target, effect > 0 ? effect : 7300);
+                say(pc, "MANA_DRAIN", String.format("\fY[에고] 정신 흡수 발동. MP +%d", mp));
+                return damage;
+            case CRITICAL_BURST:
+                int criticalAdd = Math.max(2, egoLevel);
+                sendEffect(target, effect > 0 ? effect : 12487);
+                say(pc, "CRITICAL_BURST", String.format("\fY[에고] 치명 폭발 발동. 추가 피해 +%d", criticalAdd));
+                return damage + criticalAdd;
+            case GUARDIAN_SHIELD:
+                int hpRate = pc.getNowHp() * 100 / Math.max(1, pc.getTotalHp());
+                if (hpRate <= 40) {
+                    int shieldHeal = Math.max(5, egoLevel * 2);
+                    pc.setNowHp(Math.min(pc.getTotalHp(), pc.getNowHp() + shieldHeal));
+                    sendEffect(pc, effect > 0 ? effect : 6321);
+                    say(pc, "GUARDIAN_SHIELD", String.format("\fY[에고] 수호 의지 발동. HP +%d", shieldHeal));
+                }
+                return damage + Math.max(1, egoLevel / 3);
+            case AREA_SLASH:
+                int splashDamage = Math.max(1, damage * (10 + egoLevel) / 100);
+                int count = 0;
+                for (MonsterInstance mon : findNearbyMonsters(pc, target, AREA_RANGE)) {
+                    if (count >= AREA_MAX_TARGET)
+                        break;
+                    if (mon.getObjectId() == target.getObjectId())
+                        continue;
+                    safeSplashDamage(pc, mon, splashDamage);
+                    sendEffect(mon, effect > 0 ? effect : 12248);
+                    count++;
+                }
+                if (count > 0)
+                    say(pc, "AREA_SLASH", String.format("\fY[에고] 공명 베기 발동. 주변 %d명에게 피해", count));
+                return damage;
+            case EXECUTION:
+                if (target instanceof Character) {
+                    Character t = (Character) target;
+                    int targetHpRate = t.getNowHp() * 100 / Math.max(1, t.getTotalHp());
+                    if (targetHpRate <= 20) {
+                        int add = Math.max(3, egoLevel * 2);
+                        sendEffect(target, effect > 0 ? effect : 8683);
+                        say(pc, "EXECUTION", String.format("\fR[에고] 처형 발동. 약화된 적에게 추가 피해 +%d", add));
+                        return damage + add;
+                    }
+                }
+                return damage;
+            case FLAME_BRAND:
+                int fireAdd = Math.max(2, 3 + egoLevel);
+                sendEffect(target, effect > 0 ? effect : 1811);
+                say(pc, "FLAME_BRAND", String.format("\fR[에고] 화염 각인 발동. 추가 피해 +%d", fireAdd));
+                return damage + fireAdd;
+            case FROST_BIND:
+                int frostAdd = Math.max(1, egoLevel / 2);
+                sendEffect(target, effect > 0 ? effect : 3684);
+                say(pc, "FROST_BIND", "\fY[에고] 서리 충격 발동. 적의 움직임을 흔듭니다.");
+                return damage + frostAdd;
+            case EGO_BALANCE:
+            default:
+                int balanceAdd = Math.max(1, egoLevel / 2);
+                sendEffect(target, effect > 0 ? effect : 3940);
+                say(pc, "EGO_BALANCE", String.format("\fY[에고] 공명 타격 발동. 추가 피해 +%d", balanceAdd));
+                return damage + balanceAdd;
+        }
+    }
+
+    private static void safeCounterDamage(PcInstance pc, Character attacker, int counterDamage) {
+        if (pc == null || attacker == null || counterDamage <= 0 || attacker.isDead())
+            return;
+        try {
+            DEFENSE_RECURSION_GUARD.set(Boolean.TRUE);
+            DamageController.toDamage(pc, attacker, counterDamage, Lineage.ATTACK_TYPE_WEAPON);
+        } catch (Throwable e) {
+        } finally {
+            DEFENSE_RECURSION_GUARD.remove();
+        }
+    }
+
     private static void gainAttackExp(PcInstance pc, ItemInstance weapon) {
         if (pc == null || weapon == null)
             return;
@@ -206,7 +329,7 @@ public final class EgoWeaponAbilityController {
 
         if (levelUp || afterLevel > beforeLevel) {
             sendEffect(pc, 3944);
-            say(pc, "LEVEL_UP", String.format("\\fY[에고] 의식이 성장했습니다. Lv.%d", afterLevel));
+            say(pc, "LEVEL_UP", String.format("\fY[에고] 의식이 성장했습니다. Lv.%d", afterLevel));
             writeLog(pc, pc, weapon, "LEVEL_UP", 0, 0);
             EgoView.refreshInventory(pc, weapon);
             return;
@@ -215,7 +338,7 @@ public final class EgoWeaponAbilityController {
         if (forceMessage || Util.random(1, 100) <= 3) {
             EgoWeaponInfo info = EgoWeaponDatabase.find(weapon);
             if (info != null)
-                say(pc, "EXP", String.format("\\fS[에고] 경험치 +%d (%d/%d)", addExp, info.exp, info.maxExp));
+                say(pc, "EXP", String.format("\fS[에고] 경험치 +%d (%d/%d)", addExp, info.exp, info.maxExp));
         }
     }
 
@@ -256,92 +379,6 @@ public final class EgoWeaponAbilityController {
         } finally {
             DatabaseConnection.close(con, st);
         }
-    }
-
-    private static int applyBloodDrain(PcInstance pc, object target, int damage, int egoLevel, int effect) {
-        int heal = Math.max(1, damage * (3 + egoLevel / 3) / 100);
-        pc.setNowHp(Math.min(pc.getTotalHp(), pc.getNowHp() + heal));
-        sendEffect(target, effect > 0 ? effect : 8150);
-        say(pc, "BLOOD_DRAIN", String.format("\\fR[에고] 생명 흡수 발동. HP +%d", heal));
-        return damage + Math.max(1, egoLevel / 2);
-    }
-
-    private static int applyManaDrain(PcInstance pc, object target, int damage, int egoLevel, int effect) {
-        int mp = Math.max(1, 1 + egoLevel / 4);
-        pc.setNowMp(Math.min(pc.getTotalMp(), pc.getNowMp() + mp));
-        sendEffect(target, effect > 0 ? effect : 7300);
-        say(pc, "MANA_DRAIN", String.format("\\fY[에고] 정신 흡수 발동. MP +%d", mp));
-        return damage;
-    }
-
-    private static int applyCriticalBurst(PcInstance pc, object target, int damage, int egoLevel, int effect) {
-        int add = Math.max(2, egoLevel);
-        sendEffect(target, effect > 0 ? effect : 12487);
-        say(pc, "CRITICAL_BURST", String.format("\\fY[에고] 치명 폭발 발동. 추가 피해 +%d", add));
-        return damage + add;
-    }
-
-    private static int applyGuardianShield(PcInstance pc, object target, int damage, int egoLevel, int effect) {
-        int hpRate = pc.getNowHp() * 100 / Math.max(1, pc.getTotalHp());
-        if (hpRate <= 40) {
-            int heal = Math.max(5, egoLevel * 2);
-            pc.setNowHp(Math.min(pc.getTotalHp(), pc.getNowHp() + heal));
-            sendEffect(pc, effect > 0 ? effect : 6321);
-            say(pc, "GUARDIAN_SHIELD", String.format("\\fY[에고] 수호 의지 발동. HP +%d", heal));
-        }
-        return damage + Math.max(1, egoLevel / 3);
-    }
-
-    private static int applyAreaSlash(PcInstance pc, object target, int damage, int egoLevel, int effect) {
-        int splashDamage = Math.max(1, damage * (10 + egoLevel) / 100);
-        int count = 0;
-        for (MonsterInstance mon : findNearbyMonsters(pc, target, AREA_RANGE)) {
-            if (count >= AREA_MAX_TARGET)
-                break;
-            if (mon.getObjectId() == target.getObjectId())
-                continue;
-            safeSplashDamage(pc, mon, splashDamage);
-            sendEffect(mon, effect > 0 ? effect : 12248);
-            count++;
-        }
-        if (count > 0)
-            say(pc, "AREA_SLASH", String.format("\\fY[에고] 공명 베기 발동. 주변 %d명에게 피해", count));
-        return damage;
-    }
-
-    private static int applyExecution(PcInstance pc, object target, int damage, int egoLevel, int effect) {
-        if (!(target instanceof Character))
-            return damage;
-        Character t = (Character) target;
-        int hpRate = t.getNowHp() * 100 / Math.max(1, t.getTotalHp());
-        if (hpRate <= 20) {
-            int add = Math.max(3, egoLevel * 2);
-            sendEffect(target, effect > 0 ? effect : 8683);
-            say(pc, "EXECUTION", String.format("\\fR[에고] 처형 발동. 약화된 적에게 추가 피해 +%d", add));
-            return damage + add;
-        }
-        return damage;
-    }
-
-    private static int applyFlameBrand(PcInstance pc, object target, int damage, int egoLevel, int effect) {
-        int add = Math.max(2, 3 + egoLevel);
-        sendEffect(target, effect > 0 ? effect : 1811);
-        say(pc, "FLAME_BRAND", String.format("\\fR[에고] 화염 각인 발동. 추가 피해 +%d", add));
-        return damage + add;
-    }
-
-    private static int applyFrostBind(PcInstance pc, object target, int damage, int egoLevel, int effect) {
-        int add = Math.max(1, egoLevel / 2);
-        sendEffect(target, effect > 0 ? effect : 3684);
-        say(pc, "FROST_BIND", "\\fY[에고] 서리 충격 발동. 적의 움직임을 흔듭니다.");
-        return damage + add;
-    }
-
-    private static int applyBalanced(PcInstance pc, object target, int damage, int egoLevel, int effect) {
-        int add = Math.max(1, egoLevel / 2);
-        sendEffect(target, effect > 0 ? effect : 3940);
-        say(pc, "EGO_BALANCE", String.format("\\fY[에고] 공명 타격 발동. 추가 피해 +%d", add));
-        return damage + add;
     }
 
     private static void safeSplashDamage(PcInstance pc, MonsterInstance mon, int splashDamage) {
@@ -496,6 +533,8 @@ public final class EgoWeaponAbilityController {
         AREA_SLASH,
         EXECUTION,
         FLAME_BRAND,
-        FROST_BIND
+        FROST_BIND,
+        EGO_COUNTER,
+        EGO_REVENGE
     }
 }
