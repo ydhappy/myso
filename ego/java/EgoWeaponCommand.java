@@ -18,7 +18,7 @@ import lineage.world.object.instance.PcInstance;
  *
  * 기존 서버 전투 코어는 변경하지 않는다.
  * 강화된 무기도 에고 생성 가능하다.
- * 무기변형 기능은 제거되었다.
+ * 무기변형/이미지변경 기능은 제거되었다.
  */
 public final class EgoWeaponCommand {
 
@@ -75,7 +75,7 @@ public final class EgoWeaponCommand {
         msg(pc, Lineage.command + "에고능력 [능력코드] : 에고 특별 능력 설정");
         msg(pc, Lineage.command + "에고상대 : 타겟 또는 가장 가까운 상대 캐릭터 분석");
         msg(pc, Lineage.command + "에고주변 : 주변 캐릭터 목록/위험도 감지");
-        msg(pc, Lineage.command + "에고리로드 : DB/이미지/스킬베이스 캐시 리로드 및 온라인 인벤토리 즉시반영");
+        msg(pc, Lineage.command + "에고리로드 : 에고 DB/스킬베이스 캐시 리로드 및 온라인 인벤토리 표식 갱신");
         msg(pc, "일반 채팅: 에고 상태 / 에고 조언 / 에고 선공 / 에고 상대 / 에고 주변캐릭 / 에고 공격 / 에고 멈춰");
         msg(pc, "능력코드: EGO_BALANCE, BLOOD_DRAIN, MANA_DRAIN, CRITICAL_BURST, GUARDIAN_SHIELD, AREA_SLASH, EXECUTION, FLAME_BRAND, FROST_BIND");
         info(pc, EgoWeaponTypeUtil.getSupportedWeaponTypesText());
@@ -229,7 +229,7 @@ public final class EgoWeaponCommand {
         }
         EgoDB.reload(null);
         int refreshed = EgoView.refreshOnlineInventories(pc);
-        msg(pc, String.format("에고 DB/이미지/스킬베이스 캐시를 리로드하고 온라인 에고 아이템 %,d개를 즉시 갱신했습니다.", refreshed));
+        msg(pc, String.format("에고 DB/스킬베이스 캐시를 리로드하고 온라인 에고 아이템 %,d개를 갱신했습니다.", refreshed));
     }
 
     private static ItemInstance getWeapon(PcInstance pc) {
