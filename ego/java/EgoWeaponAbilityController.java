@@ -39,6 +39,16 @@ public final class EgoWeaponAbilityController {
     private static final int AREA_RANGE = 2;
     private static final int AREA_MAX_TARGET = 4;
 
+    /** Lv.5마다 모든 에고 스킬 발동률 +1%. */
+    private static final int LEVEL_PROC_STEP = 5;
+    private static final int LEVEL_PROC_BONUS_PER_STEP = 1;
+    private static final int LEVEL_PROC_BONUS_MAX = 6;
+
+    /** 치명 계열은 Lv.10부터 추가 치명 발동률 보정. */
+    private static final int CRITICAL_UNLOCK_LEVEL = 10;
+    private static final int CRITICAL_BONUS_PER_5_LEVEL = 2;
+    private static final int CRITICAL_BONUS_MAX = 12;
+
     private static final long ATTACK_EGO_EXP = 1L;
     private static final long ATTACK_EXP_DELAY_MS = 3000L;
     private static final long DEFAULT_KILL_EGO_EXP = 5L;
@@ -88,7 +98,7 @@ public final class EgoWeaponAbilityController {
         if (!checkCooldown(weapon, type.name(), base.coolMs))
             return damage;
 
-        int chance = getProcChance(effectiveLevel, abilityInfo, base);
+        int chance = getProcChance(effectiveLevel, abilityInfo, base, type);
         if (Util.random(1, 100) > chance)
             return damage;
 
@@ -139,7 +149,7 @@ public final class EgoWeaponAbilityController {
         if (egoLevel >= 10) {
             SkillBaseInfo counter = getSkillBase("EGO_COUNTER");
             if (checkCooldown(weapon, "EGO_COUNTER", counter.coolMs)) {
-                int chance = Math.min(counter.maxRate, counter.baseRate + (egoLevel - 10) * Math.max(0, counter.levelRate));
+                int chance = Math.min(counter.maxRate, counter.baseRate + (egoLevel - 10) * Math.max(0, counter.levelRate) + getLevelProcBonus(egoLevel));
                 if (Util.random(1, 100) <= Math.max(1, chance)) {
                     int reflect = Math.max(1, newDamage * (10 + egoLevel) / 100);
                     markProc(weapon, "EGO_COUNTER");
@@ -156,7 +166,7 @@ public final class EgoWeaponAbilityController {
             int hpRate = pc.getNowHp() * 100 / Math.max(1, pc.getTotalHp());
             SkillBaseInfo revenge = getSkillBase("EGO_REVENGE");
             if (hpRate <= 35 && checkCooldown(weapon, "EGO_REVENGE", revenge.coolMs)) {
-                int chance = Math.min(revenge.maxRate, revenge.baseRate + (egoLevel - 20) * Math.max(0, revenge.levelRate));
+                int chance = Math.min(revenge.maxRate, revenge.baseRate + (egoLevel - 20) * Math.max(0, revenge.levelRate) + getLevelProcBonus(egoLevel));
                 if (Util.random(1, 100) <= Math.max(1, chance)) {
                     int revengeDmg = Math.max(5, egoLevel * 2);
                     int heal = Math.max(3, egoLevel / 2);
@@ -235,7 +245,7 @@ public final class EgoWeaponAbilityController {
                 say(pc, "MANA_DRAIN", String.format("\fY[에고] 정신 흡수 발동. MP +%d", mp));
                 return damage;
             case CRITICAL_BURST:
-                int criticalAdd = Math.max(2, egoLevel);
+                int criticalAdd = Math.max(2, egoLevel + getCriticalDamageBonus(egoLevel));
                 sendEffect(target, effect > 0 ? effect : 12487);
                 say(pc, "CRITICAL_BURST", String.format("\fY[에고] 치명 폭발 발동. 추가 피해 +%d", criticalAdd));
                 return damage + criticalAdd;
@@ -342,11 +352,34 @@ public final class EgoWeaponAbilityController {
         }
     }
 
-    private static int getProcChance(int egoLevel, EgoAbilityInfo abilityInfo, SkillBaseInfo base) {
+    private static int getProcChance(int egoLevel, EgoAbilityInfo abilityInfo, SkillBaseInfo base, EgoAbilityType type) {
         int chance = base.baseRate + Math.max(0, egoLevel - 1) * base.levelRate;
+        chance += getLevelProcBonus(egoLevel);
+        if (type == EgoAbilityType.CRITICAL_BURST)
+            chance += getCriticalChanceBonus(egoLevel);
         if (abilityInfo != null)
             chance += abilityInfo.procChanceBonus;
         return Math.min(base.maxRate, Math.max(1, chance));
+    }
+
+    private static int getLevelProcBonus(int egoLevel) {
+        if (egoLevel <= 1)
+            return 0;
+        int bonus = (egoLevel / LEVEL_PROC_STEP) * LEVEL_PROC_BONUS_PER_STEP;
+        return Math.min(LEVEL_PROC_BONUS_MAX, Math.max(0, bonus));
+    }
+
+    private static int getCriticalChanceBonus(int egoLevel) {
+        if (egoLevel < CRITICAL_UNLOCK_LEVEL)
+            return 0;
+        int step = (egoLevel - CRITICAL_UNLOCK_LEVEL) / 5 + 1;
+        return Math.min(CRITICAL_BONUS_MAX, step * CRITICAL_BONUS_PER_5_LEVEL);
+    }
+
+    private static int getCriticalDamageBonus(int egoLevel) {
+        if (egoLevel < CRITICAL_UNLOCK_LEVEL)
+            return 0;
+        return Math.max(1, (egoLevel - CRITICAL_UNLOCK_LEVEL) / 2 + 1);
     }
 
     private static boolean checkCooldown(ItemInstance weapon, String skill, int coolMs) {
