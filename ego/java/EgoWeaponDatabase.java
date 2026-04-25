@@ -28,6 +28,26 @@ public final class EgoWeaponDatabase {
     public static final int MIN_EGO_LEVEL = 0;
     public static final int MAX_EGO_LEVEL = 10;
 
+    /**
+     * 레벨별 다음 레벨 필요 경험치.
+     * index 0 = Lv.0 -> Lv.1 필요 경험치.
+     * index 9 = Lv.9 -> Lv.10 필요 경험치.
+     * index 10 = Lv.10 만렙 표시용 0.
+     */
+    private static final long[] NEED_EXP_BY_LEVEL = new long[] {
+        100L,    // Lv.0 -> Lv.1: 기본 스킬/치명 개방
+        250L,    // Lv.1 -> Lv.2
+        500L,    // Lv.2 -> Lv.3
+        900L,    // Lv.3 -> Lv.4
+        1500L,   // Lv.4 -> Lv.5: 피격 반격 개방
+        2400L,   // Lv.5 -> Lv.6: 자동반격 개방
+        3600L,   // Lv.6 -> Lv.7
+        5200L,   // Lv.7 -> Lv.8
+        7500L,   // Lv.8 -> Lv.9
+        10000L,  // Lv.9 -> Lv.10: 스턴 50% 개방
+        0L       // Lv.10 만렙
+    };
+
     private static final Map<Long, EgoWeaponInfo> egoMap = new ConcurrentHashMap<Long, EgoWeaponInfo>();
     private static final Map<Long, List<EgoAbilityInfo>> abilityMap = new ConcurrentHashMap<Long, List<EgoAbilityInfo>>();
 
@@ -72,7 +92,11 @@ public final class EgoWeaponDatabase {
                 info.personality = rs.getString("ego_type");
                 info.level = clampLevel(rs.getInt("ego_lv"));
                 info.exp = Math.max(0, rs.getLong("ego_exp"));
-                info.maxExp = Math.max(100, rs.getLong("need_exp"));
+                info.maxExp = getNeedExp(info.level);
+                if (info.maxExp > 0 && info.exp >= info.maxExp)
+                    info.exp = info.maxExp - 1;
+                if (info.level >= MAX_EGO_LEVEL)
+                    info.exp = 0;
                 info.talkLevel = Math.max(1, rs.getInt("talk_lv"));
                 info.controlLevel = Math.max(1, rs.getInt("ctrl_lv"));
                 info.lastTalkTime = rs.getLong("last_talk");
@@ -165,6 +189,19 @@ public final class EgoWeaponDatabase {
         return clampLevel(defaultLevel);
     }
 
+    public static long getNeedExp(int level) {
+        int lv = clampLevel(level);
+        return NEED_EXP_BY_LEVEL[lv];
+    }
+
+    public static long getTotalNeedExpToLevel(int targetLevel) {
+        int lv = clampLevel(targetLevel);
+        long total = 0L;
+        for (int i = 0; i < lv && i < MAX_EGO_LEVEL; i++)
+            total += NEED_EXP_BY_LEVEL[i];
+        return total;
+    }
+
     public static List<EgoAbilityInfo> getAbilities(ItemInstance item) {
         if (item == null)
             return new ArrayList<EgoAbilityInfo>();
@@ -201,16 +238,18 @@ public final class EgoWeaponDatabase {
             st = con.prepareStatement(
                 "INSERT INTO ego " +
                 "(item_id, char_id, use_yn, ego_name, ego_type, ego_lv, ego_exp, need_exp, talk_lv, ctrl_lv, last_talk, last_warn) " +
-                "VALUES (?, ?, 1, ?, ?, 0, 0, 100, 1, 1, 0, 0) " +
-                "ON DUPLICATE KEY UPDATE char_id=?, use_yn=1, ego_name=?, ego_type=?, ego_lv=0, ego_exp=0, need_exp=100"
+                "VALUES (?, ?, 1, ?, ?, 0, 0, ?, 1, 1, 0, 0) " +
+                "ON DUPLICATE KEY UPDATE char_id=?, use_yn=1, ego_name=?, ego_type=?, ego_lv=0, ego_exp=0, need_exp=?"
             );
             st.setLong(1, item.getObjectId());
             st.setLong(2, pc.getObjectId());
             st.setString(3, egoName);
             st.setString(4, personality);
-            st.setLong(5, pc.getObjectId());
-            st.setString(6, egoName);
-            st.setString(7, personality);
+            st.setLong(5, getNeedExp(0));
+            st.setLong(6, pc.getObjectId());
+            st.setString(7, egoName);
+            st.setString(8, personality);
+            st.setLong(9, getNeedExp(0));
             st.executeUpdate();
 
             EgoWeaponInfo info = new EgoWeaponInfo();
@@ -221,7 +260,7 @@ public final class EgoWeaponDatabase {
             info.personality = personality;
             info.level = 0;
             info.exp = 0;
-            info.maxExp = 100;
+            info.maxExp = getNeedExp(0);
             info.talkLevel = 1;
             info.controlLevel = 1;
             egoMap.put(info.itemObjId, info);
@@ -368,19 +407,25 @@ public final class EgoWeaponDatabase {
         if (info.level >= MAX_EGO_LEVEL)
             return false;
 
-        info.exp += addExp;
+        info.level = clampLevel(info.level);
+        info.maxExp = getNeedExp(info.level);
+        info.exp = Math.max(0, info.exp + addExp);
         boolean levelUp = false;
 
-        while (info.level < MAX_EGO_LEVEL && info.exp >= info.maxExp) {
-            info.exp -= info.maxExp;
+        while (info.level < MAX_EGO_LEVEL) {
+            long need = getNeedExp(info.level);
+            if (need <= 0 || info.exp < need)
+                break;
+            info.exp -= need;
             info.level++;
-            info.maxExp = Math.max(100, 100 + (info.level * 100));
+            info.maxExp = getNeedExp(info.level);
             levelUp = true;
         }
 
         if (info.level >= MAX_EGO_LEVEL) {
             info.level = MAX_EGO_LEVEL;
             info.exp = 0;
+            info.maxExp = 0;
         }
 
         Connection con = null;
