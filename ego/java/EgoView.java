@@ -30,8 +30,14 @@ import lineage.world.object.instance.PcInstance;
  * EUC-KR 안전 정책:
  * - 우선 영문 단순 테이블 ego_view 사용.
  * - 기존 한글 테이블 `에고모양`이 있으면 fallback으로 읽는다.
+ *
+ * 인벤토리 이름 표시:
+ * - 에고무기만 색상 [에고] 표식을 붙인다.
+ * - 실제 item.type2는 바꾸지 않는다.
  */
 public final class EgoView {
+
+    private static final String EGO_MARK = "\\fY[에고]\\fW";
 
     private static final Map<String, ViewInfo> viewMap = new ConcurrentHashMap<String, ViewInfo>();
     private static volatile boolean useEnglishSchema = true;
@@ -161,7 +167,7 @@ public final class EgoView {
             return baseName;
         if (!isEgo(item))
             return baseName;
-        if (baseName.indexOf("[에고:") >= 0)
+        if (baseName.indexOf("[에고]") >= 0 || baseName.indexOf("[에고:") >= 0)
             return baseName;
 
         EgoWeaponInfo ego = EgoWeaponDatabase.find(item);
@@ -170,10 +176,11 @@ public final class EgoView {
         int level = ego == null ? 1 : Math.max(1, ego.level);
 
         StringBuilder sb = new StringBuilder(baseName);
-        sb.append(" [에고:").append(label).append(" Lv.").append(level);
+        sb.append(" ").append(EGO_MARK);
+        sb.append(" \\fS(").append(label).append(" Lv.").append(level);
         if (skill.length() > 0)
             sb.append(" ").append(skill);
-        sb.append("]");
+        sb.append(")\\fW");
         return sb.toString();
     }
 
@@ -185,10 +192,13 @@ public final class EgoView {
         String text = view == null ? "" : safe(view.info);
         EgoWeaponInfo ego = EgoWeaponDatabase.find(item);
         int level = ego == null ? 1 : Math.max(1, ego.level);
+        long exp = ego == null ? 0 : Math.max(0, ego.exp);
+        long need = ego == null ? 100 : Math.max(1, ego.maxExp);
         String skill = skillName(item);
 
         StringBuilder sb = new StringBuilder();
         sb.append("에고형태: ").append(label).append(" / 레벨: ").append(level);
+        sb.append(" / 경험치: ").append(exp).append("/").append(need);
         if (skill.length() > 0)
             sb.append(" / 능력: ").append(skill);
         if (text.length() > 0)
