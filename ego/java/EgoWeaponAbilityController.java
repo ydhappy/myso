@@ -7,6 +7,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import lineage.bean.lineage.Inventory;
 import lineage.database.EgoWeaponDatabase;
+import lineage.database.EgoWeaponDatabase.EgoAbilityInfo;
 import lineage.database.EgoWeaponDatabase.EgoWeaponInfo;
 import lineage.network.packet.BasePacketPooling;
 import lineage.network.packet.server.S_ObjectEffect;
@@ -70,8 +71,11 @@ public final class EgoWeaponAbilityController {
         PcInstance pc = (PcInstance) cha;
         gainAttackExp(pc, weapon);
 
+        EgoAbilityInfo abilityInfo = EgoWeaponDatabase.getFirstAbility(weapon);
         int egoLevel = getEgoLevel(weapon);
-        int chance = getProcChance(egoLevel);
+        int abilityLevel = abilityInfo == null ? 1 : Math.max(1, abilityInfo.abilityLevel);
+        int effectiveLevel = Math.min(MAX_EGO_LEVEL, egoLevel + Math.max(0, abilityLevel - 1));
+        int chance = getProcChance(effectiveLevel, abilityInfo);
 
         if (Util.random(1, 100) > chance)
             return damage;
@@ -80,27 +84,43 @@ public final class EgoWeaponAbilityController {
         if (!EgoWeaponTypeUtil.isAbilityAllowed(type.name(), weapon))
             type = EgoAbilityType.EGO_BALANCE;
 
+        int result;
         switch (type) {
             case BLOOD_DRAIN:
-                return applyBloodDrain(pc, target, weapon, damage, egoLevel);
+                result = applyBloodDrain(pc, target, weapon, damage, effectiveLevel);
+                break;
             case MANA_DRAIN:
-                return applyManaDrain(pc, target, weapon, damage, egoLevel);
+                result = applyManaDrain(pc, target, weapon, damage, effectiveLevel);
+                break;
             case CRITICAL_BURST:
-                return applyCriticalBurst(pc, target, weapon, damage, egoLevel);
+                result = applyCriticalBurst(pc, target, weapon, damage, effectiveLevel);
+                break;
             case GUARDIAN_SHIELD:
-                return applyGuardianShield(pc, target, weapon, damage, egoLevel);
+                result = applyGuardianShield(pc, target, weapon, damage, effectiveLevel);
+                break;
             case AREA_SLASH:
-                return applyAreaSlash(pc, target, weapon, damage, egoLevel);
+                result = applyAreaSlash(pc, target, weapon, damage, effectiveLevel);
+                break;
             case EXECUTION:
-                return applyExecution(pc, target, weapon, damage, egoLevel);
+                result = applyExecution(pc, target, weapon, damage, effectiveLevel);
+                break;
             case FLAME_BRAND:
-                return applyFlameBrand(pc, target, weapon, damage, egoLevel);
+                result = applyFlameBrand(pc, target, weapon, damage, effectiveLevel);
+                break;
             case FROST_BIND:
-                return applyFrostBind(pc, target, weapon, damage, egoLevel);
+                result = applyFrostBind(pc, target, weapon, damage, effectiveLevel);
+                break;
             case EGO_BALANCE:
             default:
-                return applyBalanced(pc, target, weapon, damage, egoLevel);
+                result = applyBalanced(pc, target, weapon, damage, effectiveLevel);
+                break;
         }
+
+        int bonusDamage = abilityInfo == null ? 0 : Math.max(0, abilityInfo.damageBonus);
+        if (bonusDamage > 0 && result > 0)
+            result += bonusDamage;
+
+        return result;
     }
 
     public static void addKillExp(PcInstance pc, MonsterInstance mon) {
@@ -199,8 +219,10 @@ public final class EgoWeaponAbilityController {
         }
     }
 
-    private static int getProcChance(int egoLevel) {
+    private static int getProcChance(int egoLevel, EgoAbilityInfo abilityInfo) {
         int chance = BASE_PROC_CHANCE + Math.max(0, egoLevel - 1) * ADD_PROC_CHANCE_PER_LEVEL;
+        if (abilityInfo != null)
+            chance += abilityInfo.procChanceBonus;
         return Math.min(MAX_PROC_CHANCE, Math.max(1, chance));
     }
 
