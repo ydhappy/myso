@@ -1,244 +1,267 @@
 # 에고무기 시스템
 
-에고무기 기능을 적용하기 위한 최소 구성 폴더입니다. Java 파일은 전부 `ego/java/` 한 곳에 모았습니다. Java 8 / UTF-8 기준입니다.
+Java 8 / UTF-8 기준 에고무기 모듈입니다.
 
-```bash
-javac -encoding UTF-8 -source 1.8 -target 1.8
+최종 방향은 단순합니다.
+
+```text
+기존 무기는 그대로 사용
+type2 변형 없음
+인벤/바닥 이미지 변경 없음
+에고는 대화, 성장, 보조능력, 로그만 추가
 ```
 
 ---
 
-## 최종 적용 원칙
+## 1. 최종 원칙
 
 ```text
-기존 서버 코어 유지
 PcInstance 공격 로직 변경 금지
-DamageController 무기 타입/데미지 공식 변경 금지
-원본 item.type2 변경 금지
-원본 아이템 템플릿 변경 금지
-EgoCombat 없음, 만들지 않음
-무기변형 기능 완전 제거
-에고는 별도 모듈로만 추가
+DamageController 무기 공식 변경 금지
+item.type2 변경 금지
+item template 변경 금지
+인벤토리 이미지 변경 금지
+바닥 이미지 변경 금지
+EgoCombat 없음
+무기변형 없음
 ```
 
-에고는 실제 무기 타입을 바꾸지 않습니다.
+예시:
 
 ```text
 원본 활  → 계속 활 공격
 원본 검  → 계속 검 공격
 원본 창  → 계속 창 공격
-에고     → 대화, 표시, 경험치, 보조능력, 로그만 추가
+에고     → 기존 무기에 이름표, 대화, 경험치, 보조능력, 로그만 추가
 ```
 
 ---
 
-## 생성 조건
-
-에고 생성은 착용 중인 무기에 가능합니다.
+## 2. 폴더 구조
 
 ```text
-착용 무기 필요
-무기 슬롯 아이템 필요
-원본 type2 지원 필요
-이미 에고가 생성된 무기 재생성 불가
-강화된 무기도 에고 생성 가능
+ego/
+├─ README.md
+├─ html/
+│  └─ egoletter.htm
+├─ java/
+│  ├─ EgoMsg.java
+│  ├─ EgoType.java
+│  ├─ EgoView.java
+│  ├─ EgoTalk.java
+│  ├─ EgoSkill.java
+│  ├─ EgoDB.java
+│  ├─ EgoCmd.java
+│  ├─ EgoScan.java
+│  ├─ EgoMessageUtil.java
+│  ├─ EgoWeaponTypeUtil.java
+│  ├─ EgoWeaponControlController.java
+│  ├─ EgoWeaponAbilityController.java
+│  ├─ EgoWeaponDatabase.java
+│  ├─ EgoWeaponCommand.java
+│  ├─ EgoOpponentScanController.java
+│  ├─ EgoCoreAdapter.java
+│  └─ EgoPortableRules.java
+└─ sql/
+   ├─ ego_install_euckr.sql
+   ├─ ego_cleanup_unused.sql
+   ├─ ego_install_korean.sql
+   ├─ ego_oneclick_install.sql
+   └─ ego_no_java_admin.sql
+```
+
+삭제된 기능 파일:
+
+```text
+EgoForm.java
+EgoWeaponFormController.java
 ```
 
 ---
 
-## DB 기준
+## 3. DB 최종 테이블
 
-EUC-KR 서버는 영문 단순 테이블을 권장합니다.
+신규 설치 기준 테이블은 4개입니다.
 
 ```text
 ego
 ego_skill
-ego_view
-ego_type
-ego_talk
 ego_skill_base
 ego_log
 ```
 
-핵심 컬럼:
+삭제된 테이블:
 
 ```text
-ego.item_id       에고가 생성된 아이템 objectId
-ego.char_id       소유 캐릭터 objectId
-ego.use_yn        사용 여부
-ego.ego_name      호출 이름
-ego.ego_type      성격
-ego.ego_lv        에고 레벨
-ego.ego_exp       현재 경험치
-ego.need_exp      다음 레벨 필요 경험치
+ego_view
+ego_type
+ego_talk
+에고모양
+```
 
-ego.form          미사용 호환 컬럼, 무기변형 기능 제거로 사용하지 않음
-ego.prev_shield   미사용 호환 컬럼, 무기변형 기능 제거로 사용하지 않음
+삭제된 컬럼:
 
-ego_skill.skill       능력 코드
-ego_skill.skill_lv    능력 레벨 보정
-ego_skill.rate_bonus  발동 확률 보정
-ego_skill.dmg_bonus   피해 보정
-ego_skill.last_proc   마지막 발동 시간
+```text
+ego.form
+ego.prev_shield
+```
 
-ego_skill_base.base_rate  기본 발동률
-ego_skill_base.lv_rate    레벨당 발동률
-ego_skill_base.max_rate   최대 발동률
-ego_skill_base.min_lv     최소 에고 실질 레벨
-ego_skill_base.cool_ms    능력별 쿨타임
-ego_skill_base.effect     이펙트 번호
+기존 설치 서버는 아래 SQL을 실행합니다.
 
-ego_log                  능력 발동/레벨업 기록
+```sql
+SOURCE ego/sql/ego_cleanup_unused.sql;
+```
+
+주의: 구버전 MySQL은 `DROP INDEX`, `DROP COLUMN`에 `IF EXISTS`가 없어 이미 삭제된 컬럼이면 에러가 날 수 있습니다. 그런 경우 해당 줄은 건너뛰면 됩니다.
+
+---
+
+## 4. 설치 SQL
+
+신규 설치:
+
+```sql
+SOURCE ego/sql/ego_install_euckr.sql;
+```
+
+설치 후 확인:
+
+```sql
+SHOW TABLES LIKE 'ego';
+SHOW TABLES LIKE 'ego_skill';
+SHOW TABLES LIKE 'ego_skill_base';
+SHOW TABLES LIKE 'ego_log';
 ```
 
 ---
 
-## 인벤토리 표시
+## 5. Java 연결
 
-에고 생성 후 인벤토리 이름 뒤에 색상 표식이 붙습니다.
+### 5.1 서버 시작 DB 로드
 
-```text
-무기명 \fY[에고]\fW \fS(원본무기타입 Lv.1 공명)\fW
-```
-
-아이템정보에는 에고 상태가 표시됩니다.
-
-```text
-에고: 활 / 레벨: 3 / 경험치: 15/300 / 능력: 공명
-```
-
-`활/검/창` 표시는 원본 item.type2 기준입니다. 무기변형이 아닙니다.
-
----
-
-## 에고 경험치/레벨업
-
-에고 경험치와 레벨은 `ego` 테이블에 저장됩니다.
-
-```text
-생성 시 레벨: 1
-생성 시 경험치: 0
-생성 시 필요 경험치: 100
-최대 레벨: 30
-```
-
-경험치 획득:
-
-```text
-전투 중 에고 보조능력이 연결된 공격 → 3초마다 +1 경험치
-몬스터 처치 hook을 addKillExp에 연결한 경우 → 일반 몬스터 +5 경험치
-보스 몬스터 처치 hook을 addKillExp에 연결한 경우 → +55 경험치
-```
-
-레벨업 공식:
-
-```text
-현재 경험치 >= 필요 경험치 → 레벨 +1
-남은 경험치는 다음 레벨 경험치로 이월
-다음 필요 경험치 = 기존 필요 경험치 + 현재 레벨 * 100
-```
-
----
-
-## 에고 스킬 계산
-
-`ego_skill_base`가 실제 전투 계산에 연결됩니다.
-
-```text
-base_rate  → 기본 발동률
-lv_rate    → 에고/능력 실질 레벨당 추가 발동률
-max_rate   → 최대 발동률
-min_lv     → 발동 최소 실질 레벨
-cool_ms    → 능력별 쿨타임
-effect     → S_ObjectEffect 이펙트 번호
-```
-
-서버의 기존 스킬 DB 기준:
-
-```text
-skill.이팩트          → 일반 스킬 이펙트 컬럼
-monster_skill.effect  → 몬스터 스킬 이펙트 컬럼
-ego_skill_base.effect → 에고 보조능력 이펙트 컬럼
-```
-
-즉 `ego_skill_base.effect`에는 기존 skill/monster_skill에서 확인한 사용 가능한 이펙트 번호를 넣으면 됩니다.
-
----
-
-## ego_log
-
-에고 능력 발동 성공 시 `ego_log`에 기록됩니다.
-
-```text
-item_id
-char_id
-char_name
-target_name
-skill
-base_dmg
-final_dmg
-add_dmg
-reg_date
-```
-
-레벨업도 `skill = LEVEL_UP`으로 기록됩니다.
-
----
-
-## myso 빠른 적용 순서
-
-```text
-1. DB 백업
-2. ego/sql/ego_install_euckr.sql 직접 실행 또는 설치 스크립트 실행
-3. ego/java 파일 복사
-4. ChattingController 연결: EgoTalk.chat(...)
-5. CommandController 연결: EgoCmd.run(...)
-6. DamageController 연결: EgoSkill.attack(...) 단 1회만 추가
-7. DB 시작 연결: EgoDB.init(con)
-8. 서버 빌드
-9. 무기 착용
-10. .에고생성 카르마
-11. 인벤토리 [에고] 색상 표식 확인
-12. .에고정보 확인
-13. 카르마 상태 / 카르마 조언 / 카르마 선공 테스트
-14. ego_log 기록 확인
-```
-
-연결 예시:
+서버 DB 초기화 지점에 추가합니다.
 
 ```java
-// ChattingController: 일반채팅 방송 직전
-if (mode == Lineage.CHATTING_MODE_NORMAL
-        && o instanceof PcInstance
-        && !(o instanceof RobotInstance)) {
+EgoDB.init(con);
+```
+
+### 5.2 CommandController 연결
+
+기존 명령어 처리 전 또는 초반에 추가합니다.
+
+```java
+if (EgoCmd.run(o, key, st)) {
+    return true;
+}
+```
+
+### 5.3 ChattingController 실시간 대화 연결
+
+`ChattingController.toNormal(...)`에서 일반 채팅이 주변에 방송되기 전에 추가합니다.
+
+권장 위치:
+
+```java
+// 명령어 확인 처리.
+if (!CommandController.toCommand(o, msg)) {
+```
+
+위 코드보다 먼저 아래를 넣습니다.
+
+```java
+// [에고] 일반채팅 실시간 대화 처리
+// 에고 호출 채팅은 주변에 보이지 않게 consume 처리한다.
+if (o instanceof PcInstance && !(o instanceof RobotInstance)) {
     if (EgoTalk.chat((PcInstance) o, msg)) {
         return;
     }
 }
 ```
 
-```java
-// CommandController: 기존 명령어 처리 전
-if (EgoCmd.run(o, key, st)) {
-    return true;
-}
-```
+이렇게 하면 사용자가 일반 채팅으로 `카르마 상태`, `카르마 조언`처럼 입력해도 주변 유저에게는 보이지 않고 에고만 반응합니다.
+
+### 5.4 DamageController 공격 훅
+
+`DamageController.getDamage(...)` 최종 return 직전, 기존 데미지 계산이 끝난 뒤 추가합니다.
 
 ```java
-// DamageController: 최종 return 직전, 기존 dmg 계산 이후 보조능력만 추가
 if (cha instanceof PcInstance && weapon != null && dmg > 0) {
     dmg = EgoSkill.attack((Character) cha, target, weapon, (int) Math.round(dmg));
 }
 ```
 
+### 5.5 DamageController 피격 훅
+
+`DamageController.toDamage(...)`에서 HP 감소 직전에 추가합니다.
+
+찾을 코드:
+
 ```java
-// 서버 시작 DB 로드
-EgoDB.init(con);
+// 데미지 입었다는거 알리기.
+o.toDamage(cha, dmg, type);
+// hp 처리
+o.setNowHp(o.getNowHp() - dmg);
+```
+
+변경:
+
+```java
+// 데미지 입었다는거 알리기.
+o.toDamage(cha, dmg, type);
+
+// [에고] 피격자 레벨별 해금 능력: 방어본능 / 반격 / 복수
+if (o instanceof Character) {
+    dmg = EgoSkill.defense((Character) o, cha, dmg);
+    if (dmg <= 0)
+        return;
+}
+
+// hp 처리
+o.setNowHp(o.getNowHp() - dmg);
 ```
 
 ---
 
-## 게임 명령어
+## 6. 에고 대화 출력 방식
+
+### 짧은 답변
+
+짧은 에고 답변은 말풍선으로 출력됩니다.
+
+```text
+카르마: [에고] 듣고 있습니다. 근처에 선공 몬스터 기척이 있습니다.
+```
+
+구현 방식:
+
+```text
+S_ObjectChatting 패킷을 본인에게만 전송
+주변 캐릭터에게는 방송하지 않음
+```
+
+### 긴 답변 / 커맨드 결과
+
+상태, 도움말, 상세 정보처럼 긴 메시지는 편지창처럼 출력됩니다.
+
+```text
+ego/html/egoletter.htm
+```
+
+이 파일을 클라이언트 HTML 폴더에 복사해야 합니다.
+
+일반적으로 다음 위치 중 서버/클라 구조에 맞는 곳에 넣습니다.
+
+```text
+html/egoletter.htm
+data/html/egoletter.htm
+client/html/egoletter.htm
+```
+
+템플릿이 없으면 시스템 메시지 fallback으로 내용은 볼 수 있습니다.
+
+---
+
+## 7. 명령어
 
 ```text
 .에고도움
@@ -279,22 +302,98 @@ EgoDB.init(con);
 
 ---
 
-## 금지 작업
+## 8. 에고 생성 조건
 
 ```text
-PcInstance의 bow 값 변경 금지
-PcInstance의 공격 사거리 변경 금지
-PcInstance의 화살 소비 로직 변경 금지
-DamageController의 weapon.getItem().getType2() 교체 금지
-EgoCombat 같은 전투 타입 우회 클래스 추가 금지
-무기변형 기능 재추가 금지
+착용 중인 무기 필요
+지원 type2 필요
+이미 에고 생성된 무기 재생성 불가
+강화된 무기도 생성 가능
+```
+
+지원 type2:
+
+```text
+dagger
+sword
+tohandsword
+axe
+spear
+bow
+staff
+wand
+```
+
+제외:
+
+```text
+fishing_rod
+무기 슬롯이 아닌 아이템
+지원하지 않는 type2
 ```
 
 ---
 
-## 운영 SQL 예시
+## 9. 에고 경험치 / 레벨업
 
-능력 이펙트/확률 변경:
+```text
+생성 시 레벨: 1
+생성 시 경험치: 0
+생성 시 필요 경험치: 100
+최대 레벨: 30
+```
+
+경험치:
+
+```text
+공격 중 3초마다 +1
+몬스터 처치 hook 연결 시 +5
+보스 처치 hook 연결 시 +55
+```
+
+레벨업:
+
+```text
+현재 경험치 >= 필요 경험치 → 레벨 +1
+남은 경험치 이월
+다음 필요 경험치 = 기존 필요 경험치 + 현재 레벨 * 100
+```
+
+---
+
+## 10. 레벨별 해금
+
+```text
+Lv.5  방어본능
+      피격 시 받는 피해 소폭 감소
+
+Lv.10 반격
+      피격 시 일정 확률로 공격자에게 반격 피해
+      skill = EGO_COUNTER
+
+Lv.20 복수
+      체력 35% 이하에서 피격 시 강한 반격 + HP 회복
+      skill = EGO_REVENGE
+```
+
+`EGO_COUNTER`, `EGO_REVENGE`는 일반 설정용 주력 능력이 아니라 레벨별 자동 해금 능력입니다.
+
+---
+
+## 11. 에고 능력 계산
+
+`ego_skill_base` 기준으로 계산합니다.
+
+```text
+base_rate  기본 발동률
+lv_rate    레벨당 발동률
+max_rate   최대 발동률
+min_lv     최소 실질 레벨
+cool_ms    쿨타임
+effect     S_ObjectEffect 이펙트 번호
+```
+
+수정 예:
 
 ```sql
 UPDATE ego_skill_base
@@ -306,18 +405,19 @@ SET base_rate = 3,
 WHERE skill = 'BLOOD_DRAIN';
 ```
 
-에고 경험치 보정:
+수정 후:
 
-```sql
-UPDATE ego
-SET ego_lv = 5,
-    ego_exp = 0,
-    need_exp = 1000
-WHERE item_id = 123456789
-  AND use_yn = 1;
+```text
+.에고리로드
 ```
 
-로그 확인:
+---
+
+## 12. 에고 로그
+
+능력 발동/레벨업은 `ego_log`에 기록됩니다.
+
+확인:
 
 ```sql
 SELECT *
@@ -326,9 +426,41 @@ ORDER BY reg_date DESC
 LIMIT 50;
 ```
 
-수정 후:
+로그 컬럼:
 
 ```text
-.에고리로드
-또는 서버 재시작
+item_id
+char_id
+char_name
+target_name
+skill
+base_dmg
+final_dmg
+add_dmg
+reg_date
+```
+
+---
+
+## 13. 컴파일
+
+```bash
+javac -encoding UTF-8 -source 1.8 -target 1.8
+```
+
+---
+
+## 14. 최종 점검
+
+```text
+[확인] type2 변형 없음
+[확인] 인벤 이미지 변경 없음
+[확인] 바닥 이미지 변경 없음
+[확인] 에고 이름표만 인벤 이름에 추가
+[확인] 짧은 응답은 말풍선
+[확인] 긴 응답은 egoletter 편지창
+[확인] 에고 호출 채팅은 주변에 보이지 않음
+[확인] ego_log 기록
+[확인] ego_skill_base 전투 계산 연동
+[확인] Lv.5/Lv.10/Lv.20 해금 능력
 ```
