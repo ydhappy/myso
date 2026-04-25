@@ -8,6 +8,7 @@
 Java 파일은 전부 ego/java/ 한 곳에 둡니다.
 설치는 ego/install/ 원클릭 스크립트로 진행합니다.
 문서는 README.md와 이 문서만 봅니다.
+에고 호출은 일반채팅으로 입력하지만, 호출/응답은 다른 캐릭터에게 보이지 않게 처리합니다.
 ```
 
 ---
@@ -23,6 +24,7 @@ ego/
 │  ├─ install_ego_windows.bat
 │  └─ install_ego_linux.sh
 ├─ java/
+│  ├─ EgoMessageUtil.java                 # 개인 메시지/색상 통합
 │  ├─ EgoWeaponTypeUtil.java              # myso 무기종류 판정
 │  ├─ EgoWeaponControlController.java     # myso 대화/상태/선공/제어
 │  ├─ EgoWeaponAbilityController.java     # myso 특별능력
@@ -91,9 +93,10 @@ var, record, sealed, switch expression, text block, List.of, Map.of, Set.of, Str
 
 ### 4.1 myso 서버에 적용할 때
 
-아래 7개가 myso 기준 구현입니다.
+아래 8개가 myso 기준 구현입니다.
 
 ```text
+ego/java/EgoMessageUtil.java
 ego/java/EgoWeaponTypeUtil.java
 ego/java/EgoWeaponControlController.java
 ego/java/EgoWeaponAbilityController.java
@@ -106,6 +109,7 @@ ego/java/EgoOpponentScanController.java
 복사 위치:
 
 ```text
+EgoMessageUtil.java
 EgoWeaponTypeUtil.java
 EgoWeaponControlController.java
 EgoWeaponAbilityController.java
@@ -139,10 +143,48 @@ EgoPortableRules.java = 서버와 무관한 무기/능력/HP/위험도 규칙
 
 ---
 
-## 5. 기능 요약
+## 5. 대화 표시 정책
+
+에고 대화는 일반 채팅처럼 입력하지만, 실제 출력은 본인에게만 보이게 합니다.
+
+```text
+입력: 일반 채팅으로 "카르마 상태" 입력
+처리: EgoWeaponControlController.onNormalChat(...)가 true 반환
+효과: 해당 일반 채팅은 consume되어 주변에 방송되지 않음
+출력: EgoMessageUtil이 Lineage.CHATTING_MODE_MESSAGE로 본인에게만 전송
+결과: 다른 캐릭터에게 에고 호출/응답이 보이지 않음
+```
+
+색상 코드:
+
+```text
+일반/정상: \fY
+위험/실패: \fR
+정보/진단: \fS
+```
+
+중요 연결 위치:
+
+```java
+if (o instanceof PcInstance && !(o instanceof RobotInstance)) {
+    if (EgoWeaponControlController.onNormalChat((PcInstance) o, msg)) {
+        return;
+    }
+}
+```
+
+이 코드는 일반 채팅 방송 처리보다 먼저 실행되어야 합니다.
+위치가 늦으면 "카르마 상태" 같은 호출 채팅이 주변 캐릭터에게 보일 수 있습니다.
+
+---
+
+## 6. 기능 요약
 
 ```text
 - 에고 이름 호출 대화
+- 일반채팅 호출 consume 처리
+- 에고 응답 본인 전용 개인 메시지 출력
+- 색상 자동 주입
 - 내 캐릭터 HP/MP/무기/타겟 상태 인식
 - 주변 선공 몬스터 감지
 - 주변 상대 캐릭터 감지
@@ -157,12 +199,12 @@ EgoPortableRules.java = 서버와 무관한 무기/능력/HP/위험도 규칙
 
 ---
 
-## 6. myso 적용 순서
+## 7. myso 적용 순서
 
 ```text
 1. DB 백업
 2. ego/install/install_ego_windows.bat 또는 install_ego_linux.sh 실행
-3. myso용 java 파일 7개 복사
+3. myso용 java 파일 8개 복사
 4. ChattingController 연결
 5. CommandController 연결
 6. DamageController 연결
@@ -171,15 +213,16 @@ EgoPortableRules.java = 서버와 무관한 무기/능력/HP/위험도 규칙
 9. 게임 접속 후 .에고검사
 10. .에고생성 카르마
 11. .에고정보 / 카르마 상태 / 카르마 상대 테스트
+12. 주변 캐릭터에게 "카르마 상태" 채팅이 보이지 않는지 확인
 ```
 
 ---
 
-## 7. myso 기존 자바 연결 코드
+## 8. myso 기존 자바 연결 코드
 
-### 7.1 ChattingController.java
+### 8.1 ChattingController.java
 
-`if (!CommandController.toCommand(o, msg)) {` 바로 아래:
+`if (!CommandController.toCommand(o, msg)) {` 바로 아래 또는 일반 채팅 방송 처리보다 먼저:
 
 ```java
 if (o instanceof PcInstance && !(o instanceof RobotInstance)) {
@@ -196,7 +239,7 @@ import lineage.world.object.instance.PcInstance;
 import lineage.world.object.instance.RobotInstance;
 ```
 
-### 7.2 CommandController.java
+### 8.2 CommandController.java
 
 `PluginController.init(...)` 이후:
 
@@ -206,7 +249,7 @@ if (EgoWeaponCommand.toCommand(o, key, st)) {
 }
 ```
 
-### 7.3 DamageController.java
+### 8.3 DamageController.java
 
 최종 데미지 반환 직전:
 
@@ -218,7 +261,7 @@ if (cha instanceof PcInstance && weapon != null) {
 
 실제 변수명은 서버 파일에 맞게 조정하세요.
 
-### 7.4 서버 시작 시 DB 로드
+### 8.4 서버 시작 시 DB 로드
 
 ```java
 EgoWeaponDatabase.init(con);
@@ -232,7 +275,7 @@ EgoWeaponDatabase.init(con);
 
 ---
 
-## 8. 다른 서버코어 초보자 적용 방법
+## 9. 다른 서버코어 초보자 적용 방법
 
 다른 서버코어는 클래스명이 다릅니다.
 
@@ -247,7 +290,7 @@ myso: PcInstance, ItemInstance, MonsterInstance
 그래서 바로 `EgoWeaponControlController.java`를 복사하면 오류가 날 수 있습니다.
 아래 순서로 진행하세요.
 
-### 8.1 1단계: DB만 먼저 설치
+### 9.1 1단계: DB만 먼저 설치
 
 ```text
 ego/install/install_ego_windows.bat
@@ -255,7 +298,7 @@ ego/install/install_ego_windows.bat
 ego/install/install_ego_linux.sh
 ```
 
-### 8.2 2단계: 서버 클래스명 확인
+### 9.2 2단계: 서버 클래스명 확인
 
 찾을 것:
 
@@ -278,7 +321,7 @@ ego/install/install_ego_linux.sh
 주변객체: getInsideList, getKnownObjects, getVisibleObjects, World.getVisibleObjects
 ```
 
-### 8.3 3단계: EgoCoreAdapter 구현
+### 9.3 3단계: EgoCoreAdapter 구현
 
 파일:
 
@@ -313,7 +356,28 @@ public final class MyServerEgoAdapter implements EgoCoreAdapter {
 }
 ```
 
-### 8.4 4단계: EgoPortableRules 확인
+### 9.4 4단계: 개인 메시지 출력 보장
+
+다른 서버코어에서도 에고 응답은 일반 채팅으로 보내면 안 됩니다.
+반드시 본인 전용 메시지 메서드로 연결하세요.
+
+후보 메서드:
+
+```text
+sendPackets(new S_SystemMessage(msg))
+sendSystemMessage(msg)
+sendMessage(msg)
+```
+
+피해야 하는 방식:
+
+```text
+일반채팅 패킷 방송
+주변 객체에게 모두 전송
+World.broadcastPacket(...)
+```
+
+### 9.5 5단계: EgoPortableRules 확인
 
 파일:
 
@@ -330,7 +394,7 @@ myso: tohandsword
 다른 서버: twohand_sword, two_handed_sword
 ```
 
-### 8.5 5단계: 단계별 테스트
+### 9.6 6단계: 단계별 테스트
 
 한 번에 다 붙이지 말고 아래 순서로 켭니다.
 
@@ -345,7 +409,7 @@ myso: tohandsword
 
 ---
 
-## 9. 게임 명령어
+## 10. 게임 명령어
 
 ```text
 .에고도움        명령어 안내
@@ -374,7 +438,7 @@ myso: tohandsword
 
 ---
 
-## 10. 무기 종류와 능력
+## 11. 무기 종류와 능력
 
 지원 무기:
 
@@ -410,7 +474,7 @@ FROST_BIND       서리 충격
 
 ---
 
-## 11. Java 수정 없이 생성/편집
+## 12. Java 수정 없이 생성/편집
 
 이미 에고 시스템이 서버에 연결되어 있다면 운영 중 생성/편집은 SQL만으로 가능합니다.
 
@@ -435,7 +499,7 @@ DB 수정 후:
 
 ---
 
-## 12. 상대 감지 정보 범위
+## 13. 상대 감지 정보 범위
 
 표시:
 
@@ -451,20 +515,22 @@ DB 수정 후:
 
 ---
 
-## 13. 오류 대응
+## 14. 오류 대응
 
 ```text
+EgoMessageUtil 없음          → 신규 개인 메시지 유틸 복사 누락
 EgoWeaponTypeUtil 없음       → myso용 java 파일 복사 누락
 EgoWeaponDatabase 없음       → database 경로에 복사해야 함
 getInsideList 없음           → 서버 주변객체 메서드명 확인
 ATTACK_TYPE_WEAPON 없음      → Lineage 공격 타입 상수명 확인
 lineage 패키지 오류          → 다른 서버는 EgoCoreAdapter/EgoPortableRules 기준으로 포팅
+에고 호출이 주변에 보임      → ChattingController 연결 위치가 일반채팅 방송보다 늦음
 한글 깨짐                   → UTF-8 저장/컴파일 필요
 ```
 
 ---
 
-## 14. 원복
+## 15. 원복
 
 자바 연결 제거:
 
