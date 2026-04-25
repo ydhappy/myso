@@ -2,6 +2,7 @@ package lineage.network.packet.server;
 
 import lineage.network.packet.BasePacket;
 import lineage.network.packet.Opcodes;
+import lineage.world.controller.EgoView;
 import lineage.world.object.instance.ItemInstance;
 
 public class S_InventoryEquipped extends S_Inventory {
@@ -24,5 +25,10 @@ public class S_InventoryEquipped extends S_Inventory {
 		writeC(Opcodes.S_OPCODE_ITEMEQUIP);
 		writeD(item.getObjectId());
 		writeS(getName(item));
+	}
+
+	@Override
+	protected String getName(ItemInstance item) {
+		return EgoView.name(item, super.getName(item));
 	}
 }
