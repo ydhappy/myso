@@ -62,6 +62,22 @@ public final class EgoView {
     public static void applyGroundGfx(ItemInstance item) {
     }
 
+    /**
+     * 에고 정보/상태/생성 메시지에서 사용할 실제 아이템명.
+     * ItemInstance.clone() 구조상 item.getName()이 nameId($1234)일 수 있어 템플릿 name을 우선 사용한다.
+     */
+    public static String displayName(ItemInstance item) {
+        if (item == null)
+            return "";
+        return displayName(item, item.getName());
+    }
+
+    public static String displayName(ItemInstance item, String baseName) {
+        if (item == null)
+            return baseName == null ? "" : baseName;
+        return fixNameIdBaseName(item, baseName == null ? item.getName() : baseName);
+    }
+
     public static String name(ItemInstance item, String baseName) {
         if (item == null || baseName == null)
             return baseName;
@@ -70,7 +86,7 @@ public final class EgoView {
         if (baseName.indexOf("[에고]") >= 0 || baseName.indexOf("[에고:") >= 0)
             return baseName;
 
-        String fixedName = fixNameIdBaseName(item, baseName);
+        String fixedName = displayName(item, baseName);
         EgoWeaponInfo ego = EgoWeaponDatabase.find(item);
         String label = label(item);
         String skill = skillName(item);
@@ -154,14 +170,17 @@ public final class EgoView {
 
     private static String fixNameIdBaseName(ItemInstance item, String baseName) {
         if (item == null || item.getItem() == null)
-            return baseName;
+            return baseName == null ? "" : baseName;
 
         String realName = safe(item.getItem().getName());
         if (realName.length() == 0)
-            return baseName;
+            return baseName == null ? "" : baseName;
 
         String nameId = safe(item.getItem().getNameId());
-        String result = baseName;
+        String result = baseName == null ? "" : baseName;
+
+        if (result.length() == 0 || result.startsWith("$"))
+            result = realName;
 
         if (nameId.length() > 0 && result.indexOf(nameId) >= 0)
             result = result.replace(nameId, realName);
