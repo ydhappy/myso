@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS ego (
     char_id BIGINT NOT NULL DEFAULT 0 COMMENT '소유 캐릭터 objectId',
     use_yn TINYINT(1) NOT NULL DEFAULT 0 COMMENT '사용 여부',
     ego_name VARCHAR(50) NOT NULL DEFAULT '에고' COMMENT '호출 이름',
-    ego_type VARCHAR(30) NOT NULL DEFAULT '수호' COMMENT '성격/분류',
+    ego_type VARCHAR(30) NOT NULL DEFAULT '예의' COMMENT '실시간 대화 말투: 예의/예의반대',
     ego_lv INT NOT NULL DEFAULT 0 COMMENT '에고 레벨 0~10, 0은 전투능력 없음',
     ego_exp BIGINT NOT NULL DEFAULT 0 COMMENT '현재 경험치',
     need_exp BIGINT NOT NULL DEFAULT 100 COMMENT '다음 레벨 필요 경험치',
@@ -117,7 +117,7 @@ CREATE TABLE IF NOT EXISTS ego_log (
     INDEX ego_log_date_idx (reg_date)
 ) ENGINE=InnoDB DEFAULT CHARSET=euckr COLLATE=euckr_korean_ci COMMENT='에고 능력 발동 기록';
 
-SELECT 'EGO_INSTALL_OK_EUCKR_EXP_CURVE_0_10' AS result;
+SELECT 'EGO_INSTALL_OK_EUCKR_TALK_TONE' AS result;
 SHOW TABLES LIKE 'ego';
 SHOW TABLES LIKE 'ego_skill';
 SHOW TABLES LIKE 'ego_skill_base';
