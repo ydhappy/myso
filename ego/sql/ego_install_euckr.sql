@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS ego (
     char_id BIGINT NOT NULL DEFAULT 0 COMMENT '소유 캐릭터 objectId',
     use_yn TINYINT(1) NOT NULL DEFAULT 0 COMMENT '사용 여부',
     ego_name VARCHAR(50) NOT NULL DEFAULT '에고' COMMENT '호출 이름',
-    ego_type VARCHAR(30) NOT NULL DEFAULT '수호' COMMENT '수호/광전/냉정/현자',
+    ego_type VARCHAR(30) NOT NULL DEFAULT '수호' COMMENT '성격/분류',
     ego_lv INT NOT NULL DEFAULT 1 COMMENT '에고 레벨',
     ego_exp BIGINT NOT NULL DEFAULT 0 COMMENT '현재 경험치',
     need_exp BIGINT NOT NULL DEFAULT 100 COMMENT '다음 레벨 필요 경험치',
@@ -20,14 +20,12 @@ CREATE TABLE IF NOT EXISTS ego (
     ctrl_lv INT NOT NULL DEFAULT 1 COMMENT '제어 단계',
     last_talk BIGINT NOT NULL DEFAULT 0 COMMENT '마지막 대화 시간',
     last_warn BIGINT NOT NULL DEFAULT 0 COMMENT '마지막 경고 시간',
-    form VARCHAR(40) NOT NULL DEFAULT '' COMMENT 'dagger/sword/tohandsword/axe/spear/bow/staff/wand',
-    prev_shield BIGINT NOT NULL DEFAULT 0 COMMENT '자동 해제한 방패 objectId',
     reg_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '생성일',
     mod_date DATETIME NULL DEFAULT NULL COMMENT '수정일',
     PRIMARY KEY (item_id),
     INDEX ego_char_idx (char_id),
     INDEX ego_name_idx (ego_name),
-    INDEX ego_form_idx (form)
+    INDEX ego_lv_idx (ego_lv)
 ) ENGINE=InnoDB DEFAULT CHARSET=euckr COLLATE=euckr_korean_ci COMMENT='에고무기 기본 정보';
 
 CREATE TABLE IF NOT EXISTS ego_skill (
@@ -48,78 +46,42 @@ CREATE TABLE IF NOT EXISTS ego_skill (
 ) ENGINE=InnoDB DEFAULT CHARSET=euckr COLLATE=euckr_korean_ci COMMENT='에고무기 능력 정보';
 
 CREATE TABLE IF NOT EXISTS ego_view (
-    form VARCHAR(40) NOT NULL COMMENT 'dagger/sword/tohandsword/axe/spear/bow/staff/wand',
+    form VARCHAR(40) NOT NULL COMMENT '원본 type2: dagger/sword/tohandsword/axe/spear/bow/staff/wand',
     label VARCHAR(50) NOT NULL DEFAULT '' COMMENT '표시 이름',
     inv_gfx INT NOT NULL DEFAULT 0 COMMENT '인벤토리 아이콘 gfx, 0이면 원본 사용',
     ground_gfx INT NOT NULL DEFAULT 0 COMMENT '바닥 드랍 gfx, 0이면 원본 사용',
     memo VARCHAR(255) NOT NULL DEFAULT '' COMMENT '아이템정보 보조 설명',
     use_yn TINYINT(1) NOT NULL DEFAULT 1 COMMENT '사용 여부',
     PRIMARY KEY (form)
-) ENGINE=InnoDB DEFAULT CHARSET=euckr COLLATE=euckr_korean_ci COMMENT='에고 형태별 인벤토리/바닥 표시';
+) ENGINE=InnoDB DEFAULT CHARSET=euckr COLLATE=euckr_korean_ci COMMENT='에고 원본 무기타입별 인벤토리/바닥 표시';
 
 INSERT INTO ego_view
 (form, label, inv_gfx, ground_gfx, memo, use_yn)
 VALUES
-('dagger', '단검', 0, 0, '에고 단검 형태', 1),
-('sword', '한손검', 0, 0, '에고 한손검 형태', 1),
-('tohandsword', '양손검', 0, 0, '에고 양손검 형태', 1),
-('axe', '도끼', 0, 0, '에고 도끼 형태', 1),
-('spear', '창', 0, 0, '에고 창 형태', 1),
-('bow', '활', 0, 0, '에고 활 형태', 1),
-('staff', '지팡이', 0, 0, '에고 지팡이 형태', 1),
-('wand', '완드', 0, 0, '에고 완드 형태', 1)
+('dagger', '단검', 0, 0, '에고 단검 원본 타입', 1),
+('sword', '한손검', 0, 0, '에고 한손검 원본 타입', 1),
+('tohandsword', '양손검', 0, 0, '에고 양손검 원본 타입', 1),
+('axe', '도끼', 0, 0, '에고 도끼 원본 타입', 1),
+('spear', '창', 0, 0, '에고 창 원본 타입', 1),
+('bow', '활', 0, 0, '에고 활 원본 타입', 1),
+('staff', '지팡이', 0, 0, '에고 지팡이 원본 타입', 1),
+('wand', '완드', 0, 0, '에고 완드 원본 타입', 1)
 ON DUPLICATE KEY UPDATE
     label = VALUES(label),
     memo = VALUES(memo),
     use_yn = VALUES(use_yn);
 
-CREATE TABLE IF NOT EXISTS ego_type (
-    ego_type VARCHAR(30) NOT NULL,
-    label VARCHAR(50) NOT NULL,
-    memo VARCHAR(255) NOT NULL DEFAULT '',
-    danger_hp INT NOT NULL DEFAULT 30,
-    auto_attack TINYINT(1) NOT NULL DEFAULT 1,
-    auto_warn TINYINT(1) NOT NULL DEFAULT 1,
-    PRIMARY KEY (ego_type)
-) ENGINE=InnoDB DEFAULT CHARSET=euckr COLLATE=euckr_korean_ci COMMENT='에고 성격 기본값';
-
-INSERT INTO ego_type
-(ego_type, label, memo, danger_hp, auto_attack, auto_warn)
-VALUES
-('수호', '수호형', '생존을 우선하는 안정형', 35, 1, 1),
-('광전', '광전형', '공격을 우선하는 전투형', 25, 1, 1),
-('냉정', '냉정형', '짧고 정확하게 판단하는 침착형', 30, 1, 1),
-('현자', '현자형', '분석과 조언을 중시하는 분석형', 40, 1, 1)
-ON DUPLICATE KEY UPDATE
-    label = VALUES(label),
-    memo = VALUES(memo),
-    danger_hp = VALUES(danger_hp),
-    auto_attack = VALUES(auto_attack),
-    auto_warn = VALUES(auto_warn);
-
-CREATE TABLE IF NOT EXISTS ego_talk (
-    id INT NOT NULL AUTO_INCREMENT,
-    ego_type VARCHAR(30) NOT NULL DEFAULT '수호',
-    cmd VARCHAR(100) NOT NULL COMMENT '반응 명령',
-    ment TEXT NOT NULL COMMENT '응답 대사',
-    min_lv INT NOT NULL DEFAULT 1,
-    use_yn TINYINT(1) NOT NULL DEFAULT 1,
-    PRIMARY KEY (id),
-    INDEX ego_talk_type_idx (ego_type),
-    INDEX ego_talk_cmd_idx (cmd)
-) ENGINE=InnoDB DEFAULT CHARSET=euckr COLLATE=euckr_korean_ci COMMENT='에고 대화 기본값';
-
 CREATE TABLE IF NOT EXISTS ego_skill_base (
     skill VARCHAR(40) NOT NULL COMMENT '능력 코드',
     label VARCHAR(50) NOT NULL COMMENT '표시명',
     memo VARCHAR(255) NOT NULL DEFAULT '',
-    base_rate INT NOT NULL DEFAULT 3,
-    lv_rate INT NOT NULL DEFAULT 1,
-    max_rate INT NOT NULL DEFAULT 25,
-    min_lv INT NOT NULL DEFAULT 1,
-    cool_ms INT NOT NULL DEFAULT 0,
-    effect INT NOT NULL DEFAULT 0,
-    use_yn TINYINT(1) NOT NULL DEFAULT 1,
+    base_rate INT NOT NULL DEFAULT 3 COMMENT '기본 발동률',
+    lv_rate INT NOT NULL DEFAULT 1 COMMENT '레벨당 발동률',
+    max_rate INT NOT NULL DEFAULT 25 COMMENT '최대 발동률',
+    min_lv INT NOT NULL DEFAULT 1 COMMENT '최소 에고 실질 레벨',
+    cool_ms INT NOT NULL DEFAULT 0 COMMENT '능력별 쿨타임 ms',
+    effect INT NOT NULL DEFAULT 0 COMMENT 'S_ObjectEffect 이펙트 번호',
+    use_yn TINYINT(1) NOT NULL DEFAULT 1 COMMENT '사용 여부',
     PRIMARY KEY (skill)
 ) ENGINE=InnoDB DEFAULT CHARSET=euckr COLLATE=euckr_korean_ci COMMENT='에고 능력 기본값';
 
@@ -134,7 +96,9 @@ VALUES
 ('AREA_SLASH', '광역', '주변 몬스터 피해', 2, 1, 15, 5, 3000, 12248, 1),
 ('EXECUTION', '처형', '약한 대상 추가 피해', 2, 1, 15, 7, 0, 8683, 1),
 ('FLAME_BRAND', '화염', '화염 추가 피해', 3, 1, 20, 1, 0, 1811, 1),
-('FROST_BIND', '서리', '서리 추가 피해', 3, 1, 20, 1, 0, 3684, 1)
+('FROST_BIND', '서리', '서리 추가 피해', 3, 1, 20, 1, 0, 3684, 1),
+('EGO_COUNTER', '반격', 'Lv.10 해금 피격 반격', 3, 1, 20, 10, 3000, 10710, 1),
+('EGO_REVENGE', '복수', 'Lv.20 해금 저체력 피격 특수 반격', 2, 1, 15, 20, 8000, 6321, 1)
 ON DUPLICATE KEY UPDATE
     label = VALUES(label),
     memo = VALUES(memo),
@@ -160,14 +124,13 @@ CREATE TABLE IF NOT EXISTS ego_log (
     PRIMARY KEY (id),
     INDEX ego_log_item_idx (item_id),
     INDEX ego_log_char_idx (char_id),
+    INDEX ego_log_skill_idx (skill),
     INDEX ego_log_date_idx (reg_date)
 ) ENGINE=InnoDB DEFAULT CHARSET=euckr COLLATE=euckr_korean_ci COMMENT='에고 능력 발동 기록';
 
-SELECT 'EGO_INSTALL_OK_EUCKR_SAFE' AS result;
+SELECT 'EGO_INSTALL_OK_EUCKR_CLEAN' AS result;
 SHOW TABLES LIKE 'ego';
 SHOW TABLES LIKE 'ego_skill';
 SHOW TABLES LIKE 'ego_view';
-SHOW TABLES LIKE 'ego_type';
-SHOW TABLES LIKE 'ego_talk';
 SHOW TABLES LIKE 'ego_skill_base';
 SHOW TABLES LIKE 'ego_log';
