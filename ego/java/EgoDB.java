@@ -5,6 +5,7 @@ import java.util.List;
 
 import lineage.database.EgoWeaponDatabase.EgoAbilityInfo;
 import lineage.database.EgoWeaponDatabase.EgoWeaponInfo;
+import lineage.world.controller.EgoView;
 import lineage.world.object.instance.ItemInstance;
 import lineage.world.object.instance.PcInstance;
 
@@ -20,10 +21,12 @@ public final class EgoDB {
 
     public static void init(Connection con) {
         EgoWeaponDatabase.init(con);
+        EgoView.reload(con);
     }
 
     public static void reload(Connection con) {
         EgoWeaponDatabase.reload(con);
+        EgoView.reload(con);
     }
 
     public static EgoWeaponInfo find(long itemObjId) {
