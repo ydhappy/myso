@@ -27,13 +27,10 @@ import lineage.world.object.instance.PcInstance;
 /**
  * 에고무기 표시 전용 유틸.
  *
- * EUC-KR 안전 정책:
- * - 우선 영문 단순 테이블 ego_view 사용.
- * - 기존 한글 테이블 `에고모양`이 있으면 fallback으로 읽는다.
- *
- * 인벤토리 이름 표시:
- * - 에고무기만 색상 [에고] 표식을 붙인다.
- * - 실제 item.type2는 바꾸지 않는다.
+ * 무기변형 제거 정책:
+ * - ego.form은 사용하지 않는다.
+ * - 인벤토리 이름/아이콘/바닥 이미지는 원본 item.type2 기준이다.
+ * - 원본 item.type2, item template, PcInstance, DamageController를 바꾸지 않는다.
  */
 public final class EgoView {
 
@@ -114,14 +111,10 @@ public final class EgoView {
         return item != null && EgoWeaponDatabase.isEgoWeapon(item);
     }
 
+    /**
+     * 표시 타입도 원본 item.type2 기준으로만 사용한다.
+     */
     public static String form(ItemInstance item) {
-        if (item == null)
-            return "";
-
-        String form = EgoWeaponDatabase.getFormType(item);
-        if (form != null && form.trim().length() > 0)
-            return normalize(form);
-
         return EgoWeaponTypeUtil.getType2(item);
     }
 
@@ -197,7 +190,7 @@ public final class EgoView {
         String skill = skillName(item);
 
         StringBuilder sb = new StringBuilder();
-        sb.append("에고형태: ").append(label).append(" / 레벨: ").append(level);
+        sb.append("에고: ").append(label).append(" / 레벨: ").append(level);
         sb.append(" / 경험치: ").append(exp).append("/").append(need);
         if (skill.length() > 0)
             sb.append(" / 능력: ").append(skill);
