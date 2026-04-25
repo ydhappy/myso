@@ -2,8 +2,7 @@
 -- 에고무기 설치 SQL - EUC-KR 안전 버전
 -- 파일 인코딩: UTF-8
 -- DB/테이블 문자셋: euckr
--- 목적: euckr DB에서 한글 테이블명/컬럼명 때문에 발생하는 SQL 오류 방지
--- 특징: 테이블명/컬럼명은 영문 단순명, 주석/기본값은 한글 유지
+-- MySQL 구버전 호환: 한 테이블에 CURRENT_TIMESTAMP 자동 컬럼 1개만 사용
 -- ============================================================
 
 SET NAMES utf8;
@@ -23,8 +22,8 @@ CREATE TABLE IF NOT EXISTS ego (
     last_warn BIGINT NOT NULL DEFAULT 0 COMMENT '마지막 경고 시간',
     form VARCHAR(40) NOT NULL DEFAULT '' COMMENT 'dagger/sword/tohandsword/axe/spear/bow/staff/wand',
     prev_shield BIGINT NOT NULL DEFAULT 0 COMMENT '자동 해제한 방패 objectId',
-    reg_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    mod_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    reg_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '생성일',
+    mod_date DATETIME NULL DEFAULT NULL COMMENT '수정일',
     PRIMARY KEY (item_id),
     INDEX ego_char_idx (char_id),
     INDEX ego_name_idx (ego_name),
@@ -40,8 +39,8 @@ CREATE TABLE IF NOT EXISTS ego_skill (
     dmg_bonus INT NOT NULL DEFAULT 0 COMMENT '추가 피해',
     last_proc BIGINT NOT NULL DEFAULT 0 COMMENT '마지막 발동 시간',
     use_yn TINYINT(1) NOT NULL DEFAULT 1 COMMENT '사용 여부',
-    reg_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    mod_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    reg_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '생성일',
+    mod_date DATETIME NULL DEFAULT NULL COMMENT '수정일',
     PRIMARY KEY (id),
     UNIQUE KEY ego_skill_uk (item_id, skill),
     INDEX ego_skill_item_idx (item_id),
@@ -157,7 +156,7 @@ CREATE TABLE IF NOT EXISTS ego_log (
     base_dmg INT NOT NULL DEFAULT 0,
     final_dmg INT NOT NULL DEFAULT 0,
     add_dmg INT NOT NULL DEFAULT 0,
-    reg_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    reg_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '기록일',
     PRIMARY KEY (id),
     INDEX ego_log_item_idx (item_id),
     INDEX ego_log_char_idx (char_id),
