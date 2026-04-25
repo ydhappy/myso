@@ -26,62 +26,11 @@ EgoCombat 없음
 무기변형 없음
 ```
 
-예시:
-
-```text
-원본 활  → 계속 활 공격
-원본 검  → 계속 검 공격
-원본 창  → 계속 창 공격
-에고     → 기존 무기에 이름표, 대화, 경험치, 보조능력, 로그만 추가
-```
+에고 정보/상태/생성 메시지에서 아이템 이름은 `item.getItem().getName()` 기준으로 보정합니다. `ItemInstance.getName()`이 `$1234` 같은 nameid로 들어와도 `EgoView.displayName(item)`을 사용하면 실제 아이템명으로 출력됩니다.
 
 ---
 
-## 2. 폴더 구조
-
-```text
-ego/
-├─ README.md
-├─ html/
-│  └─ egoletter.htm
-├─ java/
-│  ├─ EgoMsg.java
-│  ├─ EgoType.java
-│  ├─ EgoView.java
-│  ├─ EgoTalk.java
-│  ├─ EgoSkill.java
-│  ├─ EgoDB.java
-│  ├─ EgoCmd.java
-│  ├─ EgoScan.java
-│  ├─ EgoMessageUtil.java
-│  ├─ EgoWeaponTypeUtil.java
-│  ├─ EgoWeaponControlController.java
-│  ├─ EgoWeaponAbilityController.java
-│  ├─ EgoWeaponDatabase.java
-│  ├─ EgoWeaponCommand.java
-│  ├─ EgoOpponentScanController.java
-│  ├─ EgoCoreAdapter.java
-│  └─ EgoPortableRules.java
-└─ sql/
-   ├─ ego_install_euckr.sql
-   ├─ ego_cleanup_unused.sql
-   ├─ ego_install_korean.sql
-   ├─ ego_oneclick_install.sql
-   └─ ego_no_java_admin.sql
-```
-
-삭제된 기능 파일:
-
-```text
-EgoForm.java
-EgoWeaponFormController.java
-```
-
----
-
-## 3. DB 최종 테이블
-
-신규 설치 기준 테이블은 4개입니다.
+## 2. DB 최종 테이블
 
 ```text
 ego
@@ -90,33 +39,11 @@ ego_skill_base
 ego_log
 ```
 
-삭제된 테이블:
-
-```text
-ego_view
-ego_type
-ego_talk
-에고모양
-```
-
-삭제된 컬럼:
-
-```text
-ego.form
-ego.prev_shield
-```
-
-기존 설치 서버는 아래 SQL을 실행합니다.
+기존 설치 서버 정리:
 
 ```sql
 SOURCE ego/sql/ego_cleanup_unused.sql;
 ```
-
-주의: 구버전 MySQL은 `DROP INDEX`, `DROP COLUMN`에 `IF EXISTS`가 없어 이미 삭제된 컬럼이면 에러가 날 수 있습니다. 그런 경우 해당 줄은 건너뛰면 됩니다.
-
----
-
-## 4. 설치 SQL
 
 신규 설치:
 
@@ -124,30 +51,17 @@ SOURCE ego/sql/ego_cleanup_unused.sql;
 SOURCE ego/sql/ego_install_euckr.sql;
 ```
 
-설치 후 확인:
-
-```sql
-SHOW TABLES LIKE 'ego';
-SHOW TABLES LIKE 'ego_skill';
-SHOW TABLES LIKE 'ego_skill_base';
-SHOW TABLES LIKE 'ego_log';
-```
-
 ---
 
-## 5. Java 연결
+## 3. Java 연결
 
-### 5.1 서버 시작 DB 로드
-
-서버 DB 초기화 지점에 추가합니다.
+### 서버 시작 DB 로드
 
 ```java
 EgoDB.init(con);
 ```
 
-### 5.2 CommandController 연결
-
-기존 명령어 처리 전 또는 초반에 추가합니다.
+### CommandController 연결
 
 ```java
 if (EgoCmd.run(o, key, st)) {
@@ -155,22 +69,11 @@ if (EgoCmd.run(o, key, st)) {
 }
 ```
 
-### 5.3 ChattingController 실시간 대화 연결
+### ChattingController 실시간 대화 연결
 
-`ChattingController.toNormal(...)`에서 일반 채팅이 주변에 방송되기 전에 추가합니다.
-
-권장 위치:
+일반 채팅이 주변에 방송되기 전에 추가합니다.
 
 ```java
-// 명령어 확인 처리.
-if (!CommandController.toCommand(o, msg)) {
-```
-
-위 코드보다 먼저 아래를 넣습니다.
-
-```java
-// [에고] 일반채팅 실시간 대화 처리
-// 에고 호출 채팅은 주변에 보이지 않게 consume 처리한다.
 if (o instanceof PcInstance && !(o instanceof RobotInstance)) {
     if (EgoTalk.chat((PcInstance) o, msg)) {
         return;
@@ -178,11 +81,9 @@ if (o instanceof PcInstance && !(o instanceof RobotInstance)) {
 }
 ```
 
-이렇게 하면 사용자가 일반 채팅으로 `카르마 상태`, `카르마 조언`처럼 입력해도 주변 유저에게는 보이지 않고 에고만 반응합니다.
+### DamageController 공격 훅
 
-### 5.4 DamageController 공격 훅
-
-`DamageController.getDamage(...)` 최종 return 직전, 기존 데미지 계산이 끝난 뒤 추가합니다.
+`DamageController.getDamage(...)` 최종 return 직전:
 
 ```java
 if (cha instanceof PcInstance && weapon != null && dmg > 0) {
@@ -190,20 +91,9 @@ if (cha instanceof PcInstance && weapon != null && dmg > 0) {
 }
 ```
 
-### 5.5 DamageController 피격 훅
+### DamageController 피격 훅
 
-`DamageController.toDamage(...)`에서 HP 감소 직전에 추가합니다.
-
-찾을 코드:
-
-```java
-// 데미지 입었다는거 알리기.
-o.toDamage(cha, dmg, type);
-// hp 처리
-o.setNowHp(o.getNowHp() - dmg);
-```
-
-변경:
+`DamageController.toDamage(...)`에서 HP 감소 직전:
 
 ```java
 // 데미지 입었다는거 알리기.
@@ -222,50 +112,12 @@ o.setNowHp(o.getNowHp() - dmg);
 
 ---
 
-## 6. 에고 대화 출력 방식
-
-### 짧은 답변
-
-짧은 에고 답변은 말풍선으로 출력됩니다.
-
-```text
-카르마: [에고] 듣고 있습니다. 근처에 선공 몬스터 기척이 있습니다.
-```
-
-구현 방식:
-
-```text
-S_ObjectChatting 패킷을 본인에게만 전송
-주변 캐릭터에게는 방송하지 않음
-```
-
-### 긴 답변 / 커맨드 결과
-
-상태, 도움말, 상세 정보처럼 긴 메시지는 편지창처럼 출력됩니다.
-
-```text
-ego/html/egoletter.htm
-```
-
-이 파일을 클라이언트 HTML 폴더에 복사해야 합니다.
-
-일반적으로 다음 위치 중 서버/클라 구조에 맞는 곳에 넣습니다.
-
-```text
-html/egoletter.htm
-data/html/egoletter.htm
-client/html/egoletter.htm
-```
-
-템플릿이 없으면 시스템 메시지 fallback으로 내용은 볼 수 있습니다.
-
----
-
-## 7. 명령어
+## 4. 명령어
 
 ```text
 .에고도움
 .에고생성 이름
+.에고삭제 확인
 .에고정보
 .에고이름 이름
 .에고능력 코드
@@ -273,6 +125,15 @@ client/html/egoletter.htm
 .에고주변
 .에고리로드
 ```
+
+`.에고삭제 확인`은 완전 DELETE가 아니라 비활성화입니다.
+
+```text
+ego.use_yn = 0
+ego_skill.use_yn = 0
+```
+
+`ego_log`는 운영 추적용으로 보존됩니다.
 
 일반 채팅:
 
@@ -287,22 +148,9 @@ client/html/egoletter.htm
 카르마 타겟분석
 ```
 
-제거된 명령:
-
-```text
-카르마 활
-카르마 양검
-카르마 한검
-카르마 단검
-카르마 창
-카르마 도끼
-카르마 지팡이
-카르마 완드
-```
-
 ---
 
-## 8. 에고 생성 조건
+## 5. 에고 생성 조건
 
 ```text
 착용 중인 무기 필요
@@ -324,17 +172,25 @@ staff
 wand
 ```
 
-제외:
+---
 
-```text
-fishing_rod
-무기 슬롯이 아닌 아이템
-지원하지 않는 type2
+## 6. 이름 표시 규칙
+
+에고 코드에서 무기명을 보여줄 때는 직접 `weapon.getName()`을 쓰지 말고 아래를 사용합니다.
+
+```java
+EgoView.displayName(weapon)
+```
+
+인벤토리 표식용 이름은 아래를 사용합니다.
+
+```java
+EgoView.name(item, baseName)
 ```
 
 ---
 
-## 9. 에고 경험치 / 레벨업
+## 7. 에고 경험치 / 레벨업
 
 ```text
 생성 시 레벨: 1
@@ -361,7 +217,7 @@ fishing_rod
 
 ---
 
-## 10. 레벨별 해금
+## 8. 레벨별 해금
 
 ```text
 Lv.5  방어본능
@@ -376,46 +232,60 @@ Lv.20 복수
       skill = EGO_REVENGE
 ```
 
-`EGO_COUNTER`, `EGO_REVENGE`는 일반 설정용 주력 능력이 아니라 레벨별 자동 해금 능력입니다.
+---
+
+## 9. 발동률 / 치명 보정
+
+`ego_skill_base` 기본 공식:
+
+```text
+발동률 = base_rate + (실질레벨 - 1) * lv_rate + ego_skill.rate_bonus + 레벨보너스
+```
+
+레벨 보너스:
+
+```text
+Lv.5마다 모든 에고 스킬 발동률 +1%
+최대 +6%
+```
+
+치명 능력 보너스:
+
+```text
+CRITICAL_BURST는 Lv.10부터 추가 치명 발동률 보정
+Lv.10부터 5레벨마다 +2%
+최대 +12%
+치명 추가피해도 Lv.10부터 소폭 증가
+```
+
+최종 발동률은 `ego_skill_base.max_rate`를 넘지 않습니다.
 
 ---
 
-## 11. 에고 능력 계산
-
-`ego_skill_base` 기준으로 계산합니다.
+## 10. 에고 대화 출력 방식
 
 ```text
-base_rate  기본 발동률
-lv_rate    레벨당 발동률
-max_rate   최대 발동률
-min_lv     최소 실질 레벨
-cool_ms    쿨타임
-effect     S_ObjectEffect 이펙트 번호
+짧은 답변 → 본인에게만 보이는 말풍선
+긴 답변/커맨드 결과 → egoletter 편지창
 ```
 
-수정 예:
-
-```sql
-UPDATE ego_skill_base
-SET base_rate = 3,
-    lv_rate = 1,
-    max_rate = 25,
-    cool_ms = 3000,
-    effect = 8150
-WHERE skill = 'BLOOD_DRAIN';
-```
-
-수정 후:
+HTML 템플릿:
 
 ```text
-.에고리로드
+ego/html/egoletter.htm
+```
+
+클라이언트 HTML 폴더에 복사합니다.
+
+```text
+html/egoletter.htm
+data/html/egoletter.htm
+client/html/egoletter.htm
 ```
 
 ---
 
-## 12. 에고 로그
-
-능력 발동/레벨업은 `ego_log`에 기록됩니다.
+## 11. 에고 로그
 
 확인:
 
@@ -426,23 +296,9 @@ ORDER BY reg_date DESC
 LIMIT 50;
 ```
 
-로그 컬럼:
-
-```text
-item_id
-char_id
-char_name
-target_name
-skill
-base_dmg
-final_dmg
-add_dmg
-reg_date
-```
-
 ---
 
-## 13. 컴파일
+## 12. 컴파일
 
 ```bash
 javac -encoding UTF-8 -source 1.8 -target 1.8
@@ -450,17 +306,15 @@ javac -encoding UTF-8 -source 1.8 -target 1.8
 
 ---
 
-## 14. 최종 점검
+## 13. 최종 점검
 
 ```text
 [확인] type2 변형 없음
-[확인] 인벤 이미지 변경 없음
-[확인] 바닥 이미지 변경 없음
-[확인] 에고 이름표만 인벤 이름에 추가
-[확인] 짧은 응답은 말풍선
-[확인] 긴 응답은 egoletter 편지창
-[확인] 에고 호출 채팅은 주변에 보이지 않음
+[확인] 인벤/바닥 이미지 변경 없음
+[확인] nameid 대신 실제 아이템명 표시
+[확인] .에고삭제 확인 구현
+[확인] 레벨별 스킬 발동률 증가
+[확인] 치명 발동률/추가피해 보정
 [확인] ego_log 기록
-[확인] ego_skill_base 전투 계산 연동
 [확인] Lv.5/Lv.10/Lv.20 해금 능력
 ```
