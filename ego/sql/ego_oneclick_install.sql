@@ -22,12 +22,45 @@ CREATE TABLE IF NOT EXISTS character_item_ego (
     ego_control_level INT NOT NULL DEFAULT 1 COMMENT '제어 가능 단계',
     ego_last_talk_time BIGINT NOT NULL DEFAULT 0 COMMENT '마지막 대화 시간',
     ego_last_warning_time BIGINT NOT NULL DEFAULT 0 COMMENT '마지막 자동 경고 시간',
+    ego_form_type VARCHAR(40) NOT NULL DEFAULT '' COMMENT '에고 현재 변신 형태: sword/bow/tohandsword 등',
+    prev_shield_objid BIGINT NOT NULL DEFAULT 0 COMMENT '형태변신 때문에 해제한 방패 objectId',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (item_objid),
     INDEX idx_character_item_ego_cha_objid (cha_objid),
-    INDEX idx_character_item_ego_name (ego_name)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='에고무기 개별 성장/대화 정보';
+    INDEX idx_character_item_ego_name (ego_name),
+    INDEX idx_character_item_ego_form (ego_form_type)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='에고무기 개별 성장/대화/형태변환 정보';
+
+-- 기존 설치 DB에 컬럼이 없을 때만 자동 추가한다.
+SET @db_name := DATABASE();
+SET @sql := IF(
+    (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=@db_name AND TABLE_NAME='character_item_ego' AND COLUMN_NAME='ego_form_type') = 0,
+    'ALTER TABLE character_item_ego ADD COLUMN ego_form_type VARCHAR(40) NOT NULL DEFAULT '''' COMMENT ''에고 현재 변신 형태: sword/bow/tohandsword 등'' AFTER ego_last_warning_time',
+    'SELECT ''ego_form_type column exists'''
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @sql := IF(
+    (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=@db_name AND TABLE_NAME='character_item_ego' AND COLUMN_NAME='prev_shield_objid') = 0,
+    'ALTER TABLE character_item_ego ADD COLUMN prev_shield_objid BIGINT NOT NULL DEFAULT 0 COMMENT ''형태변신 때문에 해제한 방패 objectId'' AFTER ego_form_type',
+    'SELECT ''prev_shield_objid column exists'''
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- 인덱스는 중복 생성 시 실패할 수 있으므로 존재하지 않을 때만 생성한다.
+SET @sql := IF(
+    (SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA=@db_name AND TABLE_NAME='character_item_ego' AND INDEX_NAME='idx_character_item_ego_form') = 0,
+    'ALTER TABLE character_item_ego ADD INDEX idx_character_item_ego_form (ego_form_type)',
+    'SELECT ''idx_character_item_ego_form index exists'''
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
 
 -- ============================================================
 -- 2. 에고 성격 템플릿
@@ -76,6 +109,9 @@ INSERT INTO ego_talk_template
 VALUES
 ('guardian', '상태', '\\fY[에고] 주인님의 상태를 확인했습니다.', 1, 1),
 ('guardian', '위험', '\\fR[에고] 위험합니다. 회복과 후퇴를 우선하십시오.', 1, 1),
+('guardian', '활', '\\fY[에고] 활 형태로 변신합니다.', 1, 1),
+('guardian', '양검', '\\fY[에고] 양손검 형태로 변신합니다.', 1, 1),
+('guardian', '한검', '\\fY[에고] 한손검 형태로 변신합니다.', 1, 1),
 ('berserker', '공격', '\\fY[에고] 검이 굶주렸습니다. 적을 베겠습니다.', 1, 1),
 ('calm', '선공', '\\fY[에고] 선공 몬스터 감지.', 1, 1),
 ('sage', '조언', '\\fY[에고] 현재 전투 상황을 분석했습니다.', 1, 1)
@@ -177,3 +213,9 @@ SHOW TABLES LIKE 'ego_personality_template';
 SHOW TABLES LIKE 'ego_talk_template';
 SHOW TABLES LIKE 'ego_ability_template';
 SHOW TABLES LIKE 'ego_ability_proc_log';
+
+SELECT COLUMN_NAME
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_SCHEMA = DATABASE()
+  AND TABLE_NAME = 'character_item_ego'
+  AND COLUMN_NAME IN ('ego_form_type', 'prev_shield_objid');
