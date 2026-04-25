@@ -48,16 +48,6 @@ public final class EgoDB {
         return EgoWeaponDatabase.getEgoName(item, defaultName);
     }
 
-    /** 무기변형 기능 제거: 항상 빈 문자열. */
-    public static String form(ItemInstance item) {
-        return "";
-    }
-
-    /** 무기변형 기능 제거: 이전 방패 없음. */
-    public static long prevShield(ItemInstance item) {
-        return 0;
-    }
-
     public static int level(ItemInstance item, int defaultLevel) {
         return EgoWeaponDatabase.getEgoLevel(item, defaultLevel);
     }
@@ -76,11 +66,6 @@ public final class EgoDB {
 
     public static boolean rename(ItemInstance item, String name) {
         return EgoWeaponDatabase.setEgoName(item, name);
-    }
-
-    /** 무기변형 기능 제거: 항상 false. */
-    public static boolean setForm(ItemInstance item, String form, long prevShieldObjId) {
-        return false;
     }
 
     public static boolean setSkill(ItemInstance item, String skill) {
