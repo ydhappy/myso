@@ -1,6 +1,6 @@
 # 에고무기 시스템
 
-에고무기 기능을 적용하기 위한 최소 구성 폴더입니다. 파일 수를 줄이고, 설치는 원클릭 SQL/스크립트 중심으로 정리했습니다.
+에고무기 기능을 적용하기 위한 최소 구성 폴더입니다. **Java 파일은 전부 `ego/java/` 한 곳에 모았습니다.** 설치는 원클릭 SQL/스크립트 중심입니다.
 
 Java 8 / UTF-8 기준입니다.
 
@@ -21,20 +21,41 @@ ego/
 │  ├─ install_ego_windows.bat
 │  └─ install_ego_linux.sh
 ├─ java/
-│  ├─ EgoWeaponTypeUtil.java
-│  ├─ EgoWeaponControlController.java
-│  ├─ EgoWeaponAbilityController.java
-│  ├─ EgoWeaponDatabase.java
-│  ├─ EgoWeaponCommand.java
-│  ├─ EgoWeaponDiagnostics.java
-│  └─ EgoOpponentScanController.java
-├─ portable/
-│  ├─ EgoCoreAdapter.java
-│  └─ EgoPortableRules.java
+│  ├─ EgoWeaponTypeUtil.java              # myso 무기종류 판정
+│  ├─ EgoWeaponControlController.java     # myso 대화/상태/선공/제어
+│  ├─ EgoWeaponAbilityController.java     # myso 특별능력
+│  ├─ EgoWeaponDatabase.java              # myso DB 로드/저장
+│  ├─ EgoWeaponCommand.java               # myso 명령어
+│  ├─ EgoWeaponDiagnostics.java           # myso 진단
+│  ├─ EgoOpponentScanController.java      # myso 상대감지
+│  ├─ EgoCoreAdapter.java                 # 다른 서버코어 포팅용
+│  └─ EgoPortableRules.java               # 다른 서버코어 공통 규칙
 └─ sql/
    ├─ ego_oneclick_install.sql
    └─ ego_no_java_admin.sql
 ```
+
+---
+
+## 초보자 기준: 무엇을 써야 하나?
+
+### myso 서버에 적용
+
+```text
+ego/java/EgoWeapon*.java
+ego/java/EgoOpponentScanController.java
+ego/sql/ego_oneclick_install.sql
+```
+
+### 다른 서버코어에 적용
+
+```text
+ego/java/EgoCoreAdapter.java
+ego/java/EgoPortableRules.java
+ego/sql/ego_oneclick_install.sql
+```
+
+다른 서버코어에서는 `EgoWeapon*.java`를 그대로 복사하지 말고, `EgoCoreAdapter.java`를 서버 클래스명에 맞게 구현하는 방식이 안전합니다.
 
 ---
 
@@ -82,12 +103,12 @@ ego/sql/ego_oneclick_install.sql
 - 에고 이름/레벨/경험치/능력 DB 저장
 - .에고검사 진단 명령
 - Java 수정 없이 SQL로 생성/편집
-- 타 서버코어 포팅용 portable 제공
+- 다른 서버코어 포팅용 Adapter/Rules 제공
 ```
 
 ---
 
-## 빠른 적용 순서
+## myso 빠른 적용 순서
 
 ```text
 1. DB 백업
@@ -111,6 +132,30 @@ docs/EGO_SYSTEM_MANUAL.md
 
 ---
 
+## 다른 서버코어 빠른 적용 순서
+
+```text
+1. DB 백업
+2. 원클릭 설치 SQL 적용
+3. EgoCoreAdapter.java를 대상 서버에 맞게 구현
+4. EgoPortableRules.java에서 무기 type2 확인
+5. 채팅 처리부에 에고 호출 연결
+6. 명령어 처리부에 에고 명령 연결
+7. 데미지 계산부에 특별능력 연결
+8. 대화 → 상태 → 감지 → 능력 → DB 순서로 테스트
+```
+
+초보자 핵심:
+
+```text
+- Player 클래스명이 다르면 EgoCoreAdapter에서 맞춘다.
+- Item 클래스명이 다르면 EgoCoreAdapter에서 맞춘다.
+- Monster 클래스명이 다르면 EgoCoreAdapter에서 맞춘다.
+- 무기 type2 이름이 다르면 EgoPortableRules에서 추가한다.
+```
+
+---
+
 ## Java 수정 없이 운영 생성/편집
 
 이미 서버코어에 에고 기능이 연결되어 있다면, 운영 중 생성/편집은 SQL만으로 가능합니다.
@@ -123,17 +168,6 @@ sql/ego_no_java_admin.sql
 
 ```text
 에고 생성, 이름변경, 성격변경, 능력변경, 레벨/경험치 보정, 비활성화, 삭제, 전체 조회, 이상 데이터 보정
-```
-
----
-
-## 타 서버코어 포팅
-
-`ego/java/`는 myso 기준 참고 구현입니다. 다른 서버코어에는 아래 파일을 기준으로 포팅하세요.
-
-```text
-portable/EgoCoreAdapter.java
-portable/EgoPortableRules.java
 ```
 
 ---
@@ -175,4 +209,5 @@ portable/EgoPortableRules.java
 - 이후 에고 생성/편집은 sql/ego_no_java_admin.sql로 처리할 수 있습니다.
 - Java 8 / UTF-8 기준으로 컴파일하세요.
 - 운영 전 EgoWeaponAbilityController의 ENABLE_TEST_MODE 확인이 필요합니다.
+- 다른 서버코어는 EgoCoreAdapter/EgoPortableRules를 기준으로 포팅하세요.
 ```
