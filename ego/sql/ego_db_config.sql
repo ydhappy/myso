@@ -1,21 +1,17 @@
 -- ============================================================
--- 에고 기능 DB화 보강 SQL
+-- 에고 기능 DB화 보강 SQL - 병합 구조 최종 버전
 -- 대상: 신규/기존 서버 공통
 -- 목적:
---   1) Java 상수성 설정값을 ego_config로 이동
---   2) 레벨별 필요 경험치를 ego_level_exp로 이동
---   3) 레벨별 전투 보너스를 ego_level_bonus로 이동
---   4) 무기 타입/능력 허용 규칙을 ego_weapon_rule로 이동
---   5) .에고리로드 만으로 설정/경험치표/전투보너스/무기규칙 즉시 반영
+--   1) Java 상수성 설정값을 ego_config로 관리
+--   2) 레벨별 필요 경험치 + 전투 보너스를 ego_level로 통합 관리
+--   3) 무기 타입/능력 허용 규칙을 ego_weapon_rule로 관리
+--   4) .에고리로드 만으로 설정/레벨/무기규칙 즉시 반영
 -- 파일 인코딩: UTF-8
 -- DB 문자셋: euckr
 -- ============================================================
 
 SET NAMES utf8;
 
--- ------------------------------------------------------------
--- 1. 에고 공통 설정값
--- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS ego_config (
     config_key VARCHAR(80) NOT NULL COMMENT '설정 키',
     config_value VARCHAR(255) NOT NULL DEFAULT '' COMMENT '설정 값',
@@ -59,40 +55,9 @@ ON DUPLICATE KEY UPDATE
     memo = VALUES(memo),
     use_yn = VALUES(use_yn);
 
--- ------------------------------------------------------------
--- 2. 에고 레벨별 필요 경험치
--- ------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS ego_level_exp (
-    ego_lv INT NOT NULL COMMENT '현재 에고 레벨 0~10',
-    need_exp BIGINT NOT NULL DEFAULT 0 COMMENT '다음 레벨 필요 경험치, Lv.10은 0',
-    memo VARCHAR(255) NOT NULL DEFAULT '' COMMENT '설명',
-    use_yn TINYINT(1) NOT NULL DEFAULT 1 COMMENT '사용 여부',
-    reg_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '생성일',
-    mod_date DATETIME NULL DEFAULT NULL COMMENT '수정일',
-    PRIMARY KEY (ego_lv)
-) ENGINE=InnoDB DEFAULT CHARSET=euckr COLLATE=euckr_korean_ci COMMENT='에고 레벨별 필요 경험치';
-
-INSERT INTO ego_level_exp (ego_lv, need_exp, memo, use_yn) VALUES
-(0, 100, 'Lv.0 -> Lv.1 기본 스킬/치명 개방', 1),
-(1, 250, 'Lv.1 -> Lv.2', 1),
-(2, 500, 'Lv.2 -> Lv.3', 1),
-(3, 900, 'Lv.3 -> Lv.4', 1),
-(4, 1500, 'Lv.4 -> Lv.5 피격 반격 개방', 1),
-(5, 2400, 'Lv.5 -> Lv.6 자동반격 개방', 1),
-(6, 3600, 'Lv.6 -> Lv.7', 1),
-(7, 5200, 'Lv.7 -> Lv.8', 1),
-(8, 7500, 'Lv.8 -> Lv.9', 1),
-(9, 10000, 'Lv.9 -> Lv.10 스턴 50% 개방', 1),
-(10, 0, 'Lv.10 만렙', 1)
-ON DUPLICATE KEY UPDATE
-    memo = VALUES(memo),
-    use_yn = VALUES(use_yn);
-
--- ------------------------------------------------------------
--- 3. 레벨별 전투 보너스
--- ------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS ego_level_bonus (
+CREATE TABLE IF NOT EXISTS ego_level (
     ego_lv INT NOT NULL COMMENT '에고 레벨 0~10',
+    need_exp BIGINT NOT NULL DEFAULT 0 COMMENT '다음 레벨 필요 경험치',
     proc_bonus INT NOT NULL DEFAULT 0 COMMENT '스킬 발동률 추가',
     critical_chance INT NOT NULL DEFAULT 0 COMMENT '치명 발동률 추가',
     critical_damage INT NOT NULL DEFAULT 0 COMMENT '치명 추가 피해',
@@ -104,29 +69,26 @@ CREATE TABLE IF NOT EXISTS ego_level_bonus (
     reg_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     mod_date DATETIME NULL DEFAULT NULL,
     PRIMARY KEY (ego_lv)
-) ENGINE=InnoDB DEFAULT CHARSET=euckr COLLATE=euckr_korean_ci COMMENT='에고 레벨별 전투 보너스';
+) ENGINE=InnoDB DEFAULT CHARSET=euckr COLLATE=euckr_korean_ci COMMENT='에고 레벨 통합 설정';
 
-INSERT INTO ego_level_bonus
-(ego_lv, proc_bonus, critical_chance, critical_damage, counter_chance, counter_power, counter_critical, memo, use_yn)
+INSERT INTO ego_level
+(ego_lv, need_exp, proc_bonus, critical_chance, critical_damage, counter_chance, counter_power, counter_critical, memo, use_yn)
 VALUES
-(0, 0, 0, 0, 0, 0, 0, 'Lv.0 전투능력 없음', 1),
-(1, 0, 1, 1, 0, 0, 0, 'Lv.1 기본 치명 시작', 1),
-(2, 1, 2, 2, 0, 0, 0, 'Lv.2', 1),
-(3, 2, 3, 3, 0, 0, 0, 'Lv.3', 1),
-(4, 3, 4, 4, 0, 0, 0, 'Lv.4', 1),
-(5, 4, 6, 6, 35, 18, 8, 'Lv.5 피격 반격 시작', 1),
-(6, 6, 9, 8, 100, 24, 12, 'Lv.6 자동반격 시작', 1),
-(7, 8, 12, 10, 100, 30, 16, 'Lv.7', 1),
-(8, 10, 15, 12, 100, 38, 20, 'Lv.8', 1),
-(9, 12, 18, 15, 100, 46, 25, 'Lv.9', 1),
-(10, 15, 25, 20, 100, 60, 35, 'Lv.10 스턴 연동', 1)
+(0, 100, 0, 0, 0, 0, 0, 0, 'Lv.0 전투능력 없음', 1),
+(1, 250, 0, 1, 1, 0, 0, 0, 'Lv.1 기본 치명 시작', 1),
+(2, 500, 1, 2, 2, 0, 0, 0, 'Lv.2', 1),
+(3, 900, 2, 3, 3, 0, 0, 0, 'Lv.3', 1),
+(4, 1500, 3, 4, 4, 0, 0, 0, 'Lv.4', 1),
+(5, 2400, 4, 6, 6, 35, 18, 8, 'Lv.5 피격 반격 시작', 1),
+(6, 3600, 6, 9, 8, 100, 24, 12, 'Lv.6 자동반격 시작', 1),
+(7, 5200, 8, 12, 10, 100, 30, 16, 'Lv.7', 1),
+(8, 7500, 10, 15, 12, 100, 38, 20, 'Lv.8', 1),
+(9, 10000, 12, 18, 15, 100, 46, 25, 'Lv.9', 1),
+(10, 0, 15, 25, 20, 100, 60, 35, 'Lv.10 스턴 연동', 1)
 ON DUPLICATE KEY UPDATE
     memo = VALUES(memo),
     use_yn = VALUES(use_yn);
 
--- ------------------------------------------------------------
--- 4. 무기 타입/능력 허용 규칙
--- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS ego_weapon_rule (
     type2 VARCHAR(40) NOT NULL COMMENT 'item.type2 원본 값',
     display_name VARCHAR(50) NOT NULL DEFAULT '' COMMENT '표시명',
@@ -156,23 +118,16 @@ ON DUPLICATE KEY UPDATE
     allowed_abilities = VALUES(allowed_abilities),
     use_yn = VALUES(use_yn);
 
--- ------------------------------------------------------------
--- 5. 기존 ego.need_exp를 DB 경험치표 기준으로 보정
--- ------------------------------------------------------------
 UPDATE ego e
-INNER JOIN ego_level_exp x ON e.ego_lv = x.ego_lv
-SET e.need_exp = x.need_exp
-WHERE x.use_yn = 1;
+INNER JOIN ego_level l ON e.ego_lv = l.ego_lv
+SET e.need_exp = l.need_exp
+WHERE l.use_yn = 1;
 
 UPDATE ego SET need_exp = 0, ego_exp = 0 WHERE ego_lv >= 10;
 
--- ------------------------------------------------------------
--- 6. 확인
--- ------------------------------------------------------------
-SELECT 'EGO_DB_CONFIG_LEVEL_BONUS_WEAPON_RULE_OK' AS result;
+SELECT 'EGO_DB_CONFIG_MERGED_SCHEMA_OK' AS result;
 SELECT * FROM ego_config ORDER BY config_key;
-SELECT * FROM ego_level_exp ORDER BY ego_lv;
-SELECT * FROM ego_level_bonus ORDER BY ego_lv;
+SELECT * FROM ego_level ORDER BY ego_lv;
 SELECT * FROM ego_weapon_rule ORDER BY type2;
 SELECT ego_lv, need_exp, COUNT(*) AS count
 FROM ego
