@@ -103,6 +103,7 @@ public final class EgoBond {
                 st.setLong(1, weapon.getObjectId());
                 st.executeUpdate();
                 DatabaseConnection.close(st);
+                st = null;
             }
             st = con.prepareStatement("DELETE FROM ego_bond WHERE item_id=?");
             st.setLong(1, weapon.getObjectId());
@@ -226,21 +227,32 @@ public final class EgoBond {
     }
 
     private static boolean hasMergedBondColumns(Connection con) {
-        ResultSet rs = null;
         boolean closeCon = false;
         try {
             if (con == null) {
                 con = DatabaseConnection.getLineage();
                 closeCon = true;
             }
-            rs = con.getMetaData().getColumns(null, null, "ego", "bond");
-            return rs != null && rs.next();
+            return columnExists(con, "ego", "bond") && columnExists(con, "ego", "bond_reason");
+        } catch (Exception e) {
+            return false;
+        } finally {
+            if (closeCon)
+                DatabaseConnection.close(con);
+        }
+    }
+
+    private static boolean columnExists(Connection con, String table, String column) {
+        ResultSet rs = null;
+        try {
+            rs = con.getMetaData().getColumns(null, null, table, column);
+            if (rs != null && rs.next())
+                return true;
         } catch (Exception e) {
             return false;
         } finally {
             try { if (rs != null) rs.close(); } catch (Exception e) {}
-            if (closeCon)
-                DatabaseConnection.close(con);
         }
+        return false;
     }
 }
