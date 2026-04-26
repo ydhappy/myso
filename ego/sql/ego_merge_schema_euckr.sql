@@ -1,5 +1,5 @@
 -- ============================================================
--- 에고 테이블/컬럼 병합 마이그레이션 SQL
+-- 에고 테이블/컬럼 병합 마이그레이션 SQL - 반복 실행 안전 버전
 -- 파일 인코딩: UTF-8
 -- DB 문자셋: euckr
 --
@@ -10,19 +10,84 @@
 -- 안전 정책:
 --   기존 테이블은 즉시 DROP하지 않습니다.
 --   Java 코드는 통합 테이블 우선, 구버전 테이블 fallback 구조입니다.
+--   이 SQL은 여러 번 실행해도 멈추지 않도록 INFORMATION_SCHEMA + PREPARE 방식으로 작성했습니다.
 -- ============================================================
 
 SET NAMES utf8;
 
 -- ------------------------------------------------------------
--- 1. ego 테이블에 유대감 컬럼 병합
+-- 0. 단독 실행 안전용 구버전 호환 테이블 보장
 -- ------------------------------------------------------------
-ALTER TABLE ego ADD COLUMN bond INT NOT NULL DEFAULT 0 COMMENT '에고 유대감 0~1000';
-ALTER TABLE ego ADD COLUMN bond_reason VARCHAR(40) NOT NULL DEFAULT '' COMMENT '마지막 유대감 증가 사유';
+CREATE TABLE IF NOT EXISTS ego_bond (
+    item_id BIGINT NOT NULL COMMENT '에고무기 아이템 objectId',
+    bond INT NOT NULL DEFAULT 0 COMMENT '유대감 0~1000',
+    last_reason VARCHAR(40) NOT NULL DEFAULT '' COMMENT '마지막 증가 사유',
+    reg_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '생성일',
+    mod_date DATETIME NULL DEFAULT NULL COMMENT '수정일',
+    PRIMARY KEY (item_id),
+    INDEX ego_bond_idx (bond)
+) ENGINE=InnoDB DEFAULT CHARSET=euckr COLLATE=euckr_korean_ci COMMENT='에고 유대감 구버전 호환';
 
--- 이미 컬럼이 있는 서버에서는 위 ALTER가 실패할 수 있습니다.
--- 실패 시 아래 UPDATE부터 계속 실행하세요.
+CREATE TABLE IF NOT EXISTS ego_level_exp (
+    ego_lv INT NOT NULL COMMENT '현재 에고 레벨 0~10',
+    need_exp BIGINT NOT NULL DEFAULT 0 COMMENT '다음 레벨 필요 경험치, Lv.10은 0',
+    memo VARCHAR(255) NOT NULL DEFAULT '' COMMENT '설명',
+    use_yn TINYINT(1) NOT NULL DEFAULT 1 COMMENT '사용 여부',
+    reg_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '생성일',
+    mod_date DATETIME NULL DEFAULT NULL COMMENT '수정일',
+    PRIMARY KEY (ego_lv)
+) ENGINE=InnoDB DEFAULT CHARSET=euckr COLLATE=euckr_korean_ci COMMENT='에고 레벨별 필요 경험치 구버전 호환';
 
+CREATE TABLE IF NOT EXISTS ego_level_bonus (
+    ego_lv INT NOT NULL COMMENT '에고 레벨 0~10',
+    proc_bonus INT NOT NULL DEFAULT 0 COMMENT '스킬 발동률 추가',
+    critical_chance INT NOT NULL DEFAULT 0 COMMENT '치명 발동률 추가',
+    critical_damage INT NOT NULL DEFAULT 0 COMMENT '치명 추가 피해',
+    counter_chance INT NOT NULL DEFAULT 0 COMMENT '피격 반격 확률',
+    counter_power INT NOT NULL DEFAULT 0 COMMENT '반격 피해 비율',
+    counter_critical INT NOT NULL DEFAULT 0 COMMENT '반격 치명 확률',
+    memo VARCHAR(255) NOT NULL DEFAULT '',
+    use_yn TINYINT(1) NOT NULL DEFAULT 1,
+    reg_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    mod_date DATETIME NULL DEFAULT NULL,
+    PRIMARY KEY (ego_lv)
+) ENGINE=InnoDB DEFAULT CHARSET=euckr COLLATE=euckr_korean_ci COMMENT='에고 레벨별 전투 보너스 구버전 호환';
+
+-- ------------------------------------------------------------
+-- 1. ego 테이블에 유대감 컬럼 병합 - 반복 실행 안전
+-- ------------------------------------------------------------
+SET @ego_bond_col_sql := IF(
+    (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ego' AND COLUMN_NAME = 'bond') = 0,
+    'ALTER TABLE ego ADD COLUMN bond INT NOT NULL DEFAULT 0 COMMENT ''에고 유대감 0~1000''',
+    'SELECT ''ego.bond already exists'' AS info'
+);
+PREPARE ego_bond_col_stmt FROM @ego_bond_col_sql;
+EXECUTE ego_bond_col_stmt;
+DEALLOCATE PREPARE ego_bond_col_stmt;
+
+SET @ego_bond_reason_col_sql := IF(
+    (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ego' AND COLUMN_NAME = 'bond_reason') = 0,
+    'ALTER TABLE ego ADD COLUMN bond_reason VARCHAR(40) NOT NULL DEFAULT '''' COMMENT ''마지막 유대감 증가 사유''',
+    'SELECT ''ego.bond_reason already exists'' AS info'
+);
+PREPARE ego_bond_reason_col_stmt FROM @ego_bond_reason_col_sql;
+EXECUTE ego_bond_reason_col_stmt;
+DEALLOCATE PREPARE ego_bond_reason_col_stmt;
+
+-- 인덱스는 중복 생성 방지를 위해 정보스키마 확인 후 생성
+SET @ego_bond_idx_sql := IF(
+    (SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ego' AND INDEX_NAME = 'ego_bond_idx') = 0,
+    'ALTER TABLE ego ADD INDEX ego_bond_idx (bond)',
+    'SELECT ''ego_bond_idx already exists'' AS info'
+);
+PREPARE ego_bond_idx_stmt FROM @ego_bond_idx_sql;
+EXECUTE ego_bond_idx_stmt;
+DEALLOCATE PREPARE ego_bond_idx_stmt;
+
+-- 구버전 유대감 데이터 이관
 UPDATE ego e
 INNER JOIN ego_bond b ON e.item_id = b.item_id
 SET e.bond = b.bond,
@@ -48,7 +113,7 @@ CREATE TABLE IF NOT EXISTS ego_level (
     PRIMARY KEY (ego_lv)
 ) ENGINE=InnoDB DEFAULT CHARSET=euckr COLLATE=euckr_korean_ci COMMENT='에고 레벨 통합 설정';
 
--- 구버전 테이블이 있는 경우 데이터 이관
+-- 구버전 테이블 데이터 이관
 INSERT INTO ego_level
 (ego_lv, need_exp, proc_bonus, critical_chance, critical_damage, counter_chance, counter_power, counter_critical, memo, use_yn)
 SELECT
@@ -76,7 +141,7 @@ ON DUPLICATE KEY UPDATE
     use_yn = VALUES(use_yn),
     mod_date = NOW();
 
--- 구버전 테이블이 없거나 비어 있는 경우 기본값 보정
+-- 기본값 보정
 INSERT INTO ego_level
 (ego_lv, need_exp, proc_bonus, critical_chance, critical_damage, counter_chance, counter_power, counter_critical, memo, use_yn)
 VALUES
@@ -106,7 +171,7 @@ UPDATE ego SET need_exp = 0, ego_exp = 0 WHERE ego_lv >= 10;
 -- ------------------------------------------------------------
 -- 3. 확인
 -- ------------------------------------------------------------
-SELECT 'EGO_MERGE_SCHEMA_OK' AS result;
+SELECT 'EGO_MERGE_SCHEMA_OK_REPEAT_SAFE' AS result;
 DESC ego;
 SELECT * FROM ego_level ORDER BY ego_lv;
 SELECT item_id, ego_name, ego_lv, ego_exp, need_exp, bond, bond_reason FROM ego ORDER BY item_id DESC LIMIT 20;
