@@ -7,7 +7,6 @@ import lineage.database.EgoWeaponDatabase.EgoAbilityInfo;
 import lineage.database.EgoWeaponDatabase.EgoWeaponInfo;
 import lineage.world.controller.EgoBond;
 import lineage.world.controller.EgoConfig;
-import lineage.world.controller.EgoLevelBonus;
 import lineage.world.controller.EgoTalkPack;
 import lineage.world.controller.EgoView;
 import lineage.world.controller.EgoWeaponAbilityController;
@@ -18,7 +17,13 @@ import lineage.world.object.instance.PcInstance;
 /**
  * 짧은 이름용 에고 DB 클래스.
  *
- * 적용 코드에서는 EgoWeaponDatabase 대신 EgoDB 사용을 권장합니다.
+ * 로드 순서:
+ * 1) EgoConfig           공통 설정
+ * 2) EgoWeaponRule       무기 규칙
+ * 3) EgoWeaponDatabase   에고 기본/스킬 + EgoLevel 통합 로드 + EgoView 로드
+ * 4) EgoWeaponAbilityController 스킬베이스/전투 설정
+ * 5) EgoBond             유대감, ego.bond 우선
+ * 6) EgoTalkPack         DB 대사팩
  */
 public final class EgoDB {
 
@@ -26,22 +31,13 @@ public final class EgoDB {
     }
 
     public static void init(Connection con) {
-        EgoConfig.reload(con);
-        EgoLevelBonus.reload(con);
-        EgoWeaponRule.reload(con);
-        EgoWeaponDatabase.init(con);
-        EgoView.reload(con);
-        EgoWeaponAbilityController.reloadConfig();
-        EgoBond.reload(con);
-        EgoTalkPack.reload(con);
+        reload(con);
     }
 
     public static void reload(Connection con) {
         EgoConfig.reload(con);
-        EgoLevelBonus.reload(con);
         EgoWeaponRule.reload(con);
         EgoWeaponDatabase.reload(con);
-        EgoView.reload(con);
         EgoWeaponAbilityController.reloadConfig();
         EgoBond.reload(con);
         EgoTalkPack.reload(con);
