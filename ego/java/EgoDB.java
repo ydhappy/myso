@@ -6,6 +6,7 @@ import java.util.List;
 import lineage.database.EgoWeaponDatabase.EgoAbilityInfo;
 import lineage.database.EgoWeaponDatabase.EgoWeaponInfo;
 import lineage.world.controller.EgoBond;
+import lineage.world.controller.EgoConfig;
 import lineage.world.controller.EgoTalkPack;
 import lineage.world.controller.EgoView;
 import lineage.world.controller.EgoWeaponAbilityController;
@@ -23,6 +24,7 @@ public final class EgoDB {
     }
 
     public static void init(Connection con) {
+        EgoConfig.reload(con);
         EgoWeaponDatabase.init(con);
         EgoView.reload(con);
         EgoWeaponAbilityController.reloadConfig();
@@ -31,6 +33,7 @@ public final class EgoDB {
     }
 
     public static void reload(Connection con) {
+        EgoConfig.reload(con);
         EgoWeaponDatabase.reload(con);
         EgoView.reload(con);
         EgoWeaponAbilityController.reloadConfig();
