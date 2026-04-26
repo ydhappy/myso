@@ -341,6 +341,5 @@ DB 실행 파일: 신규 1개 / 기존 1개
 DB 접근 Facade: EgoDb 1개
 DB-자바 연결성 검증: EgoSchema 1개
 레벨 통합 캐시: EgoLevel 1개
-삭제 완료: EgoLevelBonus.java
 문서 기준 적용 난이도: 기존보다 낮음
 ```
