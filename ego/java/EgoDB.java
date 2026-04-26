@@ -11,6 +11,7 @@ import lineage.world.controller.EgoLevelBonus;
 import lineage.world.controller.EgoTalkPack;
 import lineage.world.controller.EgoView;
 import lineage.world.controller.EgoWeaponAbilityController;
+import lineage.world.controller.EgoWeaponRule;
 import lineage.world.object.instance.ItemInstance;
 import lineage.world.object.instance.PcInstance;
 
@@ -27,6 +28,7 @@ public final class EgoDB {
     public static void init(Connection con) {
         EgoConfig.reload(con);
         EgoLevelBonus.reload(con);
+        EgoWeaponRule.reload(con);
         EgoWeaponDatabase.init(con);
         EgoView.reload(con);
         EgoWeaponAbilityController.reloadConfig();
@@ -37,6 +39,7 @@ public final class EgoDB {
     public static void reload(Connection con) {
         EgoConfig.reload(con);
         EgoLevelBonus.reload(con);
+        EgoWeaponRule.reload(con);
         EgoWeaponDatabase.reload(con);
         EgoView.reload(con);
         EgoWeaponAbilityController.reloadConfig();
