@@ -1,0 +1,314 @@
+# 에고 연결성 맵
+
+목적:
+
+```text
+DB 테이블
+DB 컬럼
+Java 로더
+Java 사용 메서드
+외부 연결 진입점
+```
+
+위 항목을 한눈에 연결하기 위한 문서입니다.
+
+---
+
+## 1. 외부 연결 진입점
+
+외부 서버 코드에서는 가능하면 아래만 연결합니다.
+
+```text
+EgoCore.java
+```
+
+| 기존 서버 위치 | 호출 메서드 | 내부 연결 |
+|---|---|---|
+| 서버 시작 | EgoCore.init(con) | EgoSchema.silentCheck → EgoDB.init |
+| 운영자 리로드 | EgoCore.reload(con) | EgoSchema.silentCheck → EgoDB.reload |
+| CommandController | EgoCore.command(o,key,st) | EgoCmd.run |
+| ChattingController | EgoCore.chat(o,msg) | EgoTalk.chat |
+| 캐릭터 루프 | EgoCore.tick(pc) | EgoTalk.warning → EgoAutoTalk |
+| DamageController 공격 | EgoCore.attack(...) | EgoSkill.attack |
+| DamageController 피격 | EgoCore.defense(...) | EgoSkill.defense |
+| 스키마 진단 | EgoCore.schemaReport(con) | EgoSchema.report |
+
+---
+
+## 2. DB Facade
+
+짧은 이름용 DB Facade:
+
+```text
+EgoDb.java
+```
+
+역할:
+
+```text
+EgoDB / EgoWeaponDatabase 직접 접근을 줄이기 위한 래퍼
+외부 코드에서 DB 접근이 필요하면 EgoDb 사용 권장
+```
+
+---
+
+## 3. 스키마 중앙 검증
+
+```text
+EgoSchema.java
+```
+
+검증 대상:
+
+```text
+ego
+ego_skill
+ego_skill_base
+ego_log
+ego_bond
+ego_talk_pack
+ego_config
+ego_level_exp
+ego_level_bonus
+ego_weapon_rule
+```
+
+사용:
+
+```java
+EgoCore.schemaOk(con);
+EgoCore.schemaReport(con);
+```
+
+서버 시작/리로드 시:
+
+```java
+EgoSchema.silentCheck(con);
+```
+
+실패해도 서버를 중단하지 않습니다. 보정 SQL 적용 여부를 빠르게 확인하기 위한 장치입니다.
+
+---
+
+## 4. 테이블별 연결성
+
+### 4.1 ego
+
+| 컬럼 | 의미 | Java 로드/사용 |
+|---|---|---|
+| item_id | 아이템 objectId | EgoWeaponDatabase.loadEgoInfo / find |
+| char_id | 소유 캐릭터 objectId | EgoWeaponDatabase.enableEgo |
+| use_yn | 사용 여부 | EgoWeaponDatabase.loadEgoInfo |
+| ego_name | 호출 이름 | EgoWeaponDatabase.getEgoName / setEgoName |
+| ego_type | 말투 예의/예의반대 | EgoWeaponDatabase.getTone / setTone |
+| ego_lv | 레벨 | EgoWeaponDatabase.getEgoLevel / addExp |
+| ego_exp | 현재 경험치 | EgoWeaponDatabase.addExp |
+| need_exp | 다음 필요 경험치 | EgoWeaponDatabase.addExp |
+| talk_lv | 대화 단계 | EgoWeaponDatabase.loadEgoInfo |
+| ctrl_lv | 제어 단계 | EgoWeaponDatabase.loadEgoInfo |
+| last_talk | 마지막 대화 시간 | 보존 컬럼 |
+| last_warn | 마지막 경고 시간 | 보존 컬럼 |
+
+주요 메서드:
+
+```text
+EgoDb.create
+EgoDb.delete
+EgoDb.rename
+EgoDb.level
+EgoDb.name
+EgoWeaponDatabase.enableEgo
+EgoWeaponDatabase.disableEgo
+EgoWeaponDatabase.addExp
+```
+
+### 4.2 ego_skill
+
+| 컬럼 | 의미 | Java 로드/사용 |
+|---|---|---|
+| id | 능력 row id | EgoWeaponDatabase.loadAbilityInfo |
+| item_id | 에고 아이템 id | EgoWeaponDatabase.getAbilities |
+| skill | 능력 코드 | EgoWeaponAbilityController.getAbilityType |
+| skill_lv | 능력 레벨 | EgoWeaponAbilityController.applyAttackAbility |
+| rate_bonus | 추가 발동률 | EgoWeaponAbilityController.getProcChance |
+| dmg_bonus | 추가 피해 | EgoWeaponAbilityController.applyAttackAbility |
+| last_proc | 마지막 발동 시간 | EgoWeaponAbilityController.markProc |
+| use_yn | 사용 여부 | EgoWeaponDatabase.loadAbilityInfo |
+
+주요 메서드:
+
+```text
+EgoDb.setSkill
+EgoWeaponDatabase.setAbility
+EgoWeaponAbilityController.markProc
+```
+
+### 4.3 ego_skill_base
+
+| 컬럼 | 의미 | Java 로드/사용 |
+|---|---|---|
+| skill | 능력 코드 | EgoWeaponAbilityController.loadSkillBase |
+| label | 표시명 | 로드 보존 |
+| memo | 설명 | DB 관리용 |
+| base_rate | 기본 발동률 | getProcChance |
+| lv_rate | 레벨당 발동률 | getProcChance |
+| max_rate | 최대 발동률 | getProcChance |
+| min_lv | 최소 레벨 | applyAttackAbility |
+| cool_ms | 쿨타임 | checkCooldown |
+| effect | 이펙트 | applyAttackByType |
+| use_yn | 사용 여부 | loadSkillBase |
+
+### 4.4 ego_log
+
+| 컬럼 | 의미 | Java 사용 |
+|---|---|---|
+| item_id | 에고 아이템 id | EgoWeaponAbilityController.writeLog |
+| char_id | 캐릭터 id | writeLog |
+| char_name | 캐릭터 이름 | writeLog |
+| target_name | 대상 이름 | writeLog |
+| skill | 발동 능력 | writeLog |
+| base_dmg | 기본 피해 | writeLog |
+| final_dmg | 최종 피해 | writeLog |
+| add_dmg | 추가 피해 | writeLog |
+
+### 4.5 ego_bond
+
+| 컬럼 | 의미 | Java 사용 |
+|---|---|---|
+| item_id | 에고 아이템 id | EgoBond.reload/get/save/delete |
+| bond | 유대감 | EgoBond.get/grade/add |
+| last_reason | 마지막 증가 사유 | EgoBond.save |
+
+증가 이벤트:
+
+```text
+대화 +1
+레벨업 +10
+위험 생존 +20
+스턴 +3
+반격 +2
+```
+
+### 4.6 ego_talk_pack
+
+| 컬럼 | 의미 | Java 사용 |
+|---|---|---|
+| id | 대사 id | EgoTalkPack.reload |
+| genre | 장르 | EgoTalkPack.find |
+| tone | 말투 | EgoTalkPack.find |
+| keyword | 예비 키워드 | 보존 컬럼 |
+| message | 출력 대사 | EgoTalkHistory.pick |
+| use_yn | 사용 여부 | EgoTalkPack.reload |
+
+### 4.7 ego_config
+
+| config_key | Java 사용 |
+|---|---|
+| genre_talk_delay_ms | EgoTalk.checkGenreDelay |
+| auto_talk_hp_warn_rate | EgoAutoTalk.warning |
+| auto_talk_mp_warn_rate | EgoAutoTalk.warning |
+| auto_talk_idle_hp_rate | EgoAutoTalk.warning |
+| auto_talk_idle_mp_rate | EgoAutoTalk.warning |
+| auto_talk_hp_warn_delay_ms | EgoAutoTalk.check |
+| auto_talk_mp_warn_delay_ms | EgoAutoTalk.check |
+| auto_talk_boss_warn_delay_ms | EgoAutoTalk.check |
+| auto_talk_idle_delay_ms | EgoAutoTalk.check |
+| attack_ego_exp | EgoWeaponAbilityController.gainAttackExp |
+| attack_exp_delay_ms | EgoWeaponAbilityController.gainAttackExp |
+| kill_ego_exp | EgoWeaponAbilityController.addKillExp |
+| boss_kill_ego_exp | EgoWeaponAbilityController.addKillExp |
+| exp_message_rate | EgoWeaponAbilityController.addExp |
+| proc_message_delay_ms | EgoWeaponAbilityController.say |
+| counter_unlock_level | EgoWeaponAbilityController.applyDefenseAbility |
+| auto_counter_unlock_level | EgoWeaponAbilityController.applyDefenseAbility |
+| auto_counter_cool_ms | EgoWeaponAbilityController.tryCounter |
+| auto_counter_chance | EgoWeaponAbilityController.tryCounter |
+| stun_level | EgoWeaponAbilityController.getStunLevel |
+| stun_success_rate | EgoWeaponAbilityController.tryEgoStun |
+| stun_time | EgoWeaponAbilityController.tryEgoStun |
+| stun_effect | EgoWeaponAbilityController.tryEgoStun |
+| stun_cool_ms | EgoWeaponAbilityController.tryEgoStun |
+| guardian_shield_hp_rate | EgoWeaponAbilityController.applyAttackByType |
+| execution_target_hp_rate | EgoWeaponAbilityController.applyAttackByType |
+| area_range | EgoWeaponAbilityController.applyAttackByType |
+| area_max_target | EgoWeaponAbilityController.applyAttackByType |
+
+### 4.8 ego_level_exp
+
+| 컬럼 | 의미 | Java 사용 |
+|---|---|---|
+| ego_lv | 현재 레벨 | EgoWeaponDatabase.loadLevelExp |
+| need_exp | 다음 레벨 필요 경험치 | EgoWeaponDatabase.getNeedExp/addExp |
+| use_yn | 사용 여부 | loadLevelExp |
+
+### 4.9 ego_level_bonus
+
+| 컬럼 | Java 메서드 |
+|---|---|
+| proc_bonus | EgoLevelBonus.procBonus |
+| critical_chance | EgoLevelBonus.criticalChance |
+| critical_damage | EgoLevelBonus.criticalDamage |
+| counter_chance | EgoLevelBonus.counterChance |
+| counter_power | EgoLevelBonus.counterPower |
+| counter_critical | EgoLevelBonus.counterCritical |
+
+사용처:
+
+```text
+EgoWeaponAbilityController.getProcChance
+EgoWeaponAbilityController.tryCounter
+EgoWeaponAbilityController.applyAttackByType
+```
+
+### 4.10 ego_weapon_rule
+
+| 컬럼 | Java 사용 |
+|---|---|
+| type2 | EgoWeaponRule.get/hasRule |
+| display_name | EgoWeaponTypeUtil.getDisplayTypeName |
+| default_ability | EgoWeaponTypeUtil.getDefaultAbilityType |
+| allowed_abilities | EgoWeaponTypeUtil.isAbilityAllowed |
+| use_yn | EgoWeaponTypeUtil.isSupportedType |
+
+---
+
+## 5. 병합/최소화 결론
+
+```text
+DB 실행 파일:
+- 신규: ego_install_euckr.sql
+- 기존: ego_update_euckr.sql
+
+외부 Java 연결:
+- EgoCore.java
+
+DB 접근 Facade:
+- EgoDb.java
+
+스키마 검증:
+- EgoSchema.java
+
+기능 내부 파일:
+- public class 제약 때문에 기능별 분리 유지
+```
+
+---
+
+## 6. 연결성 점검 방법
+
+Java에서:
+
+```java
+String report = EgoCore.schemaReport(con);
+boolean ok = EgoCore.schemaOk(con);
+```
+
+DB에서:
+
+```sql
+SHOW TABLES LIKE 'ego%';
+SELECT * FROM ego_config ORDER BY config_key;
+SELECT * FROM ego_level_exp ORDER BY ego_lv;
+SELECT * FROM ego_level_bonus ORDER BY ego_lv;
+SELECT * FROM ego_weapon_rule ORDER BY type2;
+```
