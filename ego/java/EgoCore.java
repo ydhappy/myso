@@ -22,12 +22,24 @@ public final class EgoCore {
 
     /** 서버 시작 시 1회 호출. */
     public static void init(Connection con) {
+        EgoSchema.silentCheck(con);
         EgoDB.init(con);
     }
 
     /** .에고리로드 등 운영자 리로드 시 호출. */
     public static void reload(Connection con) {
+        EgoSchema.silentCheck(con);
         EgoDB.reload(con);
+    }
+
+    /** DB 테이블/컬럼 연결성 리포트. 운영자 진단/문서 확인용. */
+    public static String schemaReport(Connection con) {
+        return EgoSchema.report(con);
+    }
+
+    /** DB 테이블/컬럼 연결성이 현재 Java 기준을 만족하는지 확인. */
+    public static boolean schemaOk(Connection con) {
+        return EgoSchema.isValid(con);
     }
 
     /** CommandController에서 명령어 처리. true면 기존 명령 처리 중단. */
