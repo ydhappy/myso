@@ -7,6 +7,7 @@ DB 실행 파일 최소화
 Java 기존 서버 연결 지점 최소화
 초보자도 순서대로 적용 가능
 테이블/컬럼/메서드 연결성 추적 가능
+불필요 파일 제거 후 최종 구조 기준 안내
 ```
 
 ---
@@ -21,19 +22,25 @@ Java 기존 서버 연결 지점 최소화
 SOURCE ego/sql/ego_install_euckr.sql;
 ```
 
-포함 테이블:
+신규 우선 테이블:
 
 ```text
 ego
 ego_skill
 ego_skill_base
 ego_log
-ego_bond
 ego_talk_pack
 ego_config
+ego_level
+ego_weapon_rule
+```
+
+구버전 fallback 테이블:
+
+```text
+ego_bond
 ego_level_exp
 ego_level_bonus
-ego_weapon_rule
 ```
 
 ### 기존 서버
@@ -49,13 +56,14 @@ SOURCE ego/sql/ego_update_euckr.sql;
 ```text
 ego_cleanup_unused.sql
 ego_db_config.sql
+ego_merge_schema_euckr.sql
 ego_talk_pack_dedupe.sql
 ```
 
 주의:
 
 ```text
-사용 중인 DB 툴에서 SOURCE 문이 동작하지 않으면 위 3개 파일을 순서대로 직접 실행하세요.
+사용 중인 DB 툴에서 SOURCE 문이 동작하지 않으면 위 4개 파일을 순서대로 직접 실행하세요.
 ```
 
 ---
@@ -229,7 +237,7 @@ EgoSchema.java
 ```text
 EgoDB.java
 EgoConfig.java
-EgoLevelBonus.java
+EgoLevel.java
 EgoWeaponRule.java
 EgoTalkPack.java
 EgoBond.java
@@ -278,6 +286,7 @@ EgoView.java
 ```text
 ego_cleanup_unused.sql
 ego_db_config.sql
+ego_merge_schema_euckr.sql
 ego_talk_pack_dedupe.sql
 ```
 
@@ -302,9 +311,9 @@ DB 확인:
 
 ```sql
 SHOW TABLES LIKE 'ego%';
+SELECT item_id, ego_name, ego_lv, ego_exp, need_exp, bond, bond_reason FROM ego;
 SELECT * FROM ego_config ORDER BY config_key;
-SELECT * FROM ego_level_exp ORDER BY ego_lv;
-SELECT * FROM ego_level_bonus ORDER BY ego_lv;
+SELECT * FROM ego_level ORDER BY ego_lv;
 SELECT * FROM ego_weapon_rule ORDER BY type2;
 ```
 
@@ -331,6 +340,7 @@ DB 실행 파일: 신규 1개 / 기존 1개
 기존 Java 연결 클래스: EgoCore 1개
 DB 접근 Facade: EgoDb 1개
 DB-자바 연결성 검증: EgoSchema 1개
-실제 구현 Java 파일: 기능별 public class 제약 때문에 보존
+레벨 통합 캐시: EgoLevel 1개
+삭제 완료: EgoLevelBonus.java
 문서 기준 적용 난이도: 기존보다 낮음
 ```
