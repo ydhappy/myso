@@ -5,6 +5,8 @@ import java.util.List;
 
 import lineage.database.EgoWeaponDatabase.EgoAbilityInfo;
 import lineage.database.EgoWeaponDatabase.EgoWeaponInfo;
+import lineage.world.controller.EgoBond;
+import lineage.world.controller.EgoTalkPack;
 import lineage.world.controller.EgoView;
 import lineage.world.controller.EgoWeaponAbilityController;
 import lineage.world.object.instance.ItemInstance;
@@ -24,12 +26,16 @@ public final class EgoDB {
         EgoWeaponDatabase.init(con);
         EgoView.reload(con);
         EgoWeaponAbilityController.reloadConfig();
+        EgoBond.reload(con);
+        EgoTalkPack.reload(con);
     }
 
     public static void reload(Connection con) {
         EgoWeaponDatabase.reload(con);
         EgoView.reload(con);
         EgoWeaponAbilityController.reloadConfig();
+        EgoBond.reload(con);
+        EgoTalkPack.reload(con);
     }
 
     public static EgoWeaponInfo find(long itemObjId) {
@@ -65,6 +71,7 @@ public final class EgoDB {
     }
 
     public static boolean delete(ItemInstance item) {
+        EgoBond.delete(item);
         return EgoWeaponDatabase.disableEgo(item);
     }
 
