@@ -29,13 +29,11 @@ public final class EgoWeaponDatabase {
     public static final int MIN_EGO_LEVEL = 0;
     public static final int MAX_EGO_LEVEL = 10;
 
-    /**
-     * 레벨별 다음 레벨 필요 경험치.
-     * index 0 = Lv.0 -> Lv.1 필요 경험치.
-     * index 9 = Lv.9 -> Lv.10 필요 경험치.
-     * index 10 = Lv.10 만렙 표시용 0.
-     */
-    private static final long[] NEED_EXP_BY_LEVEL = new long[] {
+    /** Java fallback 경험치표. DB ego_level_exp가 있으면 DB 값을 우선 사용. */
+    private static final long[] DEFAULT_NEED_EXP_BY_LEVEL = new long[] {
+        100L, 250L, 500L, 900L, 1500L, 2400L, 3600L, 5200L, 7500L, 10000L, 0L
+    };
+    private static final long[] needExpByLevel = new long[] {
         100L, 250L, 500L, 900L, 1500L, 2400L, 3600L, 5200L, 7500L, 10000L, 0L
     };
 
@@ -52,9 +50,44 @@ public final class EgoWeaponDatabase {
     public static void reload(Connection con) {
         egoMap.clear();
         abilityMap.clear();
+        loadLevelExp(con);
         loadEgoInfo(con);
         loadAbilityInfo(con);
         EgoView.reload(con);
+    }
+
+    private static void loadLevelExp(Connection con) {
+        for (int i = 0; i < needExpByLevel.length; i++)
+            needExpByLevel[i] = DEFAULT_NEED_EXP_BY_LEVEL[i];
+
+        PreparedStatement st = null;
+        ResultSet rs = null;
+        boolean closeCon = false;
+        try {
+            if (con == null) {
+                con = DatabaseConnection.getLineage();
+                closeCon = true;
+            }
+            if (!tableExists(con, "ego_level_exp"))
+                return;
+            st = con.prepareStatement("SELECT ego_lv, need_exp FROM ego_level_exp WHERE use_yn=1");
+            rs = st.executeQuery();
+            while (rs.next()) {
+                int lv = rs.getInt("ego_lv");
+                if (lv < MIN_EGO_LEVEL || lv > MAX_EGO_LEVEL)
+                    continue;
+                long need = Math.max(0L, rs.getLong("need_exp"));
+                needExpByLevel[lv] = need;
+            }
+            needExpByLevel[MAX_EGO_LEVEL] = 0L;
+        } catch (Exception e) {
+            // 테이블 미적용 서버는 Java fallback 경험치표 사용.
+        } finally {
+            if (closeCon)
+                DatabaseConnection.close(con, st, rs);
+            else
+                DatabaseConnection.close(st, rs);
+        }
     }
 
     private static void loadEgoInfo(Connection con) {
@@ -189,14 +222,14 @@ public final class EgoWeaponDatabase {
 
     public static long getNeedExp(int level) {
         int lv = clampLevel(level);
-        return NEED_EXP_BY_LEVEL[lv];
+        return needExpByLevel[lv];
     }
 
     public static long getTotalNeedExpToLevel(int targetLevel) {
         int lv = clampLevel(targetLevel);
         long total = 0L;
         for (int i = 0; i < lv && i < MAX_EGO_LEVEL; i++)
-            total += NEED_EXP_BY_LEVEL[i];
+            total += needExpByLevel[i];
         return total;
     }
 
