@@ -29,32 +29,31 @@ import lineage.world.object.magic.ShockStun;
 
 /**
  * 에고무기 특별 능력 컨트롤러.
+ *
+ * DB화 우선순위:
+ * - ego_skill_base: 스킬별 발동률/쿨타임/이펙트
+ * - ego_level_bonus: 레벨별 보너스
+ * - ego_config: 경험치/스턴/자동반격/메시지/광역 범위 등 공통 설정
  */
 public final class EgoWeaponAbilityController {
 
     private static final int MAX_EGO_LEVEL = 10;
-    private static final int AREA_RANGE = 2;
-    private static final int AREA_MAX_TARGET = 4;
 
-    private static final long ATTACK_EGO_EXP = 1L;
-    private static final long ATTACK_EXP_DELAY_MS = 3000L;
+    private static final int DEFAULT_AREA_RANGE = 2;
+    private static final int DEFAULT_AREA_MAX_TARGET = 4;
+
+    private static final long DEFAULT_ATTACK_EGO_EXP = 1L;
+    private static final long DEFAULT_ATTACK_EXP_DELAY_MS = 3000L;
     private static final long DEFAULT_KILL_EGO_EXP = 5L;
-    private static final long BOSS_KILL_EGO_EXP = 50L;
-    private static final long PROC_MESSAGE_DELAY_MS = 1500L;
+    private static final long DEFAULT_BOSS_KILL_EGO_EXP = 50L;
+    private static final long DEFAULT_PROC_MESSAGE_DELAY_MS = 1500L;
 
-    private static final int[] LEVEL_PROC_BONUS = {0, 0, 1, 2, 3, 4, 6, 8, 10, 12, 15};
-    private static final int[] LEVEL_CRITICAL_CHANCE = {0, 1, 2, 3, 4, 6, 9, 12, 15, 18, 25};
-    private static final int[] LEVEL_CRITICAL_DAMAGE = {0, 1, 2, 3, 4, 6, 8, 10, 12, 15, 20};
-    private static final int[] LEVEL_COUNTER_CHANCE = {0, 0, 0, 0, 0, 35, 100, 100, 100, 100, 100};
-    private static final int[] LEVEL_COUNTER_POWER = {0, 0, 0, 0, 0, 18, 24, 30, 38, 46, 60};
-    private static final int[] LEVEL_COUNTER_CRITICAL = {0, 0, 0, 0, 0, 8, 12, 16, 20, 25, 35};
-
-    private static final int STUN_LEVEL = 10;
-    private static final int STUN_SUCCESS_RATE = 50;
-    private static final int STUN_EFFECT = 4183;
-    private static final int STUN_TIME = 2;
-    private static final int AUTO_COUNTER_COOL_MS = 2500;
-    private static final int STUN_COOL_MS = 6000;
+    private static final int DEFAULT_STUN_LEVEL = 10;
+    private static final int DEFAULT_STUN_SUCCESS_RATE = 50;
+    private static final int DEFAULT_STUN_EFFECT = 4183;
+    private static final int DEFAULT_STUN_TIME = 2;
+    private static final int DEFAULT_AUTO_COUNTER_COOL_MS = 2500;
+    private static final int DEFAULT_STUN_COOL_MS = 6000;
 
     private static final Map<String, Long> procMessageDelayMap = new ConcurrentHashMap<String, Long>();
     private static final Map<String, Long> expDelayMap = new ConcurrentHashMap<String, Long>();
@@ -112,7 +111,7 @@ public final class EgoWeaponAbilityController {
         if (bonusDamage > 0 && result > 0)
             result += bonusDamage;
 
-        if (effectiveLevel >= STUN_LEVEL && target instanceof Character)
+        if (effectiveLevel >= getStunLevel() && target instanceof Character)
             tryEgoStun(pc, (Character) target, weapon, "EGO_STUN_ATTACK");
 
         writeLog(pc, target, weapon, type.name(), damage, result);
@@ -142,13 +141,13 @@ public final class EgoWeaponAbilityController {
 
         int newDamage = damage;
 
-        if (egoLevel >= 5) {
+        if (egoLevel >= EgoConfig.getInt("counter_unlock_level", 5)) {
             int reduce = Math.max(1, egoLevel / 2);
             newDamage = Math.max(1, newDamage - reduce);
             tryCounter(pc, attacker, weapon, newDamage, egoLevel, false);
         }
 
-        if (egoLevel >= 6)
+        if (egoLevel >= EgoConfig.getInt("auto_counter_unlock_level", 6))
             tryCounter(pc, attacker, weapon, newDamage, egoLevel, true);
 
         return newDamage;
@@ -166,9 +165,9 @@ public final class EgoWeaponAbilityController {
         if (!EgoWeaponTypeUtil.isValidEgoBaseWeapon(weapon))
             return;
 
-        long addExp = DEFAULT_KILL_EGO_EXP;
+        long addExp = EgoConfig.getLong("kill_ego_exp", DEFAULT_KILL_EGO_EXP);
         if (mon.getMonster() != null && mon.getMonster().isBoss())
-            addExp += BOSS_KILL_EGO_EXP;
+            addExp += EgoConfig.getLong("boss_kill_ego_exp", DEFAULT_BOSS_KILL_EGO_EXP);
         addExp(pc, weapon, addExp, true);
     }
 
@@ -205,17 +204,17 @@ public final class EgoWeaponAbilityController {
         if (pc == null || attacker == null || weapon == null || attacker.isDead())
             return;
         String skill = automatic ? "EGO_AUTO_COUNTER" : "EGO_COUNTER";
-        int cool = automatic ? AUTO_COUNTER_COOL_MS : getSkillBase("EGO_COUNTER").coolMs;
+        int cool = automatic ? EgoConfig.getInt("auto_counter_cool_ms", DEFAULT_AUTO_COUNTER_COOL_MS) : getSkillBase("EGO_COUNTER").coolMs;
         if (!checkCooldown(weapon, skill, cool))
             return;
 
-        int chance = automatic ? 100 : LEVEL_COUNTER_CHANCE[clampLevel(egoLevel)];
+        int chance = automatic ? EgoConfig.percent("auto_counter_chance", 100) : EgoLevelBonus.counterChance(egoLevel);
         if (Util.random(1, 100) > chance)
             return;
 
-        int powerRate = LEVEL_COUNTER_POWER[clampLevel(egoLevel)];
+        int powerRate = EgoLevelBonus.counterPower(egoLevel);
         int counterDamage = Math.max(1, baseDamage * powerRate / 100);
-        boolean critical = Util.random(1, 100) <= LEVEL_COUNTER_CRITICAL[clampLevel(egoLevel)];
+        boolean critical = Util.random(1, 100) <= EgoLevelBonus.counterCritical(egoLevel);
         if (critical)
             counterDamage += Math.max(1, counterDamage * (20 + egoLevel * 2) / 100);
 
@@ -226,7 +225,7 @@ public final class EgoWeaponAbilityController {
         say(pc, skill, String.format("\fY[에고] %s반격 발동. 피해 +%d%s", automatic ? "자동" : "", counterDamage, critical ? " / 치명" : ""));
         writeLog(pc, attacker, weapon, skill, baseDamage, baseDamage + counterDamage);
 
-        if (egoLevel >= STUN_LEVEL)
+        if (egoLevel >= getStunLevel())
             tryEgoStun(pc, attacker, weapon, "EGO_STUN_COUNTER");
     }
 
@@ -235,23 +234,25 @@ public final class EgoWeaponAbilityController {
             return false;
         if (target.isDead() || target.isLock())
             return false;
-        if (!checkCooldown(weapon, coolKey, STUN_COOL_MS))
+        if (!checkCooldown(weapon, coolKey, EgoConfig.getInt("stun_cool_ms", DEFAULT_STUN_COOL_MS)))
             return false;
         markProc(weapon, coolKey);
 
-        if (Util.random(1, 100) > STUN_SUCCESS_RATE)
+        if (Util.random(1, 100) > EgoConfig.percent("stun_success_rate", DEFAULT_STUN_SUCCESS_RATE))
             return false;
 
         try {
+            int stunTime = EgoConfig.getInt("stun_time", DEFAULT_STUN_TIME);
+            int stunEffect = EgoConfig.getInt("stun_effect", DEFAULT_STUN_EFFECT);
             Skill skill = SkillDatabase.find(5, 1);
             if (skill == null) {
                 skill = new Skill(0, "에고 스턴");
-                skill.setBuffDuration(STUN_TIME);
-                skill.setCastGfx(STUN_EFFECT);
+                skill.setBuffDuration(stunTime);
+                skill.setCastGfx(stunEffect);
             }
-            int time = Math.max(1, Math.min(STUN_TIME, skill.getBuffDuration() > 0 ? skill.getBuffDuration() : STUN_TIME));
-            target.toSender(S_ObjectEffect.clone(BasePacketPooling.getPool(S_ObjectEffect.class), target, STUN_EFFECT), true);
-            BuffController.append(target, ShockStun.clone(BuffController.getPool(ShockStun.class), skill, time, target, STUN_EFFECT));
+            int time = Math.max(1, Math.min(stunTime, skill.getBuffDuration() > 0 ? skill.getBuffDuration() : stunTime));
+            target.toSender(S_ObjectEffect.clone(BasePacketPooling.getPool(S_ObjectEffect.class), target, stunEffect), true);
+            BuffController.append(target, ShockStun.clone(BuffController.getPool(ShockStun.class), skill, time, target, stunEffect));
             EgoBond.addStun(weapon);
             say(pc, "EGO_STUN", "\fR[에고] 스턴 성공.");
             writeLog(pc, target, weapon, "EGO_STUN", 0, 0);
@@ -276,13 +277,13 @@ public final class EgoWeaponAbilityController {
                 say(pc, "MANA_DRAIN", String.format("\fY[에고] 정신 흡수 발동. MP +%d", mp));
                 return damage;
             case CRITICAL_BURST:
-                int criticalAdd = Math.max(1, egoLevel + LEVEL_CRITICAL_DAMAGE[clampLevel(egoLevel)]);
+                int criticalAdd = Math.max(1, egoLevel + EgoLevelBonus.criticalDamage(egoLevel));
                 sendEffect(target, effect > 0 ? effect : 12487);
                 say(pc, "CRITICAL_BURST", String.format("\fY[에고] 치명 폭발 발동. 추가 피해 +%d", criticalAdd));
                 return damage + criticalAdd;
             case GUARDIAN_SHIELD:
                 int hpRate = pc.getNowHp() * 100 / Math.max(1, pc.getTotalHp());
-                if (hpRate <= 40) {
+                if (hpRate <= EgoConfig.percent("guardian_shield_hp_rate", 40)) {
                     int shieldHeal = Math.max(3, egoLevel * 2);
                     pc.setNowHp(Math.min(pc.getTotalHp(), pc.getNowHp() + shieldHeal));
                     sendEffect(pc, effect > 0 ? effect : 6321);
@@ -292,8 +293,10 @@ public final class EgoWeaponAbilityController {
             case AREA_SLASH:
                 int splashDamage = Math.max(1, damage * (8 + egoLevel) / 100);
                 int count = 0;
-                for (MonsterInstance mon : findNearbyMonsters(pc, target, AREA_RANGE)) {
-                    if (count >= AREA_MAX_TARGET)
+                int areaRange = EgoConfig.getInt("area_range", DEFAULT_AREA_RANGE);
+                int areaMaxTarget = EgoConfig.getInt("area_max_target", DEFAULT_AREA_MAX_TARGET);
+                for (MonsterInstance mon : findNearbyMonsters(pc, target, areaRange)) {
+                    if (count >= areaMaxTarget)
                         break;
                     if (mon.getObjectId() == target.getObjectId())
                         continue;
@@ -308,7 +311,7 @@ public final class EgoWeaponAbilityController {
                 if (target instanceof Character) {
                     Character t = (Character) target;
                     int targetHpRate = t.getNowHp() * 100 / Math.max(1, t.getTotalHp());
-                    if (targetHpRate <= 20) {
+                    if (targetHpRate <= EgoConfig.percent("execution_target_hp_rate", 20)) {
                         int add = Math.max(2, egoLevel * 2);
                         sendEffect(target, effect > 0 ? effect : 8683);
                         say(pc, "EXECUTION", String.format("\fR[에고] 처형 발동. 추가 피해 +%d", add));
@@ -353,10 +356,11 @@ public final class EgoWeaponAbilityController {
         long now = java.lang.System.currentTimeMillis();
         String key = pc.getObjectId() + ":" + weapon.getObjectId();
         Long last = expDelayMap.get(key);
-        if (last != null && now - last.longValue() < ATTACK_EXP_DELAY_MS)
+        long delay = EgoConfig.getLong("attack_exp_delay_ms", DEFAULT_ATTACK_EXP_DELAY_MS);
+        if (last != null && now - last.longValue() < delay)
             return;
         expDelayMap.put(key, now);
-        addExp(pc, weapon, ATTACK_EGO_EXP, false);
+        addExp(pc, weapon, EgoConfig.getLong("attack_ego_exp", DEFAULT_ATTACK_EGO_EXP), false);
     }
 
     private static void addExp(PcInstance pc, ItemInstance weapon, long addExp, boolean forceMessage) {
@@ -377,7 +381,7 @@ public final class EgoWeaponAbilityController {
             return;
         }
 
-        if (forceMessage || Util.random(1, 100) <= 3) {
+        if (forceMessage || Util.random(1, 100) <= EgoConfig.percent("exp_message_rate", 3)) {
             EgoWeaponInfo info = EgoWeaponDatabase.find(weapon);
             if (info != null)
                 say(pc, "EXP", String.format("\fS[에고] 경험치 +%d (%d/%d)", addExp, info.exp, info.maxExp));
@@ -388,9 +392,9 @@ public final class EgoWeaponAbilityController {
         if (egoLevel <= 0)
             return 0;
         int level = clampLevel(egoLevel);
-        int chance = base.baseRate + Math.max(0, level - 1) * base.levelRate + LEVEL_PROC_BONUS[level];
+        int chance = base.baseRate + Math.max(0, level - 1) * base.levelRate + EgoLevelBonus.procBonus(level);
         if (type == EgoAbilityType.CRITICAL_BURST)
-            chance += LEVEL_CRITICAL_CHANCE[level];
+            chance += EgoLevelBonus.criticalChance(level);
         if (abilityInfo != null)
             chance += abilityInfo.procChanceBonus;
         return Math.min(base.maxRate, Math.max(1, chance));
@@ -476,7 +480,8 @@ public final class EgoWeaponAbilityController {
         long now = java.lang.System.currentTimeMillis();
         String key = pc.getObjectId() + ":" + abilityKey;
         Long last = procMessageDelayMap.get(key);
-        if (last != null && now - last.longValue() < PROC_MESSAGE_DELAY_MS)
+        long delay = EgoConfig.getLong("proc_message_delay_ms", DEFAULT_PROC_MESSAGE_DELAY_MS);
+        if (last != null && now - last.longValue() < delay)
             return;
         procMessageDelayMap.put(key, now);
         ChattingController.toChatting(pc, msg, Lineage.CHATTING_MODE_MESSAGE);
@@ -524,6 +529,10 @@ public final class EgoWeaponAbilityController {
         def.coolMs = 0;
         def.effect = 3940;
         return def;
+    }
+
+    private static int getStunLevel() {
+        return EgoConfig.getInt("stun_level", DEFAULT_STUN_LEVEL);
     }
 
     private static int clampLevel(int level) {
