@@ -32,7 +32,7 @@ import lineage.world.object.magic.ShockStun;
  *
  * DB화 우선순위:
  * - ego_skill_base: 스킬별 발동률/쿨타임/이펙트
- * - ego_level_bonus: 레벨별 보너스
+ * - ego_level: 레벨별 경험치/전투 보너스 통합
  * - ego_config: 경험치/스턴/자동반격/메시지/광역 범위 등 공통 설정
  */
 public final class EgoWeaponAbilityController {
@@ -208,13 +208,13 @@ public final class EgoWeaponAbilityController {
         if (!checkCooldown(weapon, skill, cool))
             return;
 
-        int chance = automatic ? EgoConfig.percent("auto_counter_chance", 100) : EgoLevelBonus.counterChance(egoLevel);
+        int chance = automatic ? EgoConfig.percent("auto_counter_chance", 100) : EgoLevel.counterChance(egoLevel);
         if (Util.random(1, 100) > chance)
             return;
 
-        int powerRate = EgoLevelBonus.counterPower(egoLevel);
+        int powerRate = EgoLevel.counterPower(egoLevel);
         int counterDamage = Math.max(1, baseDamage * powerRate / 100);
-        boolean critical = Util.random(1, 100) <= EgoLevelBonus.counterCritical(egoLevel);
+        boolean critical = Util.random(1, 100) <= EgoLevel.counterCritical(egoLevel);
         if (critical)
             counterDamage += Math.max(1, counterDamage * (20 + egoLevel * 2) / 100);
 
@@ -277,7 +277,7 @@ public final class EgoWeaponAbilityController {
                 say(pc, "MANA_DRAIN", String.format("\fY[에고] 정신 흡수 발동. MP +%d", mp));
                 return damage;
             case CRITICAL_BURST:
-                int criticalAdd = Math.max(1, egoLevel + EgoLevelBonus.criticalDamage(egoLevel));
+                int criticalAdd = Math.max(1, egoLevel + EgoLevel.criticalDamage(egoLevel));
                 sendEffect(target, effect > 0 ? effect : 12487);
                 say(pc, "CRITICAL_BURST", String.format("\fY[에고] 치명 폭발 발동. 추가 피해 +%d", criticalAdd));
                 return damage + criticalAdd;
@@ -392,9 +392,9 @@ public final class EgoWeaponAbilityController {
         if (egoLevel <= 0)
             return 0;
         int level = clampLevel(egoLevel);
-        int chance = base.baseRate + Math.max(0, level - 1) * base.levelRate + EgoLevelBonus.procBonus(level);
+        int chance = base.baseRate + Math.max(0, level - 1) * base.levelRate + EgoLevel.procBonus(level);
         if (type == EgoAbilityType.CRITICAL_BURST)
-            chance += EgoLevelBonus.criticalChance(level);
+            chance += EgoLevel.criticalChance(level);
         if (abilityInfo != null)
             chance += abilityInfo.procChanceBonus;
         return Math.min(base.maxRate, Math.max(1, chance));
