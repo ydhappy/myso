@@ -29,14 +29,6 @@ import lineage.world.object.magic.ShockStun;
 
 /**
  * 에고무기 특별 능력 컨트롤러.
- *
- * 최종 전투 정책:
- * - 에고 최대레벨 10 고정.
- * - Lv.0은 스킬/치명/반격/스턴이 전혀 발동하지 않는다.
- * - Lv.1부터 공격 보조능력과 치명 보정이 레벨별로 동작한다.
- * - Lv.5부터 피격 시 확률 반격, 반격 공격성공/공격력/치명타 보정이 동작한다. PC 대상 포함.
- * - Lv.6부터 피격 시 자동반격이 동작한다. PC 대상 포함.
- * - Lv.10은 에고 스턴을 50% 성공률로 시도한다.
  */
 public final class EgoWeaponAbilityController {
 
@@ -230,6 +222,7 @@ public final class EgoWeaponAbilityController {
         markProc(weapon, skill);
         sendEffect(attacker, critical ? 12487 : 10710);
         safeCounterDamage(pc, attacker, counterDamage);
+        EgoBond.addCounter(weapon);
         say(pc, skill, String.format("\fY[에고] %s반격 발동. 피해 +%d%s", automatic ? "자동" : "", counterDamage, critical ? " / 치명" : ""));
         writeLog(pc, attacker, weapon, skill, baseDamage, baseDamage + counterDamage);
 
@@ -259,6 +252,7 @@ public final class EgoWeaponAbilityController {
             int time = Math.max(1, Math.min(STUN_TIME, skill.getBuffDuration() > 0 ? skill.getBuffDuration() : STUN_TIME));
             target.toSender(S_ObjectEffect.clone(BasePacketPooling.getPool(S_ObjectEffect.class), target, STUN_EFFECT), true);
             BuffController.append(target, ShockStun.clone(BuffController.getPool(ShockStun.class), skill, time, target, STUN_EFFECT));
+            EgoBond.addStun(weapon);
             say(pc, "EGO_STUN", "\fR[에고] 스턴 성공.");
             writeLog(pc, target, weapon, "EGO_STUN", 0, 0);
             return true;
@@ -376,6 +370,7 @@ public final class EgoWeaponAbilityController {
 
         if (levelUp || afterLevel > beforeLevel) {
             sendEffect(pc, 3944);
+            EgoBond.addLevelUp(weapon);
             say(pc, "LEVEL_UP", String.format("\fY[에고] 의식이 성장했습니다. Lv.%d", afterLevel));
             writeLog(pc, pc, weapon, "LEVEL_UP", 0, 0);
             EgoView.refreshInventory(pc, weapon);
