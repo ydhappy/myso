@@ -5,7 +5,8 @@
 --   1) Java 상수성 설정값을 ego_config로 이동
 --   2) 레벨별 필요 경험치를 ego_level_exp로 이동
 --   3) 레벨별 전투 보너스를 ego_level_bonus로 이동
---   4) .에고리로드 만으로 설정/경험치표/전투보너스 즉시 반영
+--   4) 무기 타입/능력 허용 규칙을 ego_weapon_rule로 이동
+--   5) .에고리로드 만으로 설정/경험치표/전투보너스/무기규칙 즉시 반영
 -- 파일 인코딩: UTF-8
 -- DB 문자셋: euckr
 -- ============================================================
@@ -124,7 +125,39 @@ ON DUPLICATE KEY UPDATE
     use_yn = VALUES(use_yn);
 
 -- ------------------------------------------------------------
--- 4. 기존 ego.need_exp를 DB 경험치표 기준으로 보정
+-- 4. 무기 타입/능력 허용 규칙
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS ego_weapon_rule (
+    type2 VARCHAR(40) NOT NULL COMMENT 'item.type2 원본 값',
+    display_name VARCHAR(50) NOT NULL DEFAULT '' COMMENT '표시명',
+    default_ability VARCHAR(40) NOT NULL DEFAULT 'EGO_BALANCE' COMMENT '기본 에고 능력',
+    allowed_abilities VARCHAR(255) NOT NULL DEFAULT '' COMMENT '허용 능력 콤마 구분',
+    use_yn TINYINT(1) NOT NULL DEFAULT 1 COMMENT '에고 생성 허용 여부',
+    reg_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    mod_date DATETIME NULL DEFAULT NULL,
+    PRIMARY KEY (type2)
+) ENGINE=InnoDB DEFAULT CHARSET=euckr COLLATE=euckr_korean_ci COMMENT='에고 무기 타입/능력 허용 규칙';
+
+INSERT INTO ego_weapon_rule
+(type2, display_name, default_ability, allowed_abilities, use_yn)
+VALUES
+('dagger', '단검', 'EGO_BALANCE', 'EGO_BALANCE,BLOOD_DRAIN,MANA_DRAIN,CRITICAL_BURST,GUARDIAN_SHIELD,EXECUTION,FLAME_BRAND,EGO_COUNTER,EGO_REVENGE', 1),
+('sword', '한손검', 'EGO_BALANCE', 'EGO_BALANCE,BLOOD_DRAIN,MANA_DRAIN,CRITICAL_BURST,GUARDIAN_SHIELD,EXECUTION,FLAME_BRAND,EGO_COUNTER,EGO_REVENGE', 1),
+('tohandsword', '양손검', 'CRITICAL_BURST', 'EGO_BALANCE,BLOOD_DRAIN,CRITICAL_BURST,GUARDIAN_SHIELD,AREA_SLASH,EXECUTION,FLAME_BRAND,EGO_COUNTER,EGO_REVENGE', 1),
+('axe', '도끼', 'CRITICAL_BURST', 'EGO_BALANCE,BLOOD_DRAIN,CRITICAL_BURST,GUARDIAN_SHIELD,AREA_SLASH,EXECUTION,FLAME_BRAND,EGO_COUNTER,EGO_REVENGE', 1),
+('spear', '창', 'AREA_SLASH', 'EGO_BALANCE,BLOOD_DRAIN,CRITICAL_BURST,GUARDIAN_SHIELD,AREA_SLASH,FLAME_BRAND,FROST_BIND,EGO_COUNTER,EGO_REVENGE', 1),
+('bow', '활', 'EGO_BALANCE', 'EGO_BALANCE,CRITICAL_BURST,GUARDIAN_SHIELD,FROST_BIND,EGO_COUNTER,EGO_REVENGE', 1),
+('staff', '지팡이', 'MANA_DRAIN', 'EGO_BALANCE,MANA_DRAIN,GUARDIAN_SHIELD,FLAME_BRAND,FROST_BIND,EGO_COUNTER,EGO_REVENGE', 1),
+('wand', '완드', 'MANA_DRAIN', 'EGO_BALANCE,MANA_DRAIN,GUARDIAN_SHIELD,FLAME_BRAND,FROST_BIND,EGO_COUNTER,EGO_REVENGE', 1),
+('fishing_rod', '낚싯대', 'EGO_BALANCE', '', 0)
+ON DUPLICATE KEY UPDATE
+    display_name = VALUES(display_name),
+    default_ability = VALUES(default_ability),
+    allowed_abilities = VALUES(allowed_abilities),
+    use_yn = VALUES(use_yn);
+
+-- ------------------------------------------------------------
+-- 5. 기존 ego.need_exp를 DB 경험치표 기준으로 보정
 -- ------------------------------------------------------------
 UPDATE ego e
 INNER JOIN ego_level_exp x ON e.ego_lv = x.ego_lv
@@ -134,12 +167,13 @@ WHERE x.use_yn = 1;
 UPDATE ego SET need_exp = 0, ego_exp = 0 WHERE ego_lv >= 10;
 
 -- ------------------------------------------------------------
--- 5. 확인
+-- 6. 확인
 -- ------------------------------------------------------------
-SELECT 'EGO_DB_CONFIG_LEVEL_BONUS_OK' AS result;
+SELECT 'EGO_DB_CONFIG_LEVEL_BONUS_WEAPON_RULE_OK' AS result;
 SELECT * FROM ego_config ORDER BY config_key;
 SELECT * FROM ego_level_exp ORDER BY ego_lv;
 SELECT * FROM ego_level_bonus ORDER BY ego_lv;
+SELECT * FROM ego_weapon_rule ORDER BY type2;
 SELECT ego_lv, need_exp, COUNT(*) AS count
 FROM ego
 GROUP BY ego_lv, need_exp
