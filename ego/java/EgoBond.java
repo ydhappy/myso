@@ -80,10 +80,24 @@ public final class EgoBond {
         add(weapon, 2, "COUNTER");
     }
 
+    /** 에고삭제 시 유대감도 완전삭제. */
     public static void delete(ItemInstance weapon) {
         if (weapon == null)
             return;
         bondMap.remove(weapon.getObjectId());
+        talkDelayMap.remove(weapon.getObjectId());
+
+        Connection con = null;
+        PreparedStatement st = null;
+        try {
+            con = DatabaseConnection.getLineage();
+            st = con.prepareStatement("DELETE FROM ego_bond WHERE item_id=?");
+            st.setLong(1, weapon.getObjectId());
+            st.executeUpdate();
+        } catch (Exception e) {
+        } finally {
+            DatabaseConnection.close(con, st);
+        }
     }
 
     private static void add(ItemInstance weapon, int add, String reason) {
