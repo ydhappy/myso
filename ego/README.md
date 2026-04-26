@@ -14,6 +14,7 @@ type2 변형 없음
 명령어가 아닌 자연대화도 반응
 드라마/영화/웹툰 등 장르별 오리지널 대사 지원
 장르목록/대사추천/스팸방지 보강 완료
+주요 수치/경험치/전투 보너스/무기 규칙 DB화 완료
 ```
 
 ---
@@ -39,10 +40,16 @@ EgoCombat 없음
 ## 2. DB 최종 테이블
 
 ```text
-ego
-ego_skill
-ego_skill_base
-ego_log
+ego                      에고 기본 정보
+ego_skill                에고 무기별 능력
+ego_skill_base           에고 스킬 기본 발동률/쿨타임/이펙트
+ego_log                  에고 전투 로그
+ego_bond                 에고 유대감
+ego_talk_pack            에고 장르/자연대화 DB 대사팩
+ego_config               에고 공통 설정값
+ego_level_exp            에고 레벨별 필요 경험치
+ego_level_bonus          에고 레벨별 전투 보너스
+ego_weapon_rule          에고 무기 타입/능력 허용 규칙
 ```
 
 `ego.ego_type`은 현재 성격 테이블이 아니라 실시간 대화 말투 저장소로 사용합니다.
@@ -52,21 +59,42 @@ ego_log
 예의반대  건방진 반말/도발형
 ```
 
-기존 설치 서버 정리/보정:
+---
 
-```sql
-SOURCE ego/sql/ego_cleanup_unused.sql;
-```
+## 3. SQL 적용
 
-신규 설치:
+### 신규 서버
+
+본설치 SQL 하나만 실행하면 됩니다.
 
 ```sql
 SOURCE ego/sql/ego_install_euckr.sql;
 ```
 
+### 기존 서버
+
+기존 서버는 정리/보정 후 DB화 보강 SQL을 실행합니다.
+
+```sql
+SOURCE ego/sql/ego_cleanup_unused.sql;
+SOURCE ego/sql/ego_db_config.sql;
+```
+
+대사팩 중복이 의심되면 추가 실행합니다.
+
+```sql
+SOURCE ego/sql/ego_talk_pack_dedupe.sql;
+```
+
+### 서버 내 즉시 반영
+
+```text
+.에고리로드
+```
+
 ---
 
-## 3. Java 연결
+## 4. Java 연결
 
 ### 서버 시작 DB 로드
 
@@ -92,6 +120,14 @@ if (o instanceof PcInstance && !(o instanceof RobotInstance)) {
         return;
     }
 }
+```
+
+### 자동 상황 대사 연결
+
+서버 루프 또는 캐릭터 AI/상태 갱신 루프에서 주기적으로 호출합니다.
+
+```java
+EgoTalk.warning(pc);
 ```
 
 ### DamageController 공격 훅
@@ -125,7 +161,7 @@ o.setNowHp(o.getNowHp() - dmg);
 
 ---
 
-## 4. 명령어
+## 5. 명령어
 
 ```text
 .에고도움
@@ -147,11 +183,16 @@ o.setNowHp(o.getNowHp() - dmg);
 ego 삭제
 ego_skill 삭제
 ego_log 삭제
+ego_bond 삭제
 ```
 
 삭제 후 복구할 수 없습니다. 다시 사용하려면 `.에고생성 이름`으로 새로 생성해야 합니다.
 
-일반 채팅:
+---
+
+## 6. 일반채팅 대화
+
+기본 대화:
 
 ```text
 카르마 상태
@@ -207,181 +248,91 @@ ego_log 삭제
 
 ---
 
-## 5. 자연스러운 대화 구현
+## 7. DB화된 주요 설정
 
-명령어로 딱 떨어지지 않는 문장은 `EgoWeaponControlController.buildNaturalTalk(...)`에서 처리합니다.
-
-처리 범위:
+### ego_config
 
 ```text
-인사
-감사/칭찬
-사과
-피곤함/휴식
-불안/위험감
-잡담/심심함
-에고 정체성 질문
-성장/레벨/경험치 질문
-HP/MP/물약/회복 질문
-사냥/이동/계속 진행 질문
-앞 대화 이어말: 그래, 좋아, 왜, 그래서 등
-불평/짜증
-기타 자유문장
+genre_talk_delay_ms
+auto_talk_hp_warn_rate
+auto_talk_mp_warn_rate
+auto_talk_idle_hp_rate
+auto_talk_idle_mp_rate
+auto_talk_hp_warn_delay_ms
+auto_talk_mp_warn_delay_ms
+auto_talk_boss_warn_delay_ms
+auto_talk_idle_delay_ms
+attack_ego_exp
+attack_exp_delay_ms
+kill_ego_exp
+boss_kill_ego_exp
+exp_message_rate
+proc_message_delay_ms
+counter_unlock_level
+auto_counter_unlock_level
+auto_counter_cool_ms
+auto_counter_chance
+stun_level
+stun_success_rate
+stun_time
+stun_effect
+stun_cool_ms
+guardian_shield_hp_rate
+execution_target_hp_rate
+area_range
+area_max_target
 ```
 
-대화는 최근 주제를 1개 기억합니다.
+예시: 스턴 성공률 변경
+
+```sql
+UPDATE ego_config
+SET config_value='40', mod_date=NOW()
+WHERE config_key='stun_success_rate';
+```
+
+예시: 자동반격 해금 레벨 변경
+
+```sql
+UPDATE ego_config
+SET config_value='7', mod_date=NOW()
+WHERE config_key='auto_counter_unlock_level';
+```
+
+변경 후:
 
 ```text
-상태 확인 후 "그래" → 상태 흐름으로 이어서 대답
-조언 후 "왜" → 다시 조언 맥락으로 대답
-선공 확인 후 "그럼" → 선공 상태를 다시 확인
-공격 후 "좋아" → 공격 흐름 유지 안내
-멈춤 후 "그래" → 멈춤 상태 안내
+.에고리로드
 ```
 
-최근 주제는 메모리 맵에만 저장합니다.
+### ego_level_exp
 
-```java
-lastTopicMap
+에고 레벨별 필요 경험치를 DB에서 조정합니다.
+
+```sql
+UPDATE ego_level_exp
+SET need_exp=2000, mod_date=NOW()
+WHERE ego_lv=4;
 ```
 
-DB 컬럼은 추가하지 않습니다.
+### ego_level_bonus
 
----
+레벨별 전투 보너스를 DB에서 조정합니다.
 
-## 6. 장르별 대화 라이브러리
-
-장르 대화는 파일을 분리했습니다.
-
-```text
-EgoGenreTalk.java   장르별 오리지널 대사
-EgoGenreGuide.java  장르목록/대화추천 안내
+```sql
+UPDATE ego_level_bonus
+SET critical_chance=30, critical_damage=25, mod_date=NOW()
+WHERE ego_lv=10;
 ```
 
-지원 장르:
+### ego_weapon_rule
 
-```text
-드라마
-영화
-웹툰
-로맨스
-액션
-판타지
-무협
-공포
-코미디
-추리
-학원
-일상/힐링
-빌런/악역
-주인공/각성
-아무 대사
-```
+무기 타입별 기본 능력/허용 능력을 DB에서 조정합니다.
 
-실제 드라마/영화/웹툰 대사를 복사하지 않습니다. 모두 에고 전용 오리지널 분위기 대사입니다.
-
-처리 흐름:
-
-```text
-EgoTalk.chat()
-→ EgoGenreGuide.isGuideRequest(command)
-→ EgoGenreTalk.isGenreRequest(command)
-→ EgoGenreTalk.talk(pc, weapon, command)
-→ 매칭 없으면 EgoWeaponControlController.onNormalChat()
-```
-
-스팸 방지:
-
-```text
-장르대화 전용 딜레이: 1200ms
-연속 입력 시 채팅은 주변에 방송하지 않고 소비
-```
-
-예의 예시:
-
-```text
-카르마 장르목록
-→ 가능한 장르는 드라마, 영화, 웹툰, 로맨스, 액션, 판타지, 무협, 공포, 코미디, 추리, 학원, 일상/힐링, 빌런, 주인공각성입니다.
-
-카르마 대화 추천
-→ 전투가 많다면 액션 또는 무협 대사가 잘 어울립니다.
-
-카르마 드라마 대사 해줘
-→ 상처가 남는 날도 있습니다. 그래도 검을 쥔 손이 멈추지 않는다면 이야기는 끝나지 않습니다.
-
-카르마 영화 한마디
-→ 지금은 예고편이 아닙니다. 주인님의 선택이 곧 본편입니다.
-```
-
-예의반대 예시:
-
-```text
-카르마 장르목록
-→ 가능한 장르는 이거다: 드라마, 영화, 웹툰, 로맨스, 액션, 판타지, 무협, 공포, 코미디, 추리, 학원, 일상/힐링, 빌런, 주인공각성.
-
-카르마 대화 추천
-→ 오늘은 액션이나 무협으로 가라. 멍때리는 분위기는 아니니까.
-
-카르마 드라마 대사 해줘
-→ 드라마 찍냐? 그래도 주인공이면 끝까지 서 있어야지.
-
-카르마 영화 한마디
-→ 엔딩 크레딧 보고 싶으면 지금 죽지 마라.
-```
-
----
-
-## 7. 실시간 대화 말투 2종
-
-### 예의
-
-공손한 존댓말입니다. 기본 생성 말투입니다.
-
-```text
-카르마 안녕
-→ 어서 오십시오, 주인님. 오늘도 곁에서 전투 흐름을 살피겠습니다.
-
-카르마 고마워
-→ 도움이 되었다니 다행입니다. 계속 주인님의 흐름을 보조하겠습니다.
-
-카르마 무서워
-→ 위험합니다. 지금은 대화보다 회복과 거리 확보가 우선입니다.
-
-카르마 심심해
-→ 대화는 가능합니다. 다만 전투 중이면 제 말보다 발밑을 먼저 보십시오.
-
-카르마 너 누구야
-→ 저는 주인님의 무기에 깃든 에고입니다. 전투 상황을 읽고, 성장하며, 필요할 때 조언과 보조능력을 발동합니다.
-```
-
-### 예의반대
-
-건방진 반말/도발형입니다. 욕설 없이 거친 반응만 사용합니다.
-
-```text
-카르마 안녕
-→ 왔냐, 주인님. 늦지는 않았네.
-
-카르마 고마워
-→ 이제야 내 가치를 알아보네. 그래, 계속 잘 써먹어.
-
-카르마 무서워
-→ 진짜 위험하다. 말 그만하고 피부터 채워.
-
-카르마 심심해
-→ 심심하면 몹이나 찾아. 나는 말동무도 되지만 장식품은 아니다.
-
-카르마 너 누구야
-→ 나는 네 무기에 깃든 에고다. 네 전투를 보고, 판단하고, 가끔 네 목숨도 건져주는 존재지.
-```
-
-변경 방법:
-
-```text
-.에고말투 예의
-.에고말투 예의반대
-카르마 말투 예의
-카르마 말투 예의반대
+```sql
+UPDATE ego_weapon_rule
+SET allowed_abilities='EGO_BALANCE,CRITICAL_BURST,GUARDIAN_SHIELD,EGO_COUNTER,EGO_REVENGE', mod_date=NOW()
+WHERE type2='bow';
 ```
 
 ---
@@ -395,7 +346,7 @@ EgoTalk.chat()
 강화된 무기도 생성 가능
 ```
 
-지원 type2:
+기본 지원 type2:
 
 ```text
 dagger
@@ -408,30 +359,22 @@ staff
 wand
 ```
 
----
+제외 type2:
 
-## 9. 이름 표시 규칙
-
-에고 코드에서 무기명을 보여줄 때는 직접 `weapon.getName()`을 쓰지 말고 아래를 사용합니다.
-
-```java
-EgoView.displayName(weapon)
+```text
+fishing_rod
 ```
 
-인벤토리 표식용 이름은 아래를 사용합니다.
-
-```java
-EgoView.name(item, baseName)
-```
+무기 규칙은 `ego_weapon_rule`에서 변경 가능합니다.
 
 ---
 
-## 10. 에고 경험치 / 레벨업
+## 9. 에고 경험치 / 레벨업
 
 ```text
 생성 시 레벨: 0
 생성 시 경험치: 0
-생성 시 필요 경험치: 100
+생성 시 필요 경험치: ego_level_exp.ego_lv=0 기준
 최대 레벨: 10
 ```
 
@@ -445,7 +388,7 @@ Lv.0 규칙:
 스턴 없음
 ```
 
-레벨별 필요 경험치:
+기본 레벨별 필요 경험치:
 
 ```text
 Lv.0 -> Lv.1  : 100
@@ -461,116 +404,85 @@ Lv.9 -> Lv.10 : 10,000 스턴 50% 개방
 Lv.10         : 0       만렙
 ```
 
-누적 필요 경험치:
-
-```text
-Lv.1  누적 100
-Lv.2  누적 350
-Lv.3  누적 850
-Lv.4  누적 1,750
-Lv.5  누적 3,250
-Lv.6  누적 5,650
-Lv.7  누적 9,250
-Lv.8  누적 14,450
-Lv.9  누적 21,950
-Lv.10 누적 31,950
-```
-
-경험치 획득:
+경험치 획득 기본값:
 
 ```text
 공격 중 3초마다 +1
-몬스터 처치 hook 연결 시 +5
-보스 처치 hook 연결 시 +55
+몬스터 처치 +5
+보스 처치 추가 +50
 ```
 
-레벨업:
-
-```text
-현재 경험치 >= 현재 레벨 필요 경험치 → 레벨 +1
-남은 경험치 이월
-다음 필요 경험치는 고정 경험치표에서 자동 적용
-최대 Lv.10 도달 시 경험치 0 / 필요 경험치 0 고정
-```
+위 수치는 `ego_config`에서 변경 가능합니다.
 
 ---
 
-## 11. 레벨별 전투 규칙
+## 10. 레벨별 전투 규칙
+
+레벨별 세부 수치는 `ego_level_bonus`에서 관리합니다.
 
 ```text
 Lv.0  모든 전투 능력 없음
-
 Lv.1  기본 에고 스킬/치명 보정 시작
-Lv.2  스킬 발동률 +1, 치명률 +2
-Lv.3  스킬 발동률 +2, 치명률 +3
-Lv.4  스킬 발동률 +3, 치명률 +4
-
-Lv.5  피격 시 확률 반격 시작
-      반격 공격성공/공격력/치명타 보정 시작
-      PC 대상 포함
-
-Lv.6  피격 시 자동반격 시작
-      PC 대상 포함
-
-Lv.7  자동반격 강화
-Lv.8  자동반격/치명 강화
-Lv.9  자동반격/치명 강화
-
-Lv.10 최대 레벨
-      스턴 스킬 50% 성공
-      공격/반격 시 스턴 시도
-      PC 대상 포함
+Lv.5  피격 반격 시작
+Lv.6  자동반격 시작
+Lv.10 스턴 시도
 ```
 
-세부 수치표는 `EgoWeaponAbilityController` 내부 배열 기준입니다.
+전투 공식 주요 기준:
 
-```java
-LEVEL_PROC_BONUS
-LEVEL_CRITICAL_CHANCE
-LEVEL_CRITICAL_DAMAGE
-LEVEL_COUNTER_CHANCE
-LEVEL_COUNTER_POWER
-LEVEL_COUNTER_CRITICAL
+```text
+스킬 발동률 = ego_skill_base.base_rate + 레벨 보정 + ego_skill.rate_bonus
+레벨 보정 = ego_level_bonus.proc_bonus
+치명률 보정 = ego_level_bonus.critical_chance
+치명 피해 보정 = ego_level_bonus.critical_damage
+반격 확률 = ego_level_bonus.counter_chance
+반격 피해 = ego_level_bonus.counter_power
+반격 치명 = ego_level_bonus.counter_critical
 ```
 
 ---
 
-## 12. 에고 능력 계산
+## 11. 장르별 대화 라이브러리
 
-`ego_skill_base` 기본 공식:
+장르 대화는 파일과 DB를 함께 사용합니다.
 
 ```text
-발동률 = base_rate + (레벨 - 1) * lv_rate + ego_skill.rate_bonus + 레벨별 보너스
+EgoGenreTalk.java   Java fallback 오리지널 대사
+EgoGenreGuide.java  장르목록/대화추천 안내
+EgoTalkPack.java    ego_talk_pack DB 대사팩
 ```
 
-Lv.0은 공식 계산 전에 차단됩니다.
+처리 흐름:
 
 ```text
-Lv.0이면 발동률 0
+EgoTalk.chat()
+→ EgoGenreGuide.isGuideRequest(command)
+→ EgoTalkPack.find(pc, weapon, command)
+→ EgoGenreTalk.talk(pc, weapon, command)
+→ 매칭 없으면 EgoWeaponControlController.onNormalChat()
 ```
 
-치명 능력:
+스팸 방지:
 
 ```text
-CRITICAL_BURST는 Lv.1부터 치명 보정 적용
-레벨이 오를수록 치명 발동률/치명 추가피해 증가
+장르대화 전용 딜레이: ego_config.genre_talk_delay_ms
+연속 입력 시 채팅은 주변에 방송하지 않고 소비
 ```
 
-반격:
+---
 
-```text
-Lv.5부터 EGO_COUNTER 사용
-Lv.6부터 EGO_AUTO_COUNTER 사용
-Lv.10부터 EGO_STUN 시도
+## 12. 이름 표시 규칙
+
+에고 코드에서 무기명을 보여줄 때는 직접 `weapon.getName()`을 쓰지 말고 아래를 사용합니다.
+
+```java
+EgoView.displayName(weapon)
 ```
 
-스턴:
+인벤토리 표식용 이름은 아래를 사용합니다.
 
-```text
-Lv.10 전용
-성공률 50%
-쿨타임 6000ms
-ShockStun 버프 재사용
+```java
+EgoView.name(item, baseName)
 ```
 
 ---
@@ -580,6 +492,7 @@ ShockStun 버프 재사용
 ```text
 짧은 답변 → 본인에게만 보이는 말풍선
 긴 답변/커맨드 결과 → egoletter 편지창
+장르/감성 대사 → EgoMessageUtil.genre()
 ```
 
 HTML 템플릿:
@@ -613,32 +526,20 @@ LIMIT 50;
 
 ---
 
-## 15. 컴파일
+## 15. 참고 문서
 
-```bash
-javac -encoding UTF-8 -source 1.8 -target 1.8
+```text
+ego/docs/EGO_DBIZATION.md
+ego/docs/EGO_IMPLEMENTED_NO_TEST_COMMANDS.md
+ego/docs/EGO_SUGGESTIONS.md
 ```
 
 ---
 
-## 16. 보강/확장 제안 문서
+## 16. 컴파일
 
-추가 제안은 아래 문서에 정리했습니다.
-
-```text
-ego/docs/EGO_SUGGESTIONS.md
-```
-
-포함 내용:
-
-```text
-DB 대사팩화
-호감도/유대감 시스템
-상황별 자동 대사
-대사 반복 방지
-성격 확장
-클라이언트 색상 표시 강화
-운영자 테스트 명령
+```bash
+javac -encoding UTF-8 -source 1.8 -target 1.8
 ```
 
 ---
@@ -653,16 +554,20 @@ DB 대사팩화
 [확인] 실시간 대화 예의/예의반대 2종
 [확인] 명령어가 아닌 자연대화 반응
 [확인] 드라마/영화/웹툰 등 장르별 대화 라이브러리
+[확인] DB 대사팩 ego_talk_pack
 [확인] 장르목록/대사목록/대화추천 안내
-[확인] 장르대화 스팸 방지 1200ms
+[확인] 장르대화 스팸 방지 DB화
 [확인] 최근 주제 1개 기억 후 이어말 처리
 [확인] .에고말투 예의 / .에고말투 예의반대
 [확인] 일반채팅 말투 변경
-[확인] 레벨별 고정 경험치표 적용
+[확인] 레벨별 경험치 DB화
+[확인] 레벨별 전투 보너스 DB화
+[확인] 주요 전투 설정 ego_config DB화
+[확인] 무기 타입/능력 허용 규칙 DB화
 [확인] 만렙 Lv.10 경험치 0 / 필요 경험치 0 고정
 [확인] Lv.5부터 피격 반격/공격성공/공격력/치명 보정
 [확인] Lv.6부터 피격 자동반격
-[확인] Lv.10 스턴 50% 성공
+[확인] Lv.10 스턴 기본 50% 성공
 [확인] PC 대상 포함
 [확인] .에고삭제 확인 완전삭제
 [확인] type2 변형 없음
