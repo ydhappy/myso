@@ -24,6 +24,7 @@ public final class EgoMessageUtil {
     public static final String COLOR_DANGER = "\fR";
     public static final String COLOR_INFO = "\fS";
     public static final String COLOR_WHITE = "\fW";
+    public static final String COLOR_GENRE = "\fU";
 
     private static final String PREFIX = "[에고] ";
     private static final int BUBBLE_MAX_LENGTH = 72;
@@ -42,6 +43,11 @@ public final class EgoMessageUtil {
 
     public static void info(PcInstance pc, String message) {
         reply(pc, COLOR_INFO, message);
+    }
+
+    /** 장르/감성 대사용 색상. 클라이언트가 \fU를 지원하지 않으면 일반색처럼 표시된다. */
+    public static void genre(PcInstance pc, String message) {
+        reply(pc, COLOR_GENRE, message);
     }
 
     /** 짧으면 말풍선, 길면 편지형 HTML로 출력. */
