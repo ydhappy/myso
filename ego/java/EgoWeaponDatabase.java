@@ -223,9 +223,9 @@ public final class EgoWeaponDatabase {
             con = DatabaseConnection.getLineage();
             st = con.prepareStatement(
                 "INSERT INTO ego " +
-                "(item_id, char_id, use_yn, ego_name, ego_type, ego_lv, ego_exp, need_exp, talk_lv, ctrl_lv, last_talk, last_warn) " +
-                "VALUES (?, ?, 1, ?, ?, 0, 0, ?, 1, 1, 0, 0) " +
-                "ON DUPLICATE KEY UPDATE char_id=?, use_yn=1, ego_name=?, ego_type=?, ego_lv=0, ego_exp=0, need_exp=?"
+                "(item_id, char_id, use_yn, ego_name, ego_type, ego_lv, ego_exp, need_exp, talk_lv, ctrl_lv, last_talk, last_warn, bond, bond_reason) " +
+                "VALUES (?, ?, 1, ?, ?, 0, 0, ?, 1, 1, 0, 0, 0, '') " +
+                "ON DUPLICATE KEY UPDATE char_id=?, use_yn=1, ego_name=?, ego_type=?, ego_lv=0, ego_exp=0, need_exp=?, bond=0, bond_reason=''"
             );
             st.setLong(1, item.getObjectId());
             st.setLong(2, pc.getObjectId());
