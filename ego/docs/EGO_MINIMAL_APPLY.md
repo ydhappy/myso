@@ -6,6 +6,7 @@
 DB 실행 파일 최소화
 Java 기존 서버 연결 지점 최소화
 초보자도 순서대로 적용 가능
+테이블/컬럼/메서드 연결성 추적 가능
 ```
 
 ---
@@ -69,6 +70,13 @@ EgoCore.java
 
 내부 구현 파일은 많지만 기존 서버에는 `EgoCore`만 연결하면 됩니다.
 
+보조 Facade:
+
+```text
+EgoDb.java      DB 접근 짧은 이름 Facade
+EgoSchema.java  테이블/컬럼 연결성 검증기
+```
+
 ---
 
 ## 3. 서버 시작 연결
@@ -90,6 +98,8 @@ EgoCore.init(con);
 ```java
 EgoCore.reload(con);
 ```
+
+`EgoCore.init/reload`는 내부에서 `EgoSchema.silentCheck(con)`를 먼저 호출하고, 이후 DB 캐시를 로드합니다.
 
 ---
 
@@ -207,6 +217,13 @@ HP 감소 직전에만 에고 반격/방어 보정을 넣습니다.
 EgoCore.java
 ```
 
+### 연결성/Facade 그룹
+
+```text
+EgoDb.java
+EgoSchema.java
+```
+
 ### DB/설정 그룹
 
 ```text
@@ -266,16 +283,19 @@ ego_talk_pack_dedupe.sql
 
 ---
 
-## 11. 적용 후 확인
+## 11. 연결성 점검
 
-게임 안에서:
+Java에서 직접 확인:
+
+```java
+boolean ok = EgoCore.schemaOk(con);
+String report = EgoCore.schemaReport(con);
+```
+
+연결성 상세 문서:
 
 ```text
-.에고리로드
-.에고도움
-.에고생성 카르마
-카르마 상태
-카르마 장르목록
+ego/docs/EGO_CONNECTIVITY_MAP.md
 ```
 
 DB 확인:
@@ -290,11 +310,27 @@ SELECT * FROM ego_weapon_rule ORDER BY type2;
 
 ---
 
-## 12. 현재 최소화 결론
+## 12. 적용 후 확인
+
+게임 안에서:
+
+```text
+.에고리로드
+.에고도움
+.에고생성 카르마
+카르마 상태
+카르마 장르목록
+```
+
+---
+
+## 13. 현재 최소화 결론
 
 ```text
 DB 실행 파일: 신규 1개 / 기존 1개
 기존 Java 연결 클래스: EgoCore 1개
+DB 접근 Facade: EgoDb 1개
+DB-자바 연결성 검증: EgoSchema 1개
 실제 구현 Java 파일: 기능별 public class 제약 때문에 보존
 문서 기준 적용 난이도: 기존보다 낮음
 ```
