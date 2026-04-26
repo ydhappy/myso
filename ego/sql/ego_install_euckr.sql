@@ -7,6 +7,7 @@
 --   ego / ego_skill / ego_skill_base / ego_log
 --   ego_bond / ego_talk_pack
 --   ego_config / ego_level_exp / ego_level_bonus / ego_weapon_rule
+--   ego_level / ego.bond / ego.bond_reason 병합 구조
 -- ============================================================
 
 SET NAMES utf8;
@@ -27,12 +28,15 @@ CREATE TABLE IF NOT EXISTS ego (
     ctrl_lv INT NOT NULL DEFAULT 1 COMMENT '제어 단계',
     last_talk BIGINT NOT NULL DEFAULT 0 COMMENT '마지막 대화 시간',
     last_warn BIGINT NOT NULL DEFAULT 0 COMMENT '마지막 경고 시간',
+    bond INT NOT NULL DEFAULT 0 COMMENT '에고 유대감 0~1000',
+    bond_reason VARCHAR(40) NOT NULL DEFAULT '' COMMENT '마지막 유대감 증가 사유',
     reg_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '생성일',
     mod_date DATETIME NULL DEFAULT NULL COMMENT '수정일',
     PRIMARY KEY (item_id),
     INDEX ego_char_idx (char_id),
     INDEX ego_name_idx (ego_name),
-    INDEX ego_lv_idx (ego_lv)
+    INDEX ego_lv_idx (ego_lv),
+    INDEX ego_bond_idx (bond)
 ) ENGINE=InnoDB DEFAULT CHARSET=euckr COLLATE=euckr_korean_ci COMMENT='에고무기 기본 정보';
 
 CREATE TABLE IF NOT EXISTS ego_skill (
@@ -110,7 +114,7 @@ CREATE TABLE IF NOT EXISTS ego_log (
 ) ENGINE=InnoDB DEFAULT CHARSET=euckr COLLATE=euckr_korean_ci COMMENT='에고 능력 발동 기록';
 
 -- ============================================================
--- 2. 유대감 / 대사팩
+-- 2. 구버전 호환 유대감 / 대사팩
 -- ============================================================
 CREATE TABLE IF NOT EXISTS ego_bond (
     item_id BIGINT NOT NULL COMMENT '에고무기 아이템 objectId',
@@ -120,7 +124,7 @@ CREATE TABLE IF NOT EXISTS ego_bond (
     mod_date DATETIME NULL DEFAULT NULL COMMENT '수정일',
     PRIMARY KEY (item_id),
     INDEX ego_bond_idx (bond)
-) ENGINE=InnoDB DEFAULT CHARSET=euckr COLLATE=euckr_korean_ci COMMENT='에고 유대감';
+) ENGINE=InnoDB DEFAULT CHARSET=euckr COLLATE=euckr_korean_ci COMMENT='에고 유대감 구버전 호환';
 
 CREATE TABLE IF NOT EXISTS ego_talk_pack (
     id BIGINT NOT NULL AUTO_INCREMENT,
@@ -149,7 +153,7 @@ INSERT INTO ego_talk_pack (genre, tone, keyword, message, use_yn) VALUES
 ON DUPLICATE KEY UPDATE message = message;
 
 -- ============================================================
--- 3. 공통 설정 / 경험치 / 전투 보너스 / 무기 규칙
+-- 3. 공통 설정 / 통합 레벨 / 무기 규칙
 -- ============================================================
 CREATE TABLE IF NOT EXISTS ego_config (
     config_key VARCHAR(80) NOT NULL COMMENT '설정 키',
@@ -192,32 +196,9 @@ INSERT INTO ego_config (config_key, config_value, memo, use_yn) VALUES
 ('area_max_target', '4', '광역 능력 최대 대상 수', 1)
 ON DUPLICATE KEY UPDATE memo = VALUES(memo), use_yn = VALUES(use_yn);
 
-CREATE TABLE IF NOT EXISTS ego_level_exp (
-    ego_lv INT NOT NULL COMMENT '현재 에고 레벨 0~10',
-    need_exp BIGINT NOT NULL DEFAULT 0 COMMENT '다음 레벨 필요 경험치, Lv.10은 0',
-    memo VARCHAR(255) NOT NULL DEFAULT '' COMMENT '설명',
-    use_yn TINYINT(1) NOT NULL DEFAULT 1 COMMENT '사용 여부',
-    reg_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '생성일',
-    mod_date DATETIME NULL DEFAULT NULL COMMENT '수정일',
-    PRIMARY KEY (ego_lv)
-) ENGINE=InnoDB DEFAULT CHARSET=euckr COLLATE=euckr_korean_ci COMMENT='에고 레벨별 필요 경험치';
-
-INSERT INTO ego_level_exp (ego_lv, need_exp, memo, use_yn) VALUES
-(0, 100, 'Lv.0 -> Lv.1 기본 스킬/치명 개방', 1),
-(1, 250, 'Lv.1 -> Lv.2', 1),
-(2, 500, 'Lv.2 -> Lv.3', 1),
-(3, 900, 'Lv.3 -> Lv.4', 1),
-(4, 1500, 'Lv.4 -> Lv.5 피격 반격 개방', 1),
-(5, 2400, 'Lv.5 -> Lv.6 자동반격 개방', 1),
-(6, 3600, 'Lv.6 -> Lv.7', 1),
-(7, 5200, 'Lv.7 -> Lv.8', 1),
-(8, 7500, 'Lv.8 -> Lv.9', 1),
-(9, 10000, 'Lv.9 -> Lv.10 스턴 50% 개방', 1),
-(10, 0, 'Lv.10 만렙', 1)
-ON DUPLICATE KEY UPDATE memo = VALUES(memo), use_yn = VALUES(use_yn);
-
-CREATE TABLE IF NOT EXISTS ego_level_bonus (
+CREATE TABLE IF NOT EXISTS ego_level (
     ego_lv INT NOT NULL COMMENT '에고 레벨 0~10',
+    need_exp BIGINT NOT NULL DEFAULT 0 COMMENT '다음 레벨 필요 경험치',
     proc_bonus INT NOT NULL DEFAULT 0 COMMENT '스킬 발동률 추가',
     critical_chance INT NOT NULL DEFAULT 0 COMMENT '치명 발동률 추가',
     critical_damage INT NOT NULL DEFAULT 0 COMMENT '치명 추가 피해',
@@ -229,22 +210,22 @@ CREATE TABLE IF NOT EXISTS ego_level_bonus (
     reg_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     mod_date DATETIME NULL DEFAULT NULL,
     PRIMARY KEY (ego_lv)
-) ENGINE=InnoDB DEFAULT CHARSET=euckr COLLATE=euckr_korean_ci COMMENT='에고 레벨별 전투 보너스';
+) ENGINE=InnoDB DEFAULT CHARSET=euckr COLLATE=euckr_korean_ci COMMENT='에고 레벨 통합 설정';
 
-INSERT INTO ego_level_bonus
-(ego_lv, proc_bonus, critical_chance, critical_damage, counter_chance, counter_power, counter_critical, memo, use_yn)
+INSERT INTO ego_level
+(ego_lv, need_exp, proc_bonus, critical_chance, critical_damage, counter_chance, counter_power, counter_critical, memo, use_yn)
 VALUES
-(0, 0, 0, 0, 0, 0, 0, 'Lv.0 전투능력 없음', 1),
-(1, 0, 1, 1, 0, 0, 0, 'Lv.1 기본 치명 시작', 1),
-(2, 1, 2, 2, 0, 0, 0, 'Lv.2', 1),
-(3, 2, 3, 3, 0, 0, 0, 'Lv.3', 1),
-(4, 3, 4, 4, 0, 0, 0, 'Lv.4', 1),
-(5, 4, 6, 6, 35, 18, 8, 'Lv.5 피격 반격 시작', 1),
-(6, 6, 9, 8, 100, 24, 12, 'Lv.6 자동반격 시작', 1),
-(7, 8, 12, 10, 100, 30, 16, 'Lv.7', 1),
-(8, 10, 15, 12, 100, 38, 20, 'Lv.8', 1),
-(9, 12, 18, 15, 100, 46, 25, 'Lv.9', 1),
-(10, 15, 25, 20, 100, 60, 35, 'Lv.10 스턴 연동', 1)
+(0, 100, 0, 0, 0, 0, 0, 0, 'Lv.0 전투능력 없음', 1),
+(1, 250, 0, 1, 1, 0, 0, 0, 'Lv.1 기본 치명 시작', 1),
+(2, 500, 1, 2, 2, 0, 0, 0, 'Lv.2', 1),
+(3, 900, 2, 3, 3, 0, 0, 0, 'Lv.3', 1),
+(4, 1500, 3, 4, 4, 0, 0, 0, 'Lv.4', 1),
+(5, 2400, 4, 6, 6, 35, 18, 8, 'Lv.5 피격 반격 시작', 1),
+(6, 3600, 6, 9, 8, 100, 24, 12, 'Lv.6 자동반격 시작', 1),
+(7, 5200, 8, 12, 10, 100, 30, 16, 'Lv.7', 1),
+(8, 7500, 10, 15, 12, 100, 38, 20, 'Lv.8', 1),
+(9, 10000, 12, 18, 15, 100, 46, 25, 'Lv.9', 1),
+(10, 0, 15, 25, 20, 100, 60, 35, 'Lv.10 스턴 연동', 1)
 ON DUPLICATE KEY UPDATE memo = VALUES(memo), use_yn = VALUES(use_yn);
 
 CREATE TABLE IF NOT EXISTS ego_weapon_rule (
@@ -277,20 +258,18 @@ ON DUPLICATE KEY UPDATE
     use_yn = VALUES(use_yn);
 
 UPDATE ego e
-INNER JOIN ego_level_exp x ON e.ego_lv = x.ego_lv
-SET e.need_exp = x.need_exp
-WHERE x.use_yn = 1;
+INNER JOIN ego_level l ON e.ego_lv = l.ego_lv
+SET e.need_exp = l.need_exp
+WHERE l.use_yn = 1;
 
 UPDATE ego SET need_exp = 0, ego_exp = 0 WHERE ego_lv >= 10;
 
-SELECT 'EGO_INSTALL_OK_EUCKR_FULL_DBIZED' AS result;
+SELECT 'EGO_INSTALL_OK_EUCKR_MERGED_SCHEMA' AS result;
 SHOW TABLES LIKE 'ego';
 SHOW TABLES LIKE 'ego_skill';
 SHOW TABLES LIKE 'ego_skill_base';
 SHOW TABLES LIKE 'ego_log';
-SHOW TABLES LIKE 'ego_bond';
 SHOW TABLES LIKE 'ego_talk_pack';
 SHOW TABLES LIKE 'ego_config';
-SHOW TABLES LIKE 'ego_level_exp';
-SHOW TABLES LIKE 'ego_level_bonus';
+SHOW TABLES LIKE 'ego_level';
 SHOW TABLES LIKE 'ego_weapon_rule';
