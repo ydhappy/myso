@@ -29,13 +29,17 @@ public final class EgoTalk {
     public static boolean chat(PcInstance pc, String msg) {
         if (tryGenreTalk(pc, msg))
             return true;
-        return EgoWeaponControlController.onNormalChat(pc, msg);
+        boolean handled = EgoWeaponControlController.onNormalChat(pc, msg);
+        if (handled)
+            addTalkBond(pc);
+        return handled;
     }
 
     /**
      * 자동 경고 체크.
      */
     public static void warning(PcInstance pc) {
+        EgoAutoTalk.warning(pc);
         EgoWeaponControlController.checkAutoWarning(pc);
     }
 
@@ -63,10 +67,14 @@ public final class EgoTalk {
         if (EgoGenreGuide.isGuideRequest(command)) {
             if (!checkGenreDelay(pc))
                 return EgoMessageUtil.consumeNormalChat();
+            String guide;
             if (command.indexOf("추천") >= 0)
-                EgoMessageUtil.normal(pc, EgoGenreGuide.suggest(weapon));
+                guide = EgoGenreGuide.suggest(weapon);
             else
-                EgoMessageUtil.normal(pc, EgoGenreGuide.guide(weapon));
+                guide = EgoGenreGuide.guide(weapon);
+            EgoTalkHistory.remember(pc, guide);
+            EgoMessageUtil.info(pc, guide);
+            EgoBond.addTalk(pc, weapon);
             return EgoMessageUtil.consumeNormalChat();
         }
 
@@ -76,12 +84,29 @@ public final class EgoTalk {
         if (!checkGenreDelay(pc))
             return EgoMessageUtil.consumeNormalChat();
 
-        String answer = EgoGenreTalk.talk(pc, weapon, command);
+        String answer = EgoTalkPack.find(pc, weapon, command);
+        if (answer == null || answer.length() == 0)
+            answer = EgoGenreTalk.talk(pc, weapon, command);
         if (answer == null || answer.length() == 0)
             return false;
 
-        EgoMessageUtil.normal(pc, answer);
+        // Java 기본 대사까지 최소 반복 억제: 같은 문장이 바로 반복되면 기억 목록에 저장만 하고 출력한다.
+        EgoTalkHistory.remember(pc, answer);
+        EgoMessageUtil.genre(pc, answer);
+        EgoBond.addTalk(pc, weapon);
         return EgoMessageUtil.consumeNormalChat();
+    }
+
+    private static void addTalkBond(PcInstance pc) {
+        if (pc == null)
+            return;
+        Inventory inv = pc.getInventory();
+        if (inv == null)
+            return;
+        ItemInstance weapon = inv.getSlot(Lineage.SLOT_WEAPON);
+        if (weapon == null || !EgoWeaponDatabase.isEgoWeapon(weapon))
+            return;
+        EgoBond.addTalk(pc, weapon);
     }
 
     private static String extractCommand(String text, String egoName) {
