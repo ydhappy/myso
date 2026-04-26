@@ -23,10 +23,6 @@ import lineage.world.object.instance.RobotInstance;
 public final class EgoAutoTalk {
 
     private static final String TONE_RUDE = "예의반대";
-    private static final long HP_WARN_DELAY_MS = 15000L;
-    private static final long MP_WARN_DELAY_MS = 20000L;
-    private static final long IDLE_TALK_DELAY_MS = 180000L;
-    private static final long BOSS_WARN_DELAY_MS = 30000L;
 
     private static final Map<String, Long> delayMap = new ConcurrentHashMap<String, Long>();
 
@@ -49,7 +45,12 @@ public final class EgoAutoTalk {
         int hpRate = pc.getNowHp() * 100 / Math.max(1, pc.getTotalHp());
         int mpRate = pc.getNowMp() * 100 / Math.max(1, pc.getTotalMp());
 
-        if (hpRate <= 25 && check(pc, "HP", HP_WARN_DELAY_MS)) {
+        int hpWarnRate = EgoConfig.percent("auto_talk_hp_warn_rate", 25);
+        int mpWarnRate = EgoConfig.percent("auto_talk_mp_warn_rate", 15);
+        int idleHpRate = EgoConfig.percent("auto_talk_idle_hp_rate", 80);
+        int idleMpRate = EgoConfig.percent("auto_talk_idle_mp_rate", 50);
+
+        if (hpRate <= hpWarnRate && check(pc, "HP", EgoConfig.getLong("auto_talk_hp_warn_delay_ms", 15000L))) {
             EgoMessageUtil.danger(pc, phrase(tone,
                 "HP가 매우 낮습니다. 즉시 회복하거나 거리를 벌리십시오.",
                 "HP 진짜 낮다. 지금 물약 안 먹으면 눕는다."));
@@ -57,7 +58,7 @@ public final class EgoAutoTalk {
             return;
         }
 
-        if (mpRate <= 15 && check(pc, "MP", MP_WARN_DELAY_MS)) {
+        if (mpRate <= mpWarnRate && check(pc, "MP", EgoConfig.getLong("auto_talk_mp_warn_delay_ms", 20000L))) {
             EgoMessageUtil.info(pc, phrase(tone,
                 "MP가 부족합니다. 스킬 사용을 줄이고 회복 시간을 확보하십시오.",
                 "MP 바닥이다. 스킬 낭비 그만하고 숨 좀 돌려."));
@@ -65,14 +66,14 @@ public final class EgoAutoTalk {
         }
 
         MonsterInstance boss = findBoss(pc);
-        if (boss != null && check(pc, "BOSS", BOSS_WARN_DELAY_MS)) {
+        if (boss != null && check(pc, "BOSS", EgoConfig.getLong("auto_talk_boss_warn_delay_ms", 30000L))) {
             EgoMessageUtil.danger(pc, phrase(tone,
                 "보스급 기척이 감지됩니다. 대상: %s. 무리한 교전은 피하십시오.",
                 "보스급 %s 보인다. 객기 부리면 바로 눕는다.", getMonsterName(boss)));
             return;
         }
 
-        if (hpRate >= 80 && mpRate >= 50 && check(pc, "IDLE", IDLE_TALK_DELAY_MS)) {
+        if (hpRate >= idleHpRate && mpRate >= idleMpRate && check(pc, "IDLE", EgoConfig.getLong("auto_talk_idle_delay_ms", 180000L))) {
             EgoMessageUtil.genre(pc, phrase(tone,
                 "상태는 안정적입니다. 지금은 차분히 성장하기 좋은 흐름입니다.",
                 "상태 괜찮다. 지금은 무리만 안 하면 된다."));
