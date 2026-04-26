@@ -16,7 +16,7 @@ import lineage.world.object.instance.PcInstance;
  */
 public final class EgoTalk {
 
-    private static final long GENRE_TALK_DELAY_MS = 1200L;
+    private static final long DEFAULT_GENRE_TALK_DELAY_MS = 1200L;
     private static final Map<Long, Long> genreDelayMap = new ConcurrentHashMap<Long, Long>();
 
     private EgoTalk() {
@@ -90,7 +90,6 @@ public final class EgoTalk {
         if (answer == null || answer.length() == 0)
             return false;
 
-        // Java 기본 대사까지 최소 반복 억제: 같은 문장이 바로 반복되면 기억 목록에 저장만 하고 출력한다.
         EgoTalkHistory.remember(pc, answer);
         EgoMessageUtil.genre(pc, answer);
         EgoBond.addTalk(pc, weapon);
@@ -130,8 +129,9 @@ public final class EgoTalk {
         if (pc == null)
             return false;
         long now = java.lang.System.currentTimeMillis();
+        long delay = EgoConfig.getLong("genre_talk_delay_ms", DEFAULT_GENRE_TALK_DELAY_MS);
         Long last = genreDelayMap.get(pc.getObjectId());
-        if (last != null && now - last.longValue() < GENRE_TALK_DELAY_MS)
+        if (last != null && now - last.longValue() < delay)
             return false;
         genreDelayMap.put(pc.getObjectId(), now);
         return true;
