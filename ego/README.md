@@ -15,6 +15,8 @@ type2 변형 없음
 드라마/영화/웹툰 등 장르별 오리지널 대사 지원
 장르목록/대사추천/스팸방지 보강 완료
 주요 수치/경험치/전투 보너스/무기 규칙 DB화 완료
+DB 실행 파일 신규 1개 / 기존 1개로 최소화
+기존 서버 Java 연결 진입점 EgoCore 1개로 최소화
 ```
 
 ---
@@ -61,11 +63,11 @@ ego_weapon_rule          에고 무기 타입/능력 허용 규칙
 
 ---
 
-## 3. SQL 적용
+## 3. SQL 최소 적용
 
 ### 신규 서버
 
-본설치 SQL 하나만 실행하면 됩니다.
+신규 서버는 아래 1개만 실행합니다.
 
 ```sql
 SOURCE ego/sql/ego_install_euckr.sql;
@@ -73,16 +75,17 @@ SOURCE ego/sql/ego_install_euckr.sql;
 
 ### 기존 서버
 
-기존 서버는 정리/보정 후 DB화 보강 SQL을 실행합니다.
+기존 서버는 아래 1개만 실행합니다.
+
+```sql
+SOURCE ego/sql/ego_update_euckr.sql;
+```
+
+`SOURCE`가 안 되는 DB 툴이면 아래 3개를 순서대로 직접 실행합니다.
 
 ```sql
 SOURCE ego/sql/ego_cleanup_unused.sql;
 SOURCE ego/sql/ego_db_config.sql;
-```
-
-대사팩 중복이 의심되면 추가 실행합니다.
-
-```sql
 SOURCE ego/sql/ego_talk_pack_dedupe.sql;
 ```
 
@@ -94,19 +97,39 @@ SOURCE ego/sql/ego_talk_pack_dedupe.sql;
 
 ---
 
-## 4. Java 연결
+## 4. Java 최소 연결
+
+기존 서버 코드에는 가능하면 아래 클래스만 연결합니다.
+
+```text
+EgoCore.java
+```
 
 ### 서버 시작 DB 로드
 
 ```java
-EgoDB.init(con);
+EgoCore.init(con);
+```
+
+### 서버 리로드
+
+```java
+EgoCore.reload(con);
 ```
 
 ### CommandController 연결
 
 ```java
-if (EgoCmd.run(o, key, st)) {
+if (EgoCore.command(o, key, st)) {
     return true;
+}
+```
+
+`return void` 구조라면:
+
+```java
+if (EgoCore.command(o, key, st)) {
+    return;
 }
 ```
 
@@ -115,10 +138,8 @@ if (EgoCmd.run(o, key, st)) {
 일반 채팅이 주변에 방송되기 전에 추가합니다.
 
 ```java
-if (o instanceof PcInstance && !(o instanceof RobotInstance)) {
-    if (EgoTalk.chat((PcInstance) o, msg)) {
-        return;
-    }
+if (EgoCore.chat(o, msg)) {
+    return;
 }
 ```
 
@@ -127,7 +148,7 @@ if (o instanceof PcInstance && !(o instanceof RobotInstance)) {
 서버 루프 또는 캐릭터 AI/상태 갱신 루프에서 주기적으로 호출합니다.
 
 ```java
-EgoTalk.warning(pc);
+EgoCore.tick(pc);
 ```
 
 ### DamageController 공격 훅
@@ -136,7 +157,7 @@ EgoTalk.warning(pc);
 
 ```java
 if (cha instanceof PcInstance && weapon != null && dmg > 0) {
-    dmg = EgoSkill.attack((Character) cha, target, weapon, (int) Math.round(dmg));
+    dmg = EgoCore.attack((Character) cha, target, weapon, (int) Math.round(dmg));
 }
 ```
 
@@ -150,7 +171,7 @@ o.toDamage(cha, dmg, type);
 
 // [에고] 피격자 레벨별 능력: Lv.5 반격 / Lv.6 자동반격 / Lv.10 스턴
 if (o instanceof Character) {
-    dmg = EgoSkill.defense((Character) o, cha, dmg);
+    dmg = EgoCore.defense((Character) o, cha, dmg);
     if (dmg <= 0)
         return;
 }
@@ -161,7 +182,55 @@ o.setNowHp(o.getNowHp() - dmg);
 
 ---
 
-## 5. 명령어
+## 5. Java 파일 그룹
+
+### 외부 연결 그룹
+
+```text
+EgoCore.java
+```
+
+### DB/설정 그룹
+
+```text
+EgoDB.java
+EgoConfig.java
+EgoLevelBonus.java
+EgoWeaponRule.java
+EgoTalkPack.java
+EgoBond.java
+```
+
+### 전투 그룹
+
+```text
+EgoSkill.java
+EgoWeaponAbilityController.java
+EgoWeaponTypeUtil.java
+```
+
+### 대화 그룹
+
+```text
+EgoTalk.java
+EgoGenreTalk.java
+EgoGenreGuide.java
+EgoWeaponControlController.java
+EgoAutoTalk.java
+EgoTalkHistory.java
+EgoMessageUtil.java
+```
+
+### 표시/명령 그룹
+
+```text
+EgoCmd.java
+EgoView.java
+```
+
+---
+
+## 6. 명령어
 
 ```text
 .에고도움
@@ -190,7 +259,7 @@ ego_bond 삭제
 
 ---
 
-## 6. 일반채팅 대화
+## 7. 일반채팅 대화
 
 기본 대화:
 
@@ -248,7 +317,7 @@ ego_bond 삭제
 
 ---
 
-## 7. DB화된 주요 설정
+## 8. DB화된 주요 설정
 
 ### ego_config
 
@@ -337,7 +406,7 @@ WHERE type2='bow';
 
 ---
 
-## 8. 에고 생성 조건
+## 9. 에고 생성 조건
 
 ```text
 착용 중인 무기 필요
@@ -369,7 +438,7 @@ fishing_rod
 
 ---
 
-## 9. 에고 경험치 / 레벨업
+## 10. 에고 경험치 / 레벨업
 
 ```text
 생성 시 레벨: 0
@@ -416,7 +485,7 @@ Lv.10         : 0       만렙
 
 ---
 
-## 10. 레벨별 전투 규칙
+## 11. 레벨별 전투 규칙
 
 레벨별 세부 수치는 `ego_level_bonus`에서 관리합니다.
 
@@ -442,7 +511,7 @@ Lv.10 스턴 시도
 
 ---
 
-## 11. 장르별 대화 라이브러리
+## 12. 장르별 대화 라이브러리
 
 장르 대화는 파일과 DB를 함께 사용합니다.
 
@@ -455,7 +524,8 @@ EgoTalkPack.java    ego_talk_pack DB 대사팩
 처리 흐름:
 
 ```text
-EgoTalk.chat()
+EgoCore.chat(o, msg)
+→ EgoTalk.chat()
 → EgoGenreGuide.isGuideRequest(command)
 → EgoTalkPack.find(pc, weapon, command)
 → EgoGenreTalk.talk(pc, weapon, command)
@@ -471,7 +541,7 @@ EgoTalk.chat()
 
 ---
 
-## 12. 이름 표시 규칙
+## 13. 이름 표시 규칙
 
 에고 코드에서 무기명을 보여줄 때는 직접 `weapon.getName()`을 쓰지 말고 아래를 사용합니다.
 
@@ -487,7 +557,7 @@ EgoView.name(item, baseName)
 
 ---
 
-## 13. 에고 대화 출력 방식
+## 14. 에고 대화 출력 방식
 
 ```text
 짧은 답변 → 본인에게만 보이는 말풍선
@@ -511,7 +581,7 @@ client/html/egoletter.htm
 
 ---
 
-## 14. 에고 로그
+## 15. 에고 로그
 
 확인:
 
@@ -526,9 +596,10 @@ LIMIT 50;
 
 ---
 
-## 15. 참고 문서
+## 16. 참고 문서
 
 ```text
+ego/docs/EGO_MINIMAL_APPLY.md
 ego/docs/EGO_DBIZATION.md
 ego/docs/EGO_IMPLEMENTED_NO_TEST_COMMANDS.md
 ego/docs/EGO_SUGGESTIONS.md
@@ -536,7 +607,7 @@ ego/docs/EGO_SUGGESTIONS.md
 
 ---
 
-## 16. 컴파일
+## 17. 컴파일
 
 ```bash
 javac -encoding UTF-8 -source 1.8 -target 1.8
@@ -544,9 +615,11 @@ javac -encoding UTF-8 -source 1.8 -target 1.8
 
 ---
 
-## 17. 최종 점검
+## 18. 최종 점검
 
 ```text
+[확인] DB 실행 파일 신규 1개 / 기존 1개 최소화
+[확인] 기존 서버 Java 연결 진입점 EgoCore 1개 최소화
 [확인] 최대레벨 10 고정
 [확인] 생성 레벨 0
 [확인] Lv.0 전투능력 없음
