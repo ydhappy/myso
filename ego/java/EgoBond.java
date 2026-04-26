@@ -14,8 +14,13 @@ import lineage.world.object.instance.PcInstance;
 /**
  * 에고 유대감 시스템.
  *
- * 테스트 명령 없음.
- * 대화/레벨업/전투상황에서 자동으로 유대감을 올린다.
+ * 병합 후 우선 구조:
+ * - ego.bond
+ * - ego.bond_reason
+ *
+ * 구버전 fallback:
+ * - ego_bond.bond
+ * - ego_bond.last_reason
  */
 public final class EgoBond {
 
@@ -24,12 +29,14 @@ public final class EgoBond {
 
     private static final Map<Long, Integer> bondMap = new ConcurrentHashMap<Long, Integer>();
     private static final Map<Long, Long> talkDelayMap = new ConcurrentHashMap<Long, Long>();
+    private static boolean mergedBondColumn = false;
 
     private EgoBond() {
     }
 
     public static void reload(Connection con) {
         bondMap.clear();
+        mergedBondColumn = hasMergedBondColumns(con);
         load(con);
     }
 
@@ -91,6 +98,12 @@ public final class EgoBond {
         PreparedStatement st = null;
         try {
             con = DatabaseConnection.getLineage();
+            if (hasMergedBondColumns(con)) {
+                st = con.prepareStatement("UPDATE ego SET bond=0, bond_reason='', mod_date=NOW() WHERE item_id=?");
+                st.setLong(1, weapon.getObjectId());
+                st.executeUpdate();
+                DatabaseConnection.close(st);
+            }
             st = con.prepareStatement("DELETE FROM ego_bond WHERE item_id=?");
             st.setLong(1, weapon.getObjectId());
             st.executeUpdate();
@@ -112,6 +125,37 @@ public final class EgoBond {
     }
 
     private static void load(Connection con) {
+        if (mergedBondColumn) {
+            loadMerged(con);
+            return;
+        }
+        loadLegacy(con);
+    }
+
+    private static void loadMerged(Connection con) {
+        PreparedStatement st = null;
+        ResultSet rs = null;
+        boolean closeCon = false;
+        try {
+            if (con == null) {
+                con = DatabaseConnection.getLineage();
+                closeCon = true;
+            }
+            st = con.prepareStatement("SELECT item_id, bond FROM ego WHERE use_yn=1");
+            rs = st.executeQuery();
+            while (rs.next())
+                bondMap.put(rs.getLong("item_id"), rs.getInt("bond"));
+        } catch (Exception e) {
+            loadLegacy(con);
+        } finally {
+            if (closeCon)
+                DatabaseConnection.close(con, st, rs);
+            else
+                DatabaseConnection.close(st, rs);
+        }
+    }
+
+    private static void loadLegacy(Connection con) {
         PreparedStatement st = null;
         ResultSet rs = null;
         boolean closeCon = false;
@@ -125,7 +169,7 @@ public final class EgoBond {
             while (rs.next())
                 bondMap.put(rs.getLong("item_id"), rs.getInt("bond"));
         } catch (Exception e) {
-            // ego_bond 미적용 서버에서도 에고 기본 기능은 계속 동작해야 한다.
+            // 유대감 테이블/컬럼 미적용 서버에서도 기본 기능은 계속 동작한다.
         } finally {
             if (closeCon)
                 DatabaseConnection.close(con, st, rs);
@@ -135,6 +179,31 @@ public final class EgoBond {
     }
 
     private static void save(ItemInstance weapon, int value, String reason) {
+        if (mergedBondColumn) {
+            saveMerged(weapon, value, reason);
+            return;
+        }
+        saveLegacy(weapon, value, reason);
+    }
+
+    private static void saveMerged(ItemInstance weapon, int value, String reason) {
+        Connection con = null;
+        PreparedStatement st = null;
+        try {
+            con = DatabaseConnection.getLineage();
+            st = con.prepareStatement("UPDATE ego SET bond=?, bond_reason=?, mod_date=NOW() WHERE item_id=? AND use_yn=1");
+            st.setInt(1, value);
+            st.setString(2, reason == null ? "" : reason);
+            st.setLong(3, weapon.getObjectId());
+            st.executeUpdate();
+        } catch (Exception e) {
+            saveLegacy(weapon, value, reason);
+        } finally {
+            DatabaseConnection.close(con, st);
+        }
+    }
+
+    private static void saveLegacy(ItemInstance weapon, int value, String reason) {
         Connection con = null;
         PreparedStatement st = null;
         try {
@@ -153,6 +222,25 @@ public final class EgoBond {
             // DB 미적용 상태에서는 메모리 유대감만 유지한다.
         } finally {
             DatabaseConnection.close(con, st);
+        }
+    }
+
+    private static boolean hasMergedBondColumns(Connection con) {
+        ResultSet rs = null;
+        boolean closeCon = false;
+        try {
+            if (con == null) {
+                con = DatabaseConnection.getLineage();
+                closeCon = true;
+            }
+            rs = con.getMetaData().getColumns(null, null, "ego", "bond");
+            return rs != null && rs.next();
+        } catch (Exception e) {
+            return false;
+        } finally {
+            try { if (rs != null) rs.close(); } catch (Exception e) {}
+            if (closeCon)
+                DatabaseConnection.close(con);
         }
     }
 }
