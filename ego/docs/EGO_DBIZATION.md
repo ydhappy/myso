@@ -1,133 +1,122 @@
-# 에고 기능 DB화 정밀검토 및 반영 현황
+# 에고 기능 DB화 최종 현황
 
-## 1. DB화 기준
-
-에고 기능 중 DB화 우선순위는 다음 기준으로 정했습니다.
+## 1. 최종 DB화 기준
 
 ```text
-1순위: 운영 중 자주 바꾸는 값
-2순위: 서버마다 밸런스가 달라질 수 있는 값
-3순위: 대사/텍스트처럼 운영자가 직접 편집하고 싶은 값
-4순위: 로그/상태처럼 누적 조회가 필요한 값
-5순위: 서버 코어별 메서드 시그니처가 달라질 수 있는 직접 제어 로직
+운영 중 자주 바꾸는 값은 DB화
+레벨 경험치와 전투 보너스는 ego_level로 병합
+유대감은 ego 테이블 컬럼으로 병합
+구버전 테이블은 fallback으로만 유지
+외부 Java 연결은 EgoCore 중심으로 최소화
 ```
 
 ---
 
-## 2. 현재 DB화 완료 테이블
+## 2. 최종 신규 우선 테이블
 
 ```text
-ego                      에고 기본 정보
+ego                      에고 기본 정보 + 유대감 병합
 ego_skill                에고 무기별 능력
 ego_skill_base           에고 스킬 기본 발동률/쿨타임/이펙트
 ego_log                  에고 전투 로그
-ego_bond                 에고 유대감
-ego_talk_pack            에고 장르/자연대화 DB 대사팩
+ego_talk_pack            에고 DB 대사팩
 ego_config               에고 공통 설정값
-ego_level_exp            에고 레벨별 필요 경험치
-ego_level_bonus          에고 레벨별 전투 보너스
+ego_level                에고 레벨 경험치 + 전투 보너스 통합
 ego_weapon_rule          에고 무기 타입/능력 허용 규칙
 ```
 
 ---
 
-## 3. 현재 DB화 완료 Java 파일
+## 3. 구버전 fallback 테이블
+
+아래 테이블은 기존 서버 호환용으로만 유지합니다.
 
 ```text
-EgoConfig.java
-- ego_config 설정 로더
-
-EgoLevelBonus.java
-- ego_level_bonus 레벨별 전투 보너스 로더
-
-EgoWeaponRule.java
-- ego_weapon_rule 무기 타입/능력 허용 규칙 로더
-
-EgoTalkPack.java
-- ego_talk_pack 대사팩 로더
-
-EgoBond.java
-- ego_bond 유대감 로더/저장
+ego_bond                 구버전 유대감 fallback
+ego_level_exp            구버전 레벨 경험치 fallback
+ego_level_bonus          구버전 레벨 전투 보너스 fallback
 ```
 
-수정 연결 파일:
+신규 코드 우선순위:
 
 ```text
-EgoDB.java
-- EgoConfig.reload(con)
-- EgoLevelBonus.reload(con)
-- EgoWeaponRule.reload(con)
-- EgoBond.reload(con)
-- EgoTalkPack.reload(con)
-
-EgoWeaponDatabase.java
-- ego_level_exp 우선 사용
-- 없으면 Java fallback
-
-EgoWeaponAbilityController.java
-- ego_level_bonus 우선 사용
-- ego_config 전투 설정 우선 사용
-- ego_skill_base 스킬 기본값 사용
-
-EgoWeaponTypeUtil.java
-- ego_weapon_rule 우선 사용
-- 없으면 Java fallback
-
-EgoTalk.java
-- genre_talk_delay_ms 사용
-
-EgoAutoTalk.java
-- 자동대사 기준/딜레이를 ego_config에서 사용
+유대감       ego.bond / ego.bond_reason 우선, ego_bond fallback
+레벨/전투    ego_level 우선, ego_level_exp + ego_level_bonus fallback
 ```
 
 ---
 
-## 4. 설치 SQL
+## 4. 최종 Java DB/설정 그룹
+
+```text
+EgoConfig.java           ego_config 설정 로더
+EgoLevel.java            ego_level 통합 레벨/전투 캐시
+EgoWeaponRule.java       ego_weapon_rule 무기 규칙 로더
+EgoTalkPack.java         ego_talk_pack 대사팩 로더
+EgoBond.java             ego.bond 우선 유대감 로더/저장
+EgoSchema.java           테이블/컬럼 연결성 검증기
+EgoDb.java               짧은 DB Facade
+EgoDB.java               전체 DB 로드 허브
+```
+
+삭제 완료:
+
+```text
+레벨 보너스 구버전 Facade 파일 제거
+```
+
+---
+
+## 5. 로드 순서
+
+```text
+EgoCore.init/reload
+→ EgoSchema.silentCheck
+→ EgoDB.reload
+   1. EgoConfig.reload
+   2. EgoWeaponRule.reload
+   3. EgoWeaponDatabase.reload
+      - EgoLevel.reload
+      - ego 로드
+      - ego_skill 로드
+      - EgoView.reload
+   4. EgoWeaponAbilityController.reloadConfig
+   5. EgoBond.reload
+   6. EgoTalkPack.reload
+```
+
+---
+
+## 6. 설치 SQL
 
 ### 신규 서버
-
-이 파일 하나만 실행하면 기본 DB화 테이블까지 생성됩니다.
 
 ```sql
 SOURCE ego/sql/ego_install_euckr.sql;
 ```
 
-포함 내용:
-
-```text
-ego
-ego_skill
-ego_skill_base
-ego_log
-ego_bond
-ego_talk_pack
-ego_config
-ego_level_exp
-ego_level_bonus
-ego_weapon_rule
-```
-
 ### 기존 서버
 
-기존 서버는 먼저 정리/보정 SQL을 실행합니다.
+```sql
+SOURCE ego/sql/ego_update_euckr.sql;
+```
+
+`SOURCE`가 안 되는 DB 툴이면 아래 순서로 직접 실행합니다.
 
 ```sql
 SOURCE ego/sql/ego_cleanup_unused.sql;
-```
-
-그다음 DB화 보강 SQL을 실행합니다.
-
-```sql
 SOURCE ego/sql/ego_db_config.sql;
-```
-
-대사팩 중복이 의심되면 추가 실행합니다.
-
-```sql
+SOURCE ego/sql/ego_merge_schema_euckr.sql;
 SOURCE ego/sql/ego_talk_pack_dedupe.sql;
 ```
 
-### 서버 내 즉시 반영
+병합만 별도 적용:
+
+```sql
+SOURCE ego/sql/ego_merge_schema_euckr.sql;
+```
+
+서버 내 즉시 반영:
 
 ```text
 .에고리로드
@@ -135,110 +124,45 @@ SOURCE ego/sql/ego_talk_pack_dedupe.sql;
 
 ---
 
-## 5. ego_config 설정 키
+## 7. ego_config 주요 설정 키
 
 ```text
 genre_talk_delay_ms
-장르대화 연속 입력 방지 딜레이 ms
-
 auto_talk_hp_warn_rate
-HP 자동 위험 대사 발동 기준 퍼센트 이하
-
 auto_talk_mp_warn_rate
-MP 자동 안내 대사 발동 기준 퍼센트 이하
-
 auto_talk_idle_hp_rate
 auto_talk_idle_mp_rate
-안정 상태 자동 대사 기준
-
 auto_talk_hp_warn_delay_ms
 auto_talk_mp_warn_delay_ms
 auto_talk_boss_warn_delay_ms
 auto_talk_idle_delay_ms
-상황별 자동 대사 재출력 딜레이
-
 attack_ego_exp
-공격 중 주기적으로 획득하는 에고 경험치
-
 attack_exp_delay_ms
-공격 경험치 획득 딜레이 ms
-
 kill_ego_exp
-몬스터 처치 시 에고 경험치
-
 boss_kill_ego_exp
-보스 처치 시 추가 에고 경험치
-
 exp_message_rate
-일반 경험치 획득 메시지 출력 확률
-
 proc_message_delay_ms
-능력 발동 메시지 출력 딜레이 ms
-
 counter_unlock_level
-피격 반격 해금 레벨
-
 auto_counter_unlock_level
-자동반격 해금 레벨
-
 auto_counter_cool_ms
-자동반격 쿨타임 ms
-
 auto_counter_chance
-자동반격 발동 확률
-
 stun_level
-에고 스턴 해금 레벨
-
 stun_success_rate
-에고 스턴 성공 확률
-
 stun_time
-에고 스턴 시간 초
-
 stun_effect
-에고 스턴 이펙트 번호
-
 stun_cool_ms
-에고 스턴 쿨타임 ms
-
 guardian_shield_hp_rate
-수호 의지 발동 HP 기준 이하
-
 execution_target_hp_rate
-처형 발동 대상 HP 기준 이하
-
 area_range
-광역 능력 범위
-
 area_max_target
-광역 능력 최대 대상 수
 ```
 
----
-
-## 6. ego_level_exp 경험치표
-
-```text
-Lv.0 -> Lv.1  : 100
-Lv.1 -> Lv.2  : 250
-Lv.2 -> Lv.3  : 500
-Lv.3 -> Lv.4  : 900
-Lv.4 -> Lv.5  : 1500
-Lv.5 -> Lv.6  : 2400
-Lv.6 -> Lv.7  : 3600
-Lv.7 -> Lv.8  : 5200
-Lv.8 -> Lv.9  : 7500
-Lv.9 -> Lv.10 : 10000
-Lv.10         : 0
-```
-
-운영 중 변경 예시:
+예시:
 
 ```sql
-UPDATE ego_level_exp
-SET need_exp=2000, mod_date=NOW()
-WHERE ego_lv=4;
+UPDATE ego_config
+SET config_value='40', mod_date=NOW()
+WHERE config_key='stun_success_rate';
 ```
 
 변경 후:
@@ -249,24 +173,37 @@ WHERE ego_lv=4;
 
 ---
 
-## 7. ego_level_bonus 전투 보너스
+## 8. ego_level 통합 테이블
 
 컬럼:
 
 ```text
 ego_lv
+need_exp
 proc_bonus
 critical_chance
 critical_damage
 counter_chance
 counter_power
 counter_critical
+memo
+use_yn
+reg_date
+mod_date
 ```
 
-운영 중 변경 예시:
+경험치 변경 예시:
 
 ```sql
-UPDATE ego_level_bonus
+UPDATE ego_level
+SET need_exp=2000, mod_date=NOW()
+WHERE ego_lv=4;
+```
+
+전투 보너스 변경 예시:
+
+```sql
+UPDATE ego_level
 SET critical_chance=30, critical_damage=25, mod_date=NOW()
 WHERE ego_lv=10;
 ```
@@ -279,25 +216,16 @@ WHERE ego_lv=10;
 
 ---
 
-## 8. ego_weapon_rule 무기 규칙
+## 9. ego_weapon_rule 무기 규칙
 
 컬럼:
 
 ```text
 type2
-원본 item.type2 값
-
 display_name
-표시명
-
 default_ability
-기본 에고 능력
-
 allowed_abilities
-허용 능력 콤마 구분
-
 use_yn
-에고 생성 허용 여부
 ```
 
 기본 지원 type2:
@@ -319,7 +247,7 @@ wand
 fishing_rod
 ```
 
-예시: 활에 FROST_BIND 제외하기
+예시:
 
 ```sql
 UPDATE ego_weapon_rule
@@ -327,74 +255,32 @@ SET allowed_abilities='EGO_BALANCE,CRITICAL_BURST,GUARDIAN_SHIELD,EGO_COUNTER,EG
 WHERE type2='bow';
 ```
 
-변경 후:
+---
 
-```text
-.에고리로드
+## 10. 스키마 연결성 점검
+
+Java:
+
+```java
+boolean ok = EgoCore.schemaOk(con);
+String report = EgoCore.schemaReport(con);
+```
+
+DB:
+
+```sql
+SHOW TABLES LIKE 'ego%';
+SELECT item_id, ego_name, ego_lv, ego_exp, need_exp, bond, bond_reason FROM ego;
+SELECT * FROM ego_level ORDER BY ego_lv;
+SELECT * FROM ego_config ORDER BY config_key;
+SELECT * FROM ego_weapon_rule ORDER BY type2;
 ```
 
 ---
 
-## 9. 운영 중 설정 변경 예시
+## 11. 아직 DB화하지 않는 항목
 
-장르대화 딜레이를 2초로 변경:
-
-```sql
-UPDATE ego_config
-SET config_value='2000', mod_date=NOW()
-WHERE config_key='genre_talk_delay_ms';
-```
-
-HP 자동 경고 기준을 30%로 변경:
-
-```sql
-UPDATE ego_config
-SET config_value='30', mod_date=NOW()
-WHERE config_key='auto_talk_hp_warn_rate';
-```
-
-스턴 성공률을 40%로 변경:
-
-```sql
-UPDATE ego_config
-SET config_value='40', mod_date=NOW()
-WHERE config_key='stun_success_rate';
-```
-
-자동반격 해금 레벨을 7로 변경:
-
-```sql
-UPDATE ego_config
-SET config_value='7', mod_date=NOW()
-WHERE config_key='auto_counter_unlock_level';
-```
-
-변경 후 공통:
-
-```text
-.에고리로드
-```
-
----
-
-## 10. fallback 정책
-
-모든 DB화 기능은 안전 fallback 구조입니다.
-
-```text
-ego_config 없음          → Java 기본값 사용
-ego_level_exp 없음       → Java 기본 경험치표 사용
-ego_level_bonus 없음     → Java 기본 전투 보너스 사용
-ego_weapon_rule 없음     → Java 기본 무기 규칙 사용
-ego_talk_pack 없음       → Java 기본 대사 사용
-ego_bond 없음            → 메모리 유대감만 일부 동작
-```
-
----
-
-## 11. 아직 DB화하지 않은 항목
-
-아래는 DB화보다 서버 코어 연동 확인이 먼저 필요합니다.
+아래는 서버 코어별 시그니처 차이가 커서 DB화보다 컴파일 로그 기준 보정이 우선입니다.
 
 ```text
 PcInstance 직접 제어 세부 동작
@@ -409,17 +295,22 @@ ShockStun 버프 클래스 시그니처
 ## 12. 현재 완료 체크
 
 ```text
-[완료] EgoConfig.java 추가
-[완료] EgoLevelBonus.java 추가
-[완료] EgoWeaponRule.java 추가
-[완료] EgoDB.init/reload에서 설정/보너스/무기규칙 로드
-[완료] EgoWeaponDatabase 경험치표 DB 우선화
-[완료] EgoWeaponAbilityController 전투 설정/보너스 DB 우선화
+[완료] EgoConfig.java
+[완료] EgoLevel.java
+[완료] EgoWeaponRule.java
+[완료] EgoTalkPack.java
+[완료] EgoBond.java
+[완료] EgoSchema.java
+[완료] EgoDb.java
+[완료] EgoDB 로드 순서 정리
+[완료] EgoWeaponDatabase 경험치 ego_level 통합
+[완료] EgoWeaponAbilityController 전투 보너스 ego_level 통합
 [완료] EgoWeaponTypeUtil 무기 규칙 DB 우선화
 [완료] EgoTalk 장르대화 딜레이 DB화
 [완료] EgoAutoTalk 자동대사 임계값/딜레이 DB화
-[완료] ego_db_config.sql 최신화
-[완료] ego_install_euckr.sql 통합 설치 SQL 최신화
-[완료] DB 미적용 서버 fallback 유지
+[완료] ego_merge_schema_euckr.sql 반복 실행 안전화
+[완료] ego_install_euckr.sql 병합 구조 반영
+[완료] ego_update_euckr.sql 병합 순서 반영
+[완료] 삭제 가능한 구버전 Facade 제거
 [완료] 테스트 명령 추가 없음
 ```
