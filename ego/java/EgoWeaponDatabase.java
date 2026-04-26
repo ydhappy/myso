@@ -223,9 +223,9 @@ public final class EgoWeaponDatabase {
             con = DatabaseConnection.getLineage();
             st = con.prepareStatement(
                 "INSERT INTO ego " +
-                "(item_id, char_id, use_yn, ego_name, ego_type, ego_lv, ego_exp, need_exp, talk_lv, ctrl_lv, last_talk, last_warn, bond, bond_reason) " +
-                "VALUES (?, ?, 1, ?, ?, 0, 0, ?, 1, 1, 0, 0, 0, '') " +
-                "ON DUPLICATE KEY UPDATE char_id=?, use_yn=1, ego_name=?, ego_type=?, ego_lv=0, ego_exp=0, need_exp=?, bond=0, bond_reason=''"
+                "(item_id, char_id, use_yn, ego_name, ego_type, ego_lv, ego_exp, need_exp, talk_lv, ctrl_lv, last_talk, last_warn) " +
+                "VALUES (?, ?, 1, ?, ?, 0, 0, ?, 1, 1, 0, 0) " +
+                "ON DUPLICATE KEY UPDATE char_id=?, use_yn=1, ego_name=?, ego_type=?, ego_lv=0, ego_exp=0, need_exp=?"
             );
             st.setLong(1, item.getObjectId());
             st.setLong(2, pc.getObjectId());
@@ -237,6 +237,9 @@ public final class EgoWeaponDatabase {
             st.setString(8, personality);
             st.setLong(9, getNeedExp(0));
             st.executeUpdate();
+            DatabaseConnection.close(st);
+            st = null;
+            resetMergedBond(con, item.getObjectId());
 
             EgoWeaponInfo info = new EgoWeaponInfo();
             info.itemObjId = item.getObjectId();
@@ -493,6 +496,32 @@ public final class EgoWeaponDatabase {
             try { if (rs != null) rs.close(); } catch (Exception e) {}
         }
         return false;
+    }
+
+    private static boolean columnExists(Connection con, String table, String column) {
+        ResultSet rs = null;
+        try {
+            rs = con.getMetaData().getColumns(null, null, table, column);
+            return rs != null && rs.next();
+        } catch (Exception e) {
+            return false;
+        } finally {
+            try { if (rs != null) rs.close(); } catch (Exception e) {}
+        }
+    }
+
+    private static void resetMergedBond(Connection con, long itemObjId) {
+        if (con == null || !columnExists(con, "ego", "bond") || !columnExists(con, "ego", "bond_reason"))
+            return;
+        PreparedStatement st = null;
+        try {
+            st = con.prepareStatement("UPDATE ego SET bond=0, bond_reason='', mod_date=NOW() WHERE item_id=?");
+            st.setLong(1, itemObjId);
+            st.executeUpdate();
+        } catch (Exception e) {
+        } finally {
+            DatabaseConnection.close(st);
+        }
     }
 
     public static final class EgoWeaponInfo {
