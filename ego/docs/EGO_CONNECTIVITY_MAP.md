@@ -8,13 +8,41 @@ DB 컬럼
 Java 로더
 Java 사용 메서드
 외부 연결 진입점
+병합/호환 구조
 ```
 
 위 항목을 한눈에 연결하기 위한 문서입니다.
 
 ---
 
-## 1. 외부 연결 진입점
+## 1. 병합 결과 요약
+
+### 병합 완료
+
+```text
+ego_level_exp + ego_level_bonus -> ego_level
+ego_bond -> ego.bond / ego.bond_reason
+```
+
+### 구버전 fallback 유지
+
+```text
+ego_level_exp      구버전 경험치표 fallback
+ego_level_bonus    구버전 전투보너스 fallback
+ego_bond           구버전 유대감 fallback
+```
+
+### 신규 우선 구조
+
+```text
+ego_level          레벨 경험치 + 전투 보너스 통합
+ego.bond           유대감
+ego.bond_reason    마지막 유대감 증가 사유
+```
+
+---
+
+## 2. 외부 연결 진입점
 
 외부 서버 코드에서는 가능하면 아래만 연결합니다.
 
@@ -35,7 +63,7 @@ EgoCore.java
 
 ---
 
-## 2. DB Facade
+## 3. DB Facade
 
 짧은 이름용 DB Facade:
 
@@ -52,7 +80,7 @@ EgoDB / EgoWeaponDatabase 직접 접근을 줄이기 위한 래퍼
 
 ---
 
-## 3. 스키마 중앙 검증
+## 4. 스키마 중앙 검증
 
 ```text
 EgoSchema.java
@@ -65,12 +93,18 @@ ego
 ego_skill
 ego_skill_base
 ego_log
-ego_bond
 ego_talk_pack
 ego_config
+ego_level
+ego_weapon_rule
+```
+
+구버전 테이블은 fallback용이므로 필수 검증 대상에서 제외합니다.
+
+```text
+ego_bond
 ego_level_exp
 ego_level_bonus
-ego_weapon_rule
 ```
 
 사용:
@@ -90,9 +124,9 @@ EgoSchema.silentCheck(con);
 
 ---
 
-## 4. 테이블별 연결성
+## 5. 테이블별 연결성
 
-### 4.1 ego
+### 5.1 ego
 
 | 컬럼 | 의미 | Java 로드/사용 |
 |---|---|---|
@@ -108,6 +142,8 @@ EgoSchema.silentCheck(con);
 | ctrl_lv | 제어 단계 | EgoWeaponDatabase.loadEgoInfo |
 | last_talk | 마지막 대화 시간 | 보존 컬럼 |
 | last_warn | 마지막 경고 시간 | 보존 컬럼 |
+| bond | 유대감 | EgoBond.loadMerged / saveMerged |
+| bond_reason | 마지막 유대감 증가 사유 | EgoBond.saveMerged |
 
 주요 메서드:
 
@@ -120,9 +156,40 @@ EgoDb.name
 EgoWeaponDatabase.enableEgo
 EgoWeaponDatabase.disableEgo
 EgoWeaponDatabase.addExp
+EgoBond.get
+EgoBond.addTalk
+EgoBond.addLevelUp
+EgoBond.addCounter
+EgoBond.addStun
 ```
 
-### 4.2 ego_skill
+### 5.2 ego_level
+
+병합 테이블입니다.
+
+| 컬럼 | 의미 | Java 사용 |
+|---|---|---|
+| ego_lv | 레벨 0~10 | EgoLevel.reload |
+| need_exp | 다음 레벨 필요 경험치 | EgoLevel.needExp / EgoWeaponDatabase.getNeedExp |
+| proc_bonus | 스킬 발동률 추가 | EgoLevel.procBonus |
+| critical_chance | 치명률 추가 | EgoLevel.criticalChance |
+| critical_damage | 치명 추가 피해 | EgoLevel.criticalDamage |
+| counter_chance | 피격 반격 확률 | EgoLevel.counterChance |
+| counter_power | 반격 피해 비율 | EgoLevel.counterPower |
+| counter_critical | 반격 치명 확률 | EgoLevel.counterCritical |
+| use_yn | 사용 여부 | EgoLevel.reload |
+
+사용처:
+
+```text
+EgoWeaponDatabase.getNeedExp
+EgoWeaponDatabase.addExp
+EgoWeaponAbilityController.getProcChance
+EgoWeaponAbilityController.tryCounter
+EgoWeaponAbilityController.applyAttackByType
+```
+
+### 5.3 ego_skill
 
 | 컬럼 | 의미 | Java 로드/사용 |
 |---|---|---|
@@ -135,15 +202,7 @@ EgoWeaponDatabase.addExp
 | last_proc | 마지막 발동 시간 | EgoWeaponAbilityController.markProc |
 | use_yn | 사용 여부 | EgoWeaponDatabase.loadAbilityInfo |
 
-주요 메서드:
-
-```text
-EgoDb.setSkill
-EgoWeaponDatabase.setAbility
-EgoWeaponAbilityController.markProc
-```
-
-### 4.3 ego_skill_base
+### 5.4 ego_skill_base
 
 | 컬럼 | 의미 | Java 로드/사용 |
 |---|---|---|
@@ -158,7 +217,7 @@ EgoWeaponAbilityController.markProc
 | effect | 이펙트 | applyAttackByType |
 | use_yn | 사용 여부 | loadSkillBase |
 
-### 4.4 ego_log
+### 5.5 ego_log
 
 | 컬럼 | 의미 | Java 사용 |
 |---|---|---|
@@ -171,25 +230,7 @@ EgoWeaponAbilityController.markProc
 | final_dmg | 최종 피해 | writeLog |
 | add_dmg | 추가 피해 | writeLog |
 
-### 4.5 ego_bond
-
-| 컬럼 | 의미 | Java 사용 |
-|---|---|---|
-| item_id | 에고 아이템 id | EgoBond.reload/get/save/delete |
-| bond | 유대감 | EgoBond.get/grade/add |
-| last_reason | 마지막 증가 사유 | EgoBond.save |
-
-증가 이벤트:
-
-```text
-대화 +1
-레벨업 +10
-위험 생존 +20
-스턴 +3
-반격 +2
-```
-
-### 4.6 ego_talk_pack
+### 5.6 ego_talk_pack
 
 | 컬럼 | 의미 | Java 사용 |
 |---|---|---|
@@ -200,7 +241,7 @@ EgoWeaponAbilityController.markProc
 | message | 출력 대사 | EgoTalkHistory.pick |
 | use_yn | 사용 여부 | EgoTalkPack.reload |
 
-### 4.7 ego_config
+### 5.7 ego_config
 
 | config_key | Java 사용 |
 |---|---|
@@ -233,34 +274,7 @@ EgoWeaponAbilityController.markProc
 | area_range | EgoWeaponAbilityController.applyAttackByType |
 | area_max_target | EgoWeaponAbilityController.applyAttackByType |
 
-### 4.8 ego_level_exp
-
-| 컬럼 | 의미 | Java 사용 |
-|---|---|---|
-| ego_lv | 현재 레벨 | EgoWeaponDatabase.loadLevelExp |
-| need_exp | 다음 레벨 필요 경험치 | EgoWeaponDatabase.getNeedExp/addExp |
-| use_yn | 사용 여부 | loadLevelExp |
-
-### 4.9 ego_level_bonus
-
-| 컬럼 | Java 메서드 |
-|---|---|
-| proc_bonus | EgoLevelBonus.procBonus |
-| critical_chance | EgoLevelBonus.criticalChance |
-| critical_damage | EgoLevelBonus.criticalDamage |
-| counter_chance | EgoLevelBonus.counterChance |
-| counter_power | EgoLevelBonus.counterPower |
-| counter_critical | EgoLevelBonus.counterCritical |
-
-사용처:
-
-```text
-EgoWeaponAbilityController.getProcChance
-EgoWeaponAbilityController.tryCounter
-EgoWeaponAbilityController.applyAttackByType
-```
-
-### 4.10 ego_weapon_rule
+### 5.8 ego_weapon_rule
 
 | 컬럼 | Java 사용 |
 |---|---|
@@ -272,7 +286,30 @@ EgoWeaponAbilityController.applyAttackByType
 
 ---
 
-## 5. 병합/최소화 결론
+## 6. 구버전 fallback 연결
+
+### ego_level_exp
+
+```text
+EgoLevel.loadLegacyExp()
+```
+
+### ego_level_bonus
+
+```text
+EgoLevel.loadLegacyBonus()
+```
+
+### ego_bond
+
+```text
+EgoBond.loadLegacy()
+EgoBond.saveLegacy()
+```
+
+---
+
+## 7. 병합/최소화 결론
 
 ```text
 DB 실행 파일:
@@ -288,13 +325,16 @@ DB 접근 Facade:
 스키마 검증:
 - EgoSchema.java
 
+레벨 통합:
+- EgoLevel.java
+
 기능 내부 파일:
 - public class 제약 때문에 기능별 분리 유지
 ```
 
 ---
 
-## 6. 연결성 점검 방법
+## 8. 연결성 점검 방법
 
 Java에서:
 
@@ -307,8 +347,8 @@ DB에서:
 
 ```sql
 SHOW TABLES LIKE 'ego%';
+SELECT item_id, ego_name, ego_lv, ego_exp, need_exp, bond, bond_reason FROM ego;
 SELECT * FROM ego_config ORDER BY config_key;
-SELECT * FROM ego_level_exp ORDER BY ego_lv;
-SELECT * FROM ego_level_bonus ORDER BY ego_lv;
+SELECT * FROM ego_level ORDER BY ego_lv;
 SELECT * FROM ego_weapon_rule ORDER BY type2;
 ```
