@@ -14,9 +14,11 @@ import java.util.Map;
  * - Java 코드와 SQL 스키마 연결 누락을 빠르게 확인한다.
  * - 서버 시작/리로드 시 선택적으로 검증할 수 있다.
  *
- * 주의:
- * - 실제 테이블 생성/수정은 SQL 파일에서 한다.
- * - 이 클래스는 검증/문서화용이며 기존 서버 동작을 강제로 중단하지 않는다.
+ * 병합 우선 구조:
+ * - ego_level_exp + ego_level_bonus -> ego_level
+ * - ego_bond -> ego.bond / ego.bond_reason
+ *
+ * 구버전 테이블은 fallback 허용.
  */
 public final class EgoSchema {
 
@@ -24,11 +26,9 @@ public final class EgoSchema {
     public static final String T_EGO_SKILL = "ego_skill";
     public static final String T_EGO_SKILL_BASE = "ego_skill_base";
     public static final String T_EGO_LOG = "ego_log";
-    public static final String T_EGO_BOND = "ego_bond";
     public static final String T_EGO_TALK_PACK = "ego_talk_pack";
     public static final String T_EGO_CONFIG = "ego_config";
-    public static final String T_EGO_LEVEL_EXP = "ego_level_exp";
-    public static final String T_EGO_LEVEL_BONUS = "ego_level_bonus";
+    public static final String T_EGO_LEVEL = "ego_level";
     public static final String T_EGO_WEAPON_RULE = "ego_weapon_rule";
 
     private static final Map<String, String[]> REQUIRED = new LinkedHashMap<String, String[]>();
@@ -36,7 +36,7 @@ public final class EgoSchema {
     static {
         REQUIRED.put(T_EGO, new String[] {
             "item_id", "char_id", "use_yn", "ego_name", "ego_type", "ego_lv", "ego_exp", "need_exp",
-            "talk_lv", "ctrl_lv", "last_talk", "last_warn", "reg_date", "mod_date"
+            "talk_lv", "ctrl_lv", "last_talk", "last_warn", "bond", "bond_reason", "reg_date", "mod_date"
         });
         REQUIRED.put(T_EGO_SKILL, new String[] {
             "id", "item_id", "skill", "skill_lv", "rate_bonus", "dmg_bonus", "last_proc", "use_yn", "reg_date", "mod_date"
@@ -47,20 +47,14 @@ public final class EgoSchema {
         REQUIRED.put(T_EGO_LOG, new String[] {
             "id", "item_id", "char_id", "char_name", "target_name", "skill", "base_dmg", "final_dmg", "add_dmg", "reg_date"
         });
-        REQUIRED.put(T_EGO_BOND, new String[] {
-            "item_id", "bond", "last_reason", "reg_date", "mod_date"
-        });
         REQUIRED.put(T_EGO_TALK_PACK, new String[] {
             "id", "genre", "tone", "keyword", "message", "use_yn", "reg_date", "mod_date"
         });
         REQUIRED.put(T_EGO_CONFIG, new String[] {
             "config_key", "config_value", "memo", "use_yn", "reg_date", "mod_date"
         });
-        REQUIRED.put(T_EGO_LEVEL_EXP, new String[] {
-            "ego_lv", "need_exp", "memo", "use_yn", "reg_date", "mod_date"
-        });
-        REQUIRED.put(T_EGO_LEVEL_BONUS, new String[] {
-            "ego_lv", "proc_bonus", "critical_chance", "critical_damage", "counter_chance", "counter_power", "counter_critical",
+        REQUIRED.put(T_EGO_LEVEL, new String[] {
+            "ego_lv", "need_exp", "proc_bonus", "critical_chance", "critical_damage", "counter_chance", "counter_power", "counter_critical",
             "memo", "use_yn", "reg_date", "mod_date"
         });
         REQUIRED.put(T_EGO_WEAPON_RULE, new String[] {
@@ -71,17 +65,14 @@ public final class EgoSchema {
     private EgoSchema() {
     }
 
-    /** 전체 스키마가 현재 Java 연결 기준을 만족하는지 확인한다. */
     public static boolean isValid(Connection con) {
         return validate(con).ok;
     }
 
-    /** 사람이 읽을 수 있는 검증 리포트. */
     public static String report(Connection con) {
         return validate(con).message;
     }
 
-    /** 서버 시작/리로드 시 조용히 검증만 한다. 실패해도 서버를 중단하지 않는다. */
     public static void silentCheck(Connection con) {
         try {
             validate(con);
@@ -127,7 +118,7 @@ public final class EgoSchema {
             if (allOk)
                 sb.append("RESULT: OK\n");
             else
-                sb.append("RESULT: FAIL - SQL 보정 필요\n");
+                sb.append("RESULT: FAIL - ego/sql/ego_merge_schema_euckr.sql 또는 ego_install_euckr.sql 적용 필요\n");
 
             result.ok = allOk;
             result.message = sb.toString();
