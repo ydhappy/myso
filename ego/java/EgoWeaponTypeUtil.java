@@ -10,6 +10,7 @@ import lineage.world.object.instance.ItemInstance;
  * - 에고는 원본 item.type2를 변형하지 않는다.
  * - getType2(item)는 항상 원본 item.getItem().getType2()만 반환한다.
  * - PcInstance, DamageController, 공격 사거리, 화살 소비, 무기 공식은 기존 서버 코어를 따른다.
+ * - ego_weapon_rule 테이블이 있으면 DB 규칙을 우선 사용하고, 없으면 Java 기본 규칙을 사용한다.
  */
 public final class EgoWeaponTypeUtil {
 
@@ -38,6 +39,8 @@ public final class EgoWeaponTypeUtil {
 
     public static boolean isSupportedType(String type2) {
         String type = normalizeType(type2);
+        if (EgoWeaponRule.hasRule(type))
+            return EgoWeaponRule.isSupportedType(type);
         return TYPE_DAGGER.equals(type)
             || TYPE_SWORD.equals(type)
             || TYPE_TWO_HAND_SWORD.equals(type)
@@ -118,6 +121,9 @@ public final class EgoWeaponTypeUtil {
     public static String getDisplayTypeName(ItemInstance item) {
         String type = getOriginalType2(item);
 
+        if (EgoWeaponRule.hasRule(type))
+            return EgoWeaponRule.displayName(type, type.length() == 0 ? "알 수 없음" : type);
+
         if (TYPE_DAGGER.equals(type)) return "단검";
         if (TYPE_SWORD.equals(type)) return "한손검";
         if (TYPE_TWO_HAND_SWORD.equals(type)) return "양손검";
@@ -132,6 +138,17 @@ public final class EgoWeaponTypeUtil {
     }
 
     public static String getDefaultAbilityType(ItemInstance item) {
+        if (item == null)
+            return "EGO_BALANCE";
+
+        String type2 = getOriginalType2(item);
+        String javaDefault = getJavaDefaultAbilityType(item);
+        if (EgoWeaponRule.hasRule(type2))
+            return EgoWeaponRule.defaultAbility(type2, javaDefault);
+        return javaDefault;
+    }
+
+    private static String getJavaDefaultAbilityType(ItemInstance item) {
         if (item == null)
             return "EGO_BALANCE";
 
@@ -150,6 +167,17 @@ public final class EgoWeaponTypeUtil {
     }
 
     public static boolean isAbilityAllowed(String abilityType, ItemInstance item) {
+        if (abilityType == null || !isValidEgoBaseWeapon(item))
+            return false;
+
+        String type2 = getOriginalType2(item);
+        boolean javaFallback = isJavaAbilityAllowed(abilityType, item);
+        if (EgoWeaponRule.hasRule(type2))
+            return EgoWeaponRule.isAbilityAllowed(type2, abilityType, javaFallback);
+        return javaFallback;
+    }
+
+    private static boolean isJavaAbilityAllowed(String abilityType, ItemInstance item) {
         if (abilityType == null || !isValidEgoBaseWeapon(item))
             return false;
 
@@ -183,7 +211,8 @@ public final class EgoWeaponTypeUtil {
     }
 
     public static String getSupportedWeaponTypesText() {
-        return "지원 원본 무기 타입: 단검(dagger), 한손검(sword), 양손검(tohandsword), 도끼(axe), 창(spear), 활(bow), 지팡이(staff), 완드(wand) / 원본 낚싯대(fishing_rod)는 제외";
+        String fallback = "지원 원본 무기 타입: 단검(dagger), 한손검(sword), 양손검(tohandsword), 도끼(axe), 창(spear), 활(bow), 지팡이(staff), 완드(wand) / 원본 낚싯대(fishing_rod)는 제외";
+        return EgoWeaponRule.supportedText(fallback);
     }
 
     private static String normalizeType(String type) {
