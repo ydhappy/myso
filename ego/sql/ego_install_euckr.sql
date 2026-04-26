@@ -117,8 +117,46 @@ CREATE TABLE IF NOT EXISTS ego_log (
     INDEX ego_log_date_idx (reg_date)
 ) ENGINE=InnoDB DEFAULT CHARSET=euckr COLLATE=euckr_korean_ci COMMENT='에고 능력 발동 기록';
 
-SELECT 'EGO_INSTALL_OK_EUCKR_TALK_TONE' AS result;
+CREATE TABLE IF NOT EXISTS ego_bond (
+    item_id BIGINT NOT NULL COMMENT '에고무기 아이템 objectId',
+    bond INT NOT NULL DEFAULT 0 COMMENT '유대감 0~1000',
+    last_reason VARCHAR(40) NOT NULL DEFAULT '' COMMENT '마지막 증가 사유',
+    reg_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '생성일',
+    mod_date DATETIME NULL DEFAULT NULL COMMENT '수정일',
+    PRIMARY KEY (item_id),
+    INDEX ego_bond_idx (bond)
+) ENGINE=InnoDB DEFAULT CHARSET=euckr COLLATE=euckr_korean_ci COMMENT='에고 유대감';
+
+CREATE TABLE IF NOT EXISTS ego_talk_pack (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    genre VARCHAR(30) NOT NULL COMMENT '장르: 드라마/영화/웹툰/로맨스/액션/판타지/무협/공포/코미디/추리/학원/일상/빌런/주인공/아무',
+    tone VARCHAR(30) NOT NULL DEFAULT '예의' COMMENT '말투: 예의/예의반대',
+    keyword VARCHAR(80) NOT NULL DEFAULT '' COMMENT '예비 키워드',
+    message VARCHAR(255) NOT NULL COMMENT '대사',
+    use_yn TINYINT(1) NOT NULL DEFAULT 1 COMMENT '사용 여부',
+    reg_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '생성일',
+    mod_date DATETIME NULL DEFAULT NULL COMMENT '수정일',
+    PRIMARY KEY (id),
+    INDEX ego_talk_pack_idx (genre, tone, use_yn)
+) ENGINE=InnoDB DEFAULT CHARSET=euckr COLLATE=euckr_korean_ci COMMENT='에고 DB 대사팩';
+
+INSERT INTO ego_talk_pack (genre, tone, keyword, message, use_yn) VALUES
+('드라마', '예의', '', '오늘의 전투는 조용히 시작됐지만, 끝은 분명 주인님의 선택으로 기록될 것입니다.', 1),
+('드라마', '예의반대', '', '드라마 찍냐? 그래도 주인공이면 끝까지 서 있어야지.', 1),
+('영화', '예의', '', '지금은 예고편이 아닙니다. 주인님의 선택이 곧 본편입니다.', 1),
+('영화', '예의반대', '', '엔딩 크레딧 보고 싶으면 지금 죽지 마라.', 1),
+('웹툰', '예의', '', '한 컷 한 컷 쌓이면 성장 서사가 됩니다. 지금의 작은 경험치도 의미 있습니다.', 1),
+('웹툰', '예의반대', '', '이번 회차 제목은 물약 안 먹다 큰일 날 뻔함이냐?', 1),
+('무협', '예의', '', '강호에서 오래 살아남는 이는 먼저 베는 자가 아니라 먼저 읽는 자입니다.', 1),
+('무협', '예의반대', '', '강호였으면 너 지금 하수 티 난다. 자세 고쳐.', 1),
+('아무', '예의', '', '살아남은 자만이 다음 대사를 말할 수 있습니다.', 1),
+('아무', '예의반대', '', '대사는 내가 해줄 테니 전투는 네가 해.', 1)
+ON DUPLICATE KEY UPDATE message = message;
+
+SELECT 'EGO_INSTALL_OK_EUCKR_BOND_TALK_PACK' AS result;
 SHOW TABLES LIKE 'ego';
 SHOW TABLES LIKE 'ego_skill';
 SHOW TABLES LIKE 'ego_skill_base';
 SHOW TABLES LIKE 'ego_log';
+SHOW TABLES LIKE 'ego_bond';
+SHOW TABLES LIKE 'ego_talk_pack';
