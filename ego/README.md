@@ -13,8 +13,9 @@ type2 변형 없음
 실시간 대화 말투는 예의 / 예의반대 2종
 명령어가 아닌 자연대화도 반응
 드라마/영화/웹툰 등 장르별 오리지널 대사 지원
-장르목록/대사추천/스팸방지 보강 완료
 주요 수치/경험치/전투 보너스/무기 규칙 DB화 완료
+레벨 경험치 + 전투 보너스는 ego_level로 병합 완료
+유대감은 ego.bond / ego.bond_reason으로 병합 완료
 DB 실행 파일 신규 1개 / 기존 1개로 최소화
 기존 서버 Java 연결 진입점 EgoCore 1개로 최소화
 ```
@@ -39,19 +40,29 @@ EgoCombat 없음
 
 ---
 
-## 2. DB 최종 테이블
+## 2. 최종 DB 테이블
+
+### 신규 우선 테이블
 
 ```text
-ego                      에고 기본 정보
+ego                      에고 기본 정보 + 유대감 병합
 ego_skill                에고 무기별 능력
 ego_skill_base           에고 스킬 기본 발동률/쿨타임/이펙트
 ego_log                  에고 전투 로그
-ego_bond                 에고 유대감
 ego_talk_pack            에고 장르/자연대화 DB 대사팩
 ego_config               에고 공통 설정값
-ego_level_exp            에고 레벨별 필요 경험치
-ego_level_bonus          에고 레벨별 전투 보너스
+ego_level                에고 레벨 경험치 + 전투 보너스 통합
 ego_weapon_rule          에고 무기 타입/능력 허용 규칙
+```
+
+### 구버전 fallback 테이블
+
+아래 테이블은 기존 서버 호환을 위해 fallback으로만 유지합니다.
+
+```text
+ego_bond                 구버전 유대감 fallback
+ego_level_exp            구버전 레벨 경험치 fallback
+ego_level_bonus          구버전 레벨 전투 보너스 fallback
 ```
 
 `ego.ego_type`은 현재 성격 테이블이 아니라 실시간 대화 말투 저장소로 사용합니다.
@@ -81,12 +92,19 @@ SOURCE ego/sql/ego_install_euckr.sql;
 SOURCE ego/sql/ego_update_euckr.sql;
 ```
 
-`SOURCE`가 안 되는 DB 툴이면 아래 3개를 순서대로 직접 실행합니다.
+`SOURCE`가 안 되는 DB 툴이면 아래 4개를 순서대로 직접 실행합니다.
 
 ```sql
 SOURCE ego/sql/ego_cleanup_unused.sql;
 SOURCE ego/sql/ego_db_config.sql;
+SOURCE ego/sql/ego_merge_schema_euckr.sql;
 SOURCE ego/sql/ego_talk_pack_dedupe.sql;
+```
+
+병합만 별도 적용하려면 아래만 실행합니다.
+
+```sql
+SOURCE ego/sql/ego_merge_schema_euckr.sql;
 ```
 
 ### 서버 내 즉시 반영
@@ -190,12 +208,20 @@ o.setNowHp(o.getNowHp() - dmg);
 EgoCore.java
 ```
 
+### 연결성/Facade 그룹
+
+```text
+EgoDb.java
+EgoSchema.java
+```
+
 ### DB/설정 그룹
 
 ```text
 EgoDB.java
 EgoConfig.java
-EgoLevelBonus.java
+EgoLevel.java
+EgoLevelBonus.java   구버전 메서드명 호환 Facade
 EgoWeaponRule.java
 EgoTalkPack.java
 EgoBond.java
@@ -252,7 +278,8 @@ EgoView.java
 ego 삭제
 ego_skill 삭제
 ego_log 삭제
-ego_bond 삭제
+ego.bond 초기화
+ego_bond fallback row 삭제
 ```
 
 삭제 후 복구할 수 없습니다. 다시 사용하려면 `.에고생성 이름`으로 새로 생성해야 합니다.
@@ -374,22 +401,18 @@ WHERE config_key='auto_counter_unlock_level';
 .에고리로드
 ```
 
-### ego_level_exp
+### ego_level
 
-에고 레벨별 필요 경험치를 DB에서 조정합니다.
+에고 레벨별 필요 경험치와 전투 보너스를 통합 관리합니다.
 
 ```sql
-UPDATE ego_level_exp
+UPDATE ego_level
 SET need_exp=2000, mod_date=NOW()
 WHERE ego_lv=4;
 ```
 
-### ego_level_bonus
-
-레벨별 전투 보너스를 DB에서 조정합니다.
-
 ```sql
-UPDATE ego_level_bonus
+UPDATE ego_level
 SET critical_chance=30, critical_damage=25, mod_date=NOW()
 WHERE ego_lv=10;
 ```
@@ -443,7 +466,7 @@ fishing_rod
 ```text
 생성 시 레벨: 0
 생성 시 경험치: 0
-생성 시 필요 경험치: ego_level_exp.ego_lv=0 기준
+생성 시 필요 경험치: ego_level.ego_lv=0 기준
 최대 레벨: 10
 ```
 
@@ -487,7 +510,7 @@ Lv.10         : 0       만렙
 
 ## 11. 레벨별 전투 규칙
 
-레벨별 세부 수치는 `ego_level_bonus`에서 관리합니다.
+레벨별 세부 수치는 `ego_level`에서 관리합니다.
 
 ```text
 Lv.0  모든 전투 능력 없음
@@ -501,12 +524,12 @@ Lv.10 스턴 시도
 
 ```text
 스킬 발동률 = ego_skill_base.base_rate + 레벨 보정 + ego_skill.rate_bonus
-레벨 보정 = ego_level_bonus.proc_bonus
-치명률 보정 = ego_level_bonus.critical_chance
-치명 피해 보정 = ego_level_bonus.critical_damage
-반격 확률 = ego_level_bonus.counter_chance
-반격 피해 = ego_level_bonus.counter_power
-반격 치명 = ego_level_bonus.counter_critical
+레벨 보정 = ego_level.proc_bonus
+치명률 보정 = ego_level.critical_chance
+치명 피해 보정 = ego_level.critical_damage
+반격 확률 = ego_level.counter_chance
+반격 피해 = ego_level.counter_power
+반격 치명 = ego_level.counter_critical
 ```
 
 ---
@@ -596,18 +619,40 @@ LIMIT 50;
 
 ---
 
-## 16. 참고 문서
+## 16. 연결성 점검
+
+Java에서:
+
+```java
+boolean ok = EgoCore.schemaOk(con);
+String report = EgoCore.schemaReport(con);
+```
+
+DB에서:
+
+```sql
+SHOW TABLES LIKE 'ego%';
+SELECT item_id, ego_name, ego_lv, ego_exp, need_exp, bond, bond_reason FROM ego;
+SELECT * FROM ego_level ORDER BY ego_lv;
+SELECT * FROM ego_config ORDER BY config_key;
+SELECT * FROM ego_weapon_rule ORDER BY type2;
+```
+
+---
+
+## 17. 참고 문서
 
 ```text
 ego/docs/EGO_MINIMAL_APPLY.md
 ego/docs/EGO_DBIZATION.md
+ego/docs/EGO_CONNECTIVITY_MAP.md
 ego/docs/EGO_IMPLEMENTED_NO_TEST_COMMANDS.md
 ego/docs/EGO_SUGGESTIONS.md
 ```
 
 ---
 
-## 17. 컴파일
+## 18. 컴파일
 
 ```bash
 javac -encoding UTF-8 -source 1.8 -target 1.8
@@ -615,29 +660,26 @@ javac -encoding UTF-8 -source 1.8 -target 1.8
 
 ---
 
-## 18. 최종 점검
+## 19. 최종 점검
 
 ```text
 [확인] DB 실행 파일 신규 1개 / 기존 1개 최소화
 [확인] 기존 서버 Java 연결 진입점 EgoCore 1개 최소화
+[확인] ego_level_exp + ego_level_bonus -> ego_level 병합
+[확인] ego_bond -> ego.bond / ego.bond_reason 병합
+[확인] 구버전 fallback 유지
+[확인] 반복 실행 안전 SQL 보강
 [확인] 최대레벨 10 고정
 [확인] 생성 레벨 0
 [확인] Lv.0 전투능력 없음
 [확인] Lv.1부터 스킬/치명 동작
 [확인] 실시간 대화 예의/예의반대 2종
 [확인] 명령어가 아닌 자연대화 반응
-[확인] 드라마/영화/웹툰 등 장르별 대화 라이브러리
 [확인] DB 대사팩 ego_talk_pack
-[확인] 장르목록/대사목록/대화추천 안내
 [확인] 장르대화 스팸 방지 DB화
-[확인] 최근 주제 1개 기억 후 이어말 처리
-[확인] .에고말투 예의 / .에고말투 예의반대
-[확인] 일반채팅 말투 변경
-[확인] 레벨별 경험치 DB화
-[확인] 레벨별 전투 보너스 DB화
+[확인] 레벨별 경험치/전투 보너스 ego_level 통합
 [확인] 주요 전투 설정 ego_config DB화
 [확인] 무기 타입/능력 허용 규칙 DB화
-[확인] 만렙 Lv.10 경험치 0 / 필요 경험치 0 고정
 [확인] Lv.5부터 피격 반격/공격성공/공격력/치명 보정
 [확인] Lv.6부터 피격 자동반격
 [확인] Lv.10 스턴 기본 50% 성공
