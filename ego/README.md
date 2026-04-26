@@ -221,7 +221,6 @@ EgoSchema.java
 EgoDB.java
 EgoConfig.java
 EgoLevel.java
-EgoLevelBonus.java   구버전 메서드명 호환 Facade
 EgoWeaponRule.java
 EgoTalkPack.java
 EgoBond.java
