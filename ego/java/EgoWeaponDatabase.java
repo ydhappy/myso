@@ -239,7 +239,7 @@ public final class EgoWeaponDatabase {
             st.executeUpdate();
             DatabaseConnection.close(st);
             st = null;
-            resetMergedBond(con, item.getObjectId());
+            resetBond(con, item.getObjectId());
 
             EgoWeaponInfo info = new EgoWeaponInfo();
             info.itemObjId = item.getObjectId();
@@ -510,14 +510,21 @@ public final class EgoWeaponDatabase {
         }
     }
 
-    private static void resetMergedBond(Connection con, long itemObjId) {
-        if (con == null || !columnExists(con, "ego", "bond") || !columnExists(con, "ego", "bond_reason"))
-            return;
+    private static void resetBond(Connection con, long itemObjId) {
         PreparedStatement st = null;
         try {
-            st = con.prepareStatement("UPDATE ego SET bond=0, bond_reason='', mod_date=NOW() WHERE item_id=?");
-            st.setLong(1, itemObjId);
-            st.executeUpdate();
+            if (columnExists(con, "ego", "bond") && columnExists(con, "ego", "bond_reason")) {
+                st = con.prepareStatement("UPDATE ego SET bond=0, bond_reason='', mod_date=NOW() WHERE item_id=?");
+                st.setLong(1, itemObjId);
+                st.executeUpdate();
+                DatabaseConnection.close(st);
+                st = null;
+            }
+            if (tableExists(con, "ego_bond")) {
+                st = con.prepareStatement("DELETE FROM ego_bond WHERE item_id=?");
+                st.setLong(1, itemObjId);
+                st.executeUpdate();
+            }
         } catch (Exception e) {
         } finally {
             DatabaseConnection.close(st);
