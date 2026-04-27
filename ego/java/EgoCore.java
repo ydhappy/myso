@@ -1,6 +1,7 @@
 package lineage.world.controller;
 
 import java.sql.Connection;
+import java.util.StringTokenizer;
 
 import lineage.database.EgoDB;
 import lineage.world.object.Character;
@@ -43,8 +44,18 @@ public final class EgoCore {
     }
 
     /** CommandController에서 명령어 처리. true면 기존 명령 처리 중단. */
+    public static boolean command(object o, String key, StringTokenizer st) {
+        return EgoCmd.run(o, key, st);
+    }
+
+    /** CommandController가 남은 인자를 문자열로 넘기는 서버용 편의 오버로드. */
     public static boolean command(object o, String key, String args) {
-        return EgoCmd.run(o, key, args);
+        return EgoCmd.run(o, key, new StringTokenizer(args == null ? "" : args));
+    }
+
+    /** CommandController가 인자 없이 key만 넘기는 서버용 편의 오버로드. */
+    public static boolean command(object o, String key) {
+        return EgoCmd.run(o, key, new StringTokenizer(""));
     }
 
     /** ChattingController 일반채팅 처리. true면 주변 방송 중단. */
