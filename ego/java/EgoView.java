@@ -73,16 +73,14 @@ public final class EgoView {
     public static String displayName(ItemInstance item, String baseName) {
         if (item == null)
             return baseName == null ? "" : baseName;
-        return fixNameIdBaseName(item, baseName == null ? item.getName() : baseName);
+        return stripEgoDisplaySuffix(fixNameIdBaseName(item, baseName == null ? item.getName() : baseName));
     }
 
     public static String name(ItemInstance item, String baseName) {
         if (item == null || baseName == null)
             return baseName;
         if (!isEgo(item))
-            return baseName;
-        if (baseName.indexOf("[Lv.") >= 0)
-            return EgoMessageUtil.clientColor(baseName);
+            return stripEgoDisplaySuffix(baseName);
 
         String fixedName = displayName(item, baseName);
         EgoWeaponInfo ego = EgoWeaponDatabase.find(item);
@@ -166,6 +164,40 @@ public final class EgoView {
 
     public static String label(ItemInstance item) {
         return EgoWeaponTypeUtil.getDisplayTypeName(item);
+    }
+
+    private static String stripEgoDisplaySuffix(String value) {
+        String result = value == null ? "" : EgoMessageUtil.clientColor(value).trim();
+        result = removeColor(result).trim();
+
+        int egoIdx = result.indexOf(" [에고]");
+        if (egoIdx >= 0)
+            result = result.substring(0, egoIdx).trim();
+
+        int lvIdx = result.indexOf(" [Lv.");
+        if (lvIdx >= 0)
+            result = result.substring(0, lvIdx).trim();
+
+        return result;
+    }
+
+    private static String removeColor(String value) {
+        if (value == null)
+            return "";
+        StringBuilder sb = new StringBuilder(value.length());
+        for (int i = 0; i < value.length();) {
+            if (i + 2 < value.length() && value.charAt(i) == '\\' && value.charAt(i + 1) == 'f') {
+                i += 3;
+                continue;
+            }
+            if (i + 1 < value.length() && value.charAt(i) == '\f') {
+                i += 2;
+                continue;
+            }
+            sb.append(value.charAt(i));
+            i++;
+        }
+        return sb.toString();
     }
 
     private static String fixNameIdBaseName(ItemInstance item, String baseName) {
