@@ -105,7 +105,7 @@ final class EgoOrbController {
     private static final long USE_LOCK_MS = 1000L;
     private static final Random random = new Random();
     private static final Map<Long, Long> useLockMap = new ConcurrentHashMap<Long, Long>();
-    private static final String[] TONES = { "예의", "예의반대" };
+    private static final String[] TONES = { "예의", "예의반대", "싸이코패스" };
     private static final String[] ABILITIES = {
         "BALANCE",
         "BLOOD",
