@@ -1,6 +1,10 @@
 # EGO Weapon System
 
-Java 8 / UTF-8 기준 에고무기 시스템입니다.
+Java 8 / UTF-8 기준 에고무기 배포 패키지입니다.
+
+## 기준
+
+이 패키지는 `ego/` 폴더 자체가 배포 단위입니다. `bitna/빛나` 폴더는 서버 구조와 기존 코드 스타일을 확인하기 위한 참고용이며, 배포 파일을 `bitna/src`에 직접 생성하지 않습니다.
 
 ## 최종 구조
 
@@ -8,7 +12,7 @@ Java 8 / UTF-8 기준 에고무기 시스템입니다.
 ego/sql/ego_schema.sql      SQL 통합 1개
 ego/docs/사용방법.md         사용/적용 문서
 ego/docs/업데이트내용.md     변경 이력 문서
-ego/java/                   Java 보강 코드
+ego/java/                   Java 배포 코드
 ego/html/egoletter.htm      장문 안내창 템플릿
 ego/README.md               빠른 안내
 ```
@@ -16,6 +20,8 @@ ego/README.md               빠른 안내
 ## 핵심 원칙
 
 ```text
+ego 패키지 배포 기준
+bitna/빛나는 참고용
 기존 무기 type2 변경 없음
 아이템 템플릿 변경 없음
 인벤/바닥 이미지 변경 없음
@@ -23,7 +29,7 @@ DamageController 기본 공식 유지
 외부 연결은 EgoCore 중심
 SQL은 ego_schema.sql 1개만 사용
 문서는 사용방법.md, 업데이트내용.md 2개만 유지
-원클릭 관련 파일/기능/안내 없음
+자동 설치/전체 초기화 관련 파일 없음
 ```
 
 ## SQL 적용
@@ -44,7 +50,7 @@ DB 툴이 `SOURCE`를 지원하지 않으면 `ego/sql/ego_schema.sql` 내용을 
 
 ## Java 연결
 
-기존 서버에는 가능하면 `EgoCore`만 연결합니다.
+`ego/java`의 배포 코드를 서버 소스 구조에 맞게 복사한 뒤 기존 서버에는 가능하면 `EgoCore`만 연결합니다.
 
 ```java
 EgoCore.init(con);
