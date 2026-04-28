@@ -130,7 +130,33 @@ Java 클래스: lineage.world.object.item.EgoOrb
 
 ```text
 에고가 없는 착용 무기: 에고 최초 생성, 능력/대화 랜덤 최초 선택, 구슬 1개 소모
+랜덤 대화 성향: 예의 / 예의반대 / 싸이코패스
 이미 에고무기: 능력/대화/레벨/경험치 변경 없음, 현재 캐릭터를 주인으로 재인식
+```
+
+## DB 연결 기준
+
+```text
+ego.item_id              Java item objectId
+ego.char_id              현재 주인 objectId
+ego.ego_type             예의 / 예의반대 / 싸이코패스
+ego_skill.skill          Java 런타임 능력명
+ego_skill_base.skill     Java 런타임 능력명
+ego_talk_pack.tone       예의 / 예의반대 / 싸이코패스
+ego_config.config_key    Java 설정 키
+```
+
+## 현재 병합/삭제된 파일
+
+```text
+EgoItemDatabaseHook.java -> EgoDB.java에 병합 후 삭제
+EgoSkill.java            -> EgoCore.java에 병합 후 삭제
+EgoAutoTalk.java         -> EgoTalk.java에 병합 후 삭제
+EgoGenreGuide.java       -> EgoTalk.java에 병합 후 삭제
+EgoTalkHistory.java      -> EgoTalk.java에 병합 후 삭제
+EgoSchema.java           -> EgoCore.java에 병합 후 삭제
+EgoWeaponTypeUtil.java   -> EgoCore.java에 병합 후 삭제
+EgoScan.java             -> 미사용 wrapper 삭제
 ```
 
 ## 점명령 정책
@@ -143,13 +169,6 @@ Java 클래스: lineage.world.object.item.EgoOrb
 ```
 
 생성은 `에고 구슬` 아이템 사용으로만 처리합니다. 삭제와 변경은 제공하지 않습니다.
-
-## 현재 병합/삭제된 파일
-
-```text
-EgoItemDatabaseHook.java -> EgoDB.java에 병합 후 삭제
-EgoSkill.java            -> EgoCore.java에 병합 후 삭제
-```
 
 ## 문서
 
