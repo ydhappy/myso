@@ -159,7 +159,7 @@ public final class EgoMessageUtil {
     private static String normalize(String value) {
         if (value == null)
             return "";
-        return value.replace('\r', '\n').replaceAll("\n{3,}", "\n\n").trim();
+        return value.replace("\r\n", "\n").replace('\r', '\n').replaceAll("\n{3,}", "\n\n").trim();
     }
 
     private static List<String> splitLines(String text, int width, int maxLines) {
@@ -171,7 +171,7 @@ public final class EgoMessageUtil {
         if (maxLines <= 0)
             maxLines = LETTER_MAX_LINES;
 
-        String[] rawLines = text.replace("\r", "").split("\n");
+        String[] rawLines = text.replace("\r\n", "\n").replace("\r", "").split("\n");
         for (int i = 0; i < rawLines.length; i++) {
             String line = rawLines[i] == null ? "" : rawLines[i].trim();
             while (line.length() > width) {
