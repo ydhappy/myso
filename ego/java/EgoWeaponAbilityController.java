@@ -483,7 +483,8 @@ public final class EgoWeaponAbilityController {
         if (last != null && now - last.longValue() < delay)
             return;
         procMessageDelayMap.put(key, now);
-        ChattingController.toChatting(pc, EgoMessageUtil.clientColor(msg), Lineage.CHATTING_MODE_MESSAGE);
+        String out = EgoMessageUtil.keepColorOnNewLines(EgoMessageUtil.clientColor(msg));
+        ChattingController.toChatting(pc, out, Lineage.CHATTING_MODE_MESSAGE);
     }
 
     private static void loadSkillBase() {
