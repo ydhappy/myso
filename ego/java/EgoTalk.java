@@ -29,10 +29,6 @@ public final class EgoTalk {
     private EgoTalk() {
     }
 
-    /**
-     * 일반채팅 처리.
-     * true 반환 시 해당 채팅은 주변에 방송하지 않고 소비해야 합니다.
-     */
     public static boolean chat(PcInstance pc, String msg) {
         if (tryGenreTalk(pc, msg))
             return true;
@@ -42,7 +38,6 @@ public final class EgoTalk {
         return handled;
     }
 
-    /** 자동 경고 체크. */
     public static void warning(PcInstance pc) {
         EgoAutoTalk.warning(pc);
         EgoWeaponControlController.checkAutoWarning(pc);
@@ -72,11 +67,7 @@ public final class EgoTalk {
         if (EgoGenreGuide.isGuideRequest(command)) {
             if (!checkGenreDelay(pc))
                 return EgoMessageUtil.consumeNormalChat();
-            String guide;
-            if (command.indexOf("추천") >= 0)
-                guide = EgoGenreGuide.suggest(weapon);
-            else
-                guide = EgoGenreGuide.guide(weapon);
+            String guide = command.indexOf("추천") >= 0 ? EgoGenreGuide.suggest(weapon) : EgoGenreGuide.guide(weapon);
             EgoTalkHistory.remember(pc, guide);
             EgoMessageUtil.info(pc, guide);
             EgoBond.addTalk(pc, weapon);
@@ -143,10 +134,36 @@ public final class EgoTalk {
     }
 }
 
+final class EgoTone {
+    static final String RUDE = "예의반대";
+    static final String PSYCHO = "싸이코패스";
+
+    private EgoTone() {
+    }
+
+    static boolean rude(String tone) {
+        return RUDE.equals(EgoWeaponDatabase.normalizeTone(tone));
+    }
+
+    static boolean psycho(String tone) {
+        return PSYCHO.equals(EgoWeaponDatabase.normalizeTone(tone));
+    }
+
+    static String phrase(String tone, String polite, String rude, String psycho) {
+        if (psycho(tone))
+            return psycho;
+        if (rude(tone))
+            return rude;
+        return polite;
+    }
+
+    static String phrase(String tone, String polite, String rude, String psycho, Object... args) {
+        return String.format(phrase(tone, polite, rude, psycho), args);
+    }
+}
+
 /** 에고 장르대화 안내/추천 헬퍼. */
 final class EgoGenreGuide {
-
-    private static final String TONE_RUDE = "예의반대";
 
     private EgoGenreGuide() {
     }
@@ -160,9 +177,10 @@ final class EgoGenreGuide {
 
     static String guide(ItemInstance weapon) {
         String tone = EgoWeaponDatabase.getTone(weapon);
-        if (isRude(tone)) {
+        if (EgoTone.psycho(tone))
+            return "가능한 장르는 드라마, 영화, 웹툰, 로맨스, 액션, 판타지, 무협, 공포, 코미디, 추리, 학원, 일상/힐링, 빌런, 주인공각성이다. 예: '드라마 대사 해줘'. 선택해. 네 반응까지 기록해둘 테니까.";
+        if (EgoTone.rude(tone))
             return "가능한 장르는 이거다: 드라마, 영화, 웹툰, 로맨스, 액션, 판타지, 무협, 공포, 코미디, 추리, 학원, 일상/힐링, 빌런, 주인공각성. 예: '드라마 대사 해줘', '아무 대사나 해줘'.";
-        }
         return "가능한 장르는 드라마, 영화, 웹툰, 로맨스, 액션, 판타지, 무협, 공포, 코미디, 추리, 학원, 일상/힐링, 빌런, 주인공각성입니다. 예: '드라마 대사 해줘', '아무 대사나 해줘'.";
     }
 
@@ -182,12 +200,15 @@ final class EgoGenreGuide {
             "각성 대사 듣고 싶으면 먼저 성장부터 해. 그래도 분위기는 내줄게.",
             "공포 대사? 네 HP 낮을 때가 제일 공포다."
         };
-        String[] arr = isRude(tone) ? rude : polite;
+        String[] psycho = new String[] {
+            "오늘은 공포나 빌런풍이 좋겠어. 조용한 긴장감이 네 손끝을 더 예민하게 만들거든.",
+            "무협도 나쁘지 않아. 절제된 칼끝 뒤에 숨어 있는 충동이 꽤 아름답거든.",
+            "드라마풍으로 가자. 무너지는 순간의 표정은 늘 가장 오래 남아.",
+            "액션을 골라. 빠른 박자 속에서 네 망설임이 얼마나 줄었는지 보고 싶어.",
+            "각성 대사를 추천하지. 네 안쪽이 어디까지 비틀릴 수 있는지 확인해보자."
+        };
+        String[] arr = EgoTone.psycho(tone) ? psycho : (EgoTone.rude(tone) ? rude : polite);
         return arr[Util.random(0, arr.length - 1)];
-    }
-
-    private static boolean isRude(String tone) {
-        return TONE_RUDE.equals(EgoWeaponDatabase.normalizeTone(tone));
     }
 
     private static String normalize(String value) {
@@ -278,7 +299,6 @@ final class EgoTalkHistory {
  */
 final class EgoAutoTalk {
 
-    private static final String TONE_RUDE = "예의반대";
     private static final Map<String, Long> delayMap = new ConcurrentHashMap<String, Long>();
 
     private EgoAutoTalk() {
@@ -306,32 +326,36 @@ final class EgoAutoTalk {
         int idleMpRate = EgoConfig.percent("auto_talk_idle_mp_rate", 50);
 
         if (hpRate <= hpWarnRate && check(pc, "HP", EgoConfig.getLong("auto_talk_hp_warn_delay_ms", 15000L))) {
-            EgoMessageUtil.danger(pc, phrase(tone,
+            EgoMessageUtil.danger(pc, EgoTone.phrase(tone,
                 "HP가 매우 낮습니다. 즉시 회복하거나 거리를 벌리십시오.",
-                "HP 진짜 낮다. 지금 물약 안 먹으면 눕는다."));
+                "HP 진짜 낮다. 지금 물약 안 먹으면 눕는다.",
+                "피가 거의 비었어. 좋아, 공포가 판단을 맑게 하지. 그래도 지금은 살아. 더 오래 보게."));
             EgoBond.addDangerSurvive(weapon);
             return;
         }
 
         if (mpRate <= mpWarnRate && check(pc, "MP", EgoConfig.getLong("auto_talk_mp_warn_delay_ms", 20000L))) {
-            EgoMessageUtil.info(pc, phrase(tone,
+            EgoMessageUtil.info(pc, EgoTone.phrase(tone,
                 "MP가 부족합니다. 스킬 사용을 줄이고 회복 시간을 확보하십시오.",
-                "MP 바닥이다. 스킬 낭비 그만하고 숨 좀 돌려."));
+                "MP 바닥이다. 스킬 낭비 그만하고 숨 좀 돌려.",
+                "정신력이 말라간다. 무리하게 비틀지 마. 빈 껍데기는 재미없으니까."));
             return;
         }
 
         MonsterInstance boss = findBoss(pc);
         if (boss != null && check(pc, "BOSS", EgoConfig.getLong("auto_talk_boss_warn_delay_ms", 30000L))) {
-            EgoMessageUtil.danger(pc, phrase(tone,
+            EgoMessageUtil.danger(pc, EgoTone.phrase(tone,
                 "보스급 기척이 감지됩니다. 대상: %s. 무리한 교전은 피하십시오.",
-                "보스급 %s 보인다. 객기 부리면 바로 눕는다.", getMonsterName(boss)));
+                "보스급 %s 보인다. 객기 부리면 바로 눕는다.",
+                "큰 기척이다. %s... 저 무게가 네 손을 얼마나 떨리게 할지 궁금하군.", getMonsterName(boss)));
             return;
         }
 
         if (hpRate >= idleHpRate && mpRate >= idleMpRate && check(pc, "IDLE", EgoConfig.getLong("auto_talk_idle_delay_ms", 180000L))) {
-            EgoMessageUtil.genre(pc, phrase(tone,
+            EgoMessageUtil.genre(pc, EgoTone.phrase(tone,
                 "상태는 안정적입니다. 지금은 차분히 성장하기 좋은 흐름입니다.",
-                "상태 괜찮다. 지금은 무리만 안 하면 된다."));
+                "상태 괜찮다. 지금은 무리만 안 하면 된다.",
+                "몸도 정신도 안정적이군. 가장 위험한 건 이런 평온 속에서 자라나는 호기심이지."));
         }
     }
 
@@ -373,18 +397,5 @@ final class EgoAutoTalk {
         if (mon.getName() != null)
             return mon.getName();
         return "알 수 없는 몬스터";
-    }
-
-    private static boolean isRude(String tone) {
-        return TONE_RUDE.equals(EgoWeaponDatabase.normalizeTone(tone));
-    }
-
-    private static String phrase(String tone, String polite, String rude) {
-        return isRude(tone) ? rude : polite;
-    }
-
-    private static String phrase(String tone, String polite, String rude, Object... args) {
-        String pattern = isRude(tone) ? rude : polite;
-        return String.format(pattern, args);
     }
 }
