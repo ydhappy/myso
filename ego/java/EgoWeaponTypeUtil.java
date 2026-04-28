@@ -6,8 +6,10 @@ import lineage.world.object.instance.ItemInstance;
 /**
  * 에고무기 대상 판정 유틸.
  *
- * 무기 슬롯이면 에고 대상이며 낚싯대만 제외한다.
- * 능력명은 DB ego_skill.skill / ego_skill_base.skill / Java enum이 1:1로 같은 단순명을 사용한다.
+ * 최종 정책:
+ * - 무기 슬롯이면 에고 대상이다.
+ * - 낚싯대(fishing_rod)는 제외한다.
+ * - Java 전투 컨트롤러 런타임 능력명을 기본값으로 반환한다.
  */
 public final class EgoWeaponTypeUtil {
 
@@ -51,16 +53,16 @@ public final class EgoWeaponTypeUtil {
     public static String getDefaultAbilityType(ItemInstance item) {
         String name = safeItemName(item).toLowerCase();
         if (name.indexOf("피") >= 0 || name.indexOf("blood") >= 0 || name.indexOf("흡혈") >= 0)
-            return "BLOOD";
+            return "BLOOD_DRAIN";
         if (name.indexOf("마나") >= 0 || name.indexOf("지식") >= 0 || name.indexOf("mana") >= 0)
-            return "MANA";
+            return "MANA_DRAIN";
         if (name.indexOf("화염") >= 0 || name.indexOf("불") >= 0 || name.indexOf("flame") >= 0 || name.indexOf("fire") >= 0)
-            return "FIRE";
+            return "FLAME_BRAND";
         if (name.indexOf("얼음") >= 0 || name.indexOf("서리") >= 0 || name.indexOf("frost") >= 0 || name.indexOf("ice") >= 0)
-            return "FROST";
+            return "FROST_BIND";
         if (name.indexOf("수호") >= 0 || name.indexOf("가디언") >= 0 || name.indexOf("guardian") >= 0)
-            return "SHIELD";
-        return "BALANCE";
+            return "GUARDIAN_SHIELD";
+        return "EGO_BALANCE";
     }
 
     public static String getDisplayTypeName(ItemInstance item) {
