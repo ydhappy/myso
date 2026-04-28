@@ -4,7 +4,7 @@
 -- Runtime DB charset target: euckr
 -- Purpose: consolidated install/update SQL for the ego system.
 -- Policy: no one-click delete, no full reset, no direct item table insert.
--- Final orb policy: 에고 구슬 creates ego on equipped weapon; existing ego weapon only re-recognizes owner.
+-- Final policy: no weapon type rule table; weapon slot items are eligible except fishing_rod.
 -- ============================================================
 
 SET NAMES utf8;
@@ -122,17 +122,6 @@ CREATE TABLE IF NOT EXISTS ego_level (
     PRIMARY KEY (ego_lv)
 ) ENGINE=InnoDB DEFAULT CHARSET=euckr COLLATE=euckr_korean_ci COMMENT='에고 레벨 통합 설정';
 
-CREATE TABLE IF NOT EXISTS ego_weapon_rule (
-    type2 VARCHAR(40) NOT NULL,
-    display_name VARCHAR(50) NOT NULL DEFAULT '',
-    default_ability VARCHAR(40) NOT NULL DEFAULT 'EGO_BALANCE',
-    allowed_abilities VARCHAR(255) NOT NULL DEFAULT '',
-    use_yn TINYINT(1) NOT NULL DEFAULT 1,
-    reg_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    mod_date DATETIME NULL DEFAULT NULL,
-    PRIMARY KEY (type2)
-) ENGINE=InnoDB DEFAULT CHARSET=euckr COLLATE=euckr_korean_ci COMMENT='에고 무기 타입/능력 허용 규칙';
-
 CREATE TABLE IF NOT EXISTS ego_item_template (
     item_code INT NOT NULL,
     item_name VARCHAR(80) NOT NULL,
@@ -189,6 +178,7 @@ CREATE TABLE IF NOT EXISTS ego_level_bonus (
 DROP TABLE IF EXISTS ego_talk;
 DROP TABLE IF EXISTS ego_type;
 DROP TABLE IF EXISTS ego_view;
+DROP TABLE IF EXISTS ego_weapon_rule;
 DROP TABLE IF EXISTS `에고모양`;
 
 SET @sql := IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ego' AND COLUMN_NAME = 'bond') = 0,
@@ -302,20 +292,6 @@ INSERT INTO ego_level (ego_lv, need_exp, proc_bonus, critical_chance, critical_d
 (10,0,15,25,20,100,60,35,'Lv.10 스턴 연동',1)
 ON DUPLICATE KEY UPDATE memo=VALUES(memo);
 
-INSERT INTO ego_weapon_rule (type2, display_name, default_ability, allowed_abilities, use_yn) VALUES
-('dagger','단검','EGO_BALANCE','EGO_BALANCE,BLOOD_DRAIN,MANA_DRAIN,CRITICAL_BURST,GUARDIAN_SHIELD,EXECUTION,FLAME_BRAND,EGO_COUNTER,EGO_REVENGE',1),
-('sword','한손검','EGO_BALANCE','EGO_BALANCE,BLOOD_DRAIN,MANA_DRAIN,CRITICAL_BURST,GUARDIAN_SHIELD,EXECUTION,FLAME_BRAND,EGO_COUNTER,EGO_REVENGE',1),
-('tohandsword','양손검','CRITICAL_BURST','EGO_BALANCE,BLOOD_DRAIN,CRITICAL_BURST,GUARDIAN_SHIELD,AREA_SLASH,EXECUTION,FLAME_BRAND,EGO_COUNTER,EGO_REVENGE',1),
-('axe','도끼','CRITICAL_BURST','EGO_BALANCE,BLOOD_DRAIN,CRITICAL_BURST,GUARDIAN_SHIELD,AREA_SLASH,EXECUTION,FLAME_BRAND,EGO_COUNTER,EGO_REVENGE',1),
-('spear','창','AREA_SLASH','EGO_BALANCE,BLOOD_DRAIN,CRITICAL_BURST,GUARDIAN_SHIELD,AREA_SLASH,FLAME_BRAND,FROST_BIND,EGO_COUNTER,EGO_REVENGE',1),
-('bow','활','EGO_BALANCE','EGO_BALANCE,CRITICAL_BURST,GUARDIAN_SHIELD,FROST_BIND,EGO_COUNTER,EGO_REVENGE',1),
-('staff','지팡이','MANA_DRAIN','EGO_BALANCE,MANA_DRAIN,GUARDIAN_SHIELD,FLAME_BRAND,FROST_BIND,EGO_COUNTER,EGO_REVENGE',1),
-('wand','완드','MANA_DRAIN','EGO_BALANCE,MANA_DRAIN,GUARDIAN_SHIELD,FLAME_BRAND,FROST_BIND,EGO_COUNTER,EGO_REVENGE',1),
-('fishing_rod','낚싯대','EGO_BALANCE','',0)
-ON DUPLICATE KEY UPDATE display_name=VALUES(display_name);
-
-UPDATE ego_weapon_rule SET use_yn=0, allowed_abilities='' WHERE type2='fishing_rod';
-
 INSERT INTO ego_talk_pack (genre, tone, keyword, message, use_yn) VALUES
 ('드라마','예의','','오늘의 전투는 조용히 시작됐지만, 끝은 분명 주인님의 선택으로 기록될 것입니다.',1),
 ('드라마','예의반대','','드라마 찍냐? 그래도 주인공이면 끝까지 서 있어야지.',1),
@@ -339,5 +315,4 @@ SELECT 'EGO_SCHEMA_SQL_OK' AS result;
 SHOW TABLES LIKE 'ego%';
 SELECT * FROM ego_level ORDER BY ego_lv;
 SELECT * FROM ego_config ORDER BY config_key;
-SELECT * FROM ego_weapon_rule ORDER BY type2;
 SELECT * FROM ego_item_template ORDER BY item_code;
