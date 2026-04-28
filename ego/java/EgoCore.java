@@ -25,42 +25,34 @@ import lineage.world.object.instance.RobotInstance;
  * - chat/tick: 대화/상태 주기 처리
  * - attack/defense: 전투 보정
  * - useOrb: 에고 구슬 사용 처리
- *
- * 에고 생성은 점명령이 아니라 EgoOrb 아이템 사용으로만 처리한다.
  */
 public final class EgoCore {
 
     private EgoCore() {
     }
 
-    /** 서버 시작 시 1회 호출. */
     public static void init(Connection con) {
         EgoSchema.silentCheck(con);
         EgoDB.init(con);
     }
 
-    /** 서버 관리 리로드 시 호출. 점명령 연결은 제공하지 않는다. */
     public static void reload(Connection con) {
         EgoSchema.silentCheck(con);
         EgoDB.reload(con);
     }
 
-    /** DB 테이블/컬럼 연결성 리포트. 운영자 진단/문서 확인용. */
     public static String schemaReport(Connection con) {
         return EgoSchema.report(con);
     }
 
-    /** DB 테이블/컬럼 연결성이 현재 Java 기준을 만족하는지 확인. */
     public static boolean schemaOk(Connection con) {
         return EgoSchema.isValid(con);
     }
 
-    /** 에고 구슬 아이템 사용. EgoOrb에서 호출한다. */
     public static boolean useOrb(PcInstance pc, ItemInstance orb) {
         return EgoOrbController.use(pc, orb);
     }
 
-    /** ChattingController 일반채팅 처리. true면 주변 방송 중단. */
     public static boolean chat(object o, String msg) {
         if (!(o instanceof PcInstance) || o instanceof RobotInstance)
             return false;
@@ -69,7 +61,6 @@ public final class EgoCore {
         return EgoTalk.chat(pc, msg);
     }
 
-    /** 캐릭터 상태 루프/AI 루프에서 자동 경고 및 자동 대사 처리. */
     public static void tick(object o) {
         if (!(o instanceof PcInstance) || o instanceof RobotInstance)
             return;
@@ -78,14 +69,12 @@ public final class EgoCore {
         EgoTalk.warning(pc);
     }
 
-    /** DamageController.getDamage 최종 return 직전 공격 보정. */
     public static int attack(Character cha, object target, ItemInstance weapon, int damage) {
         if (cha instanceof PcInstance)
             EgoOwnerRecognition.recognize((PcInstance) cha, weapon);
         return EgoSkill.attack(cha, target, weapon, damage);
     }
 
-    /** DamageController.toDamage HP 감소 직전 피격 보정. */
     public static int defense(Character defender, Character attacker, int damage) {
         if (defender instanceof PcInstance)
             EgoOwnerRecognition.recognize((PcInstance) defender);
@@ -93,14 +82,6 @@ public final class EgoCore {
     }
 }
 
-/**
- * 에고 구슬 사용 처리.
- *
- * 정책:
- * - 명령어로 에고 생성/삭제/변경하지 않는다.
- * - 에고 구슬 사용 시 착용 무기에 에고가 없으면 최초 생성한다.
- * - 이미 에고무기라면 능력/대화/레벨은 변경하지 않고 현재 캐릭터를 주인으로 재인식한다.
- */
 final class EgoOrbController {
 
     static final int DEFAULT_ITEM_CODE = 900001;
@@ -111,15 +92,15 @@ final class EgoOrbController {
     private static final Map<Long, Long> useLockMap = new ConcurrentHashMap<Long, Long>();
     private static final String[] TONES = { "예의", "예의반대" };
     private static final String[] ABILITIES = {
-        "EGO_BALANCE",
-        "BLOOD_DRAIN",
-        "MANA_DRAIN",
-        "CRITICAL_BURST",
-        "GUARDIAN_SHIELD",
-        "AREA_SLASH",
-        "EXECUTION",
-        "FLAME_BRAND",
-        "FROST_BIND"
+        "BALANCE",
+        "BLOOD",
+        "MANA",
+        "CRIT",
+        "SHIELD",
+        "AREA",
+        "EXECUTE",
+        "FIRE",
+        "FROST"
     };
 
     private EgoOrbController() {
@@ -272,10 +253,6 @@ final class EgoOrbController {
     }
 }
 
-/**
- * 에고무기 주인 자동 재인식 헬퍼.
- * 에고무기가 다른 캐릭터에게 이동되어 착용되면 능력/대화/레벨/경험치는 유지하고 ego.char_id만 갱신한다.
- */
 final class EgoOwnerRecognition {
 
     private EgoOwnerRecognition() {
