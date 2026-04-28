@@ -236,8 +236,6 @@ public final class EgoWeaponAbilityController {
             return false;
         if (!checkCooldown(weapon, coolKey, EgoConfig.getInt("stun_cool_ms", DEFAULT_STUN_COOL_MS)))
             return false;
-        markProc(weapon, coolKey);
-
         if (Util.random(1, 100) > EgoConfig.percent("stun_success_rate", DEFAULT_STUN_SUCCESS_RATE))
             return false;
 
@@ -251,6 +249,7 @@ public final class EgoWeaponAbilityController {
                 skill.setCastGfx(stunEffect);
             }
             int time = Math.max(1, Math.min(stunTime, skill.getBuffDuration() > 0 ? skill.getBuffDuration() : stunTime));
+            markProc(weapon, coolKey);
             target.toSender(S_ObjectEffect.clone(BasePacketPooling.getPool(S_ObjectEffect.class), target, stunEffect), true);
             BuffController.append(target, ShockStun.clone(BuffController.getPool(ShockStun.class), skill, time, target, stunEffect));
             EgoBond.addStun(weapon);
