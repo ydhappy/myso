@@ -2,33 +2,30 @@
 -- EGO SCHEMA SQL
 -- File encoding: UTF-8
 -- Runtime DB charset target: euckr
--- Purpose: one consolidated install/update/migration SQL for the ego system.
+-- Purpose: consolidated install/update/migration SQL for the ego system.
 -- Policy: no full data purge, no table drop reset script.
 -- Rerun policy: preserve operator-tuned balance/config values.
 -- ============================================================
 
 SET NAMES utf8;
 
--- ------------------------------------------------------------
--- Core tables
--- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS ego (
-    item_id BIGINT NOT NULL COMMENT '에고무기 아이템 objectId',
-    char_id BIGINT NOT NULL DEFAULT 0 COMMENT '소유 캐릭터 objectId',
-    use_yn TINYINT(1) NOT NULL DEFAULT 0 COMMENT '사용 여부',
-    ego_name VARCHAR(50) NOT NULL DEFAULT '에고' COMMENT '호출 이름',
-    ego_type VARCHAR(30) NOT NULL DEFAULT '예의' COMMENT '말투: 예의/예의반대',
-    ego_lv INT NOT NULL DEFAULT 0 COMMENT '레벨 0~10',
-    ego_exp BIGINT NOT NULL DEFAULT 0 COMMENT '현재 경험치',
-    need_exp BIGINT NOT NULL DEFAULT 100 COMMENT '다음 레벨 필요 경험치',
-    talk_lv INT NOT NULL DEFAULT 1 COMMENT '대화 단계',
-    ctrl_lv INT NOT NULL DEFAULT 1 COMMENT '제어 단계',
-    last_talk BIGINT NOT NULL DEFAULT 0 COMMENT '마지막 대화 시간',
-    last_warn BIGINT NOT NULL DEFAULT 0 COMMENT '마지막 경고 시간',
-    bond INT NOT NULL DEFAULT 0 COMMENT '유대감 0~1000',
-    bond_reason VARCHAR(40) NOT NULL DEFAULT '' COMMENT '마지막 유대감 사유',
-    reg_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '생성일',
-    mod_date DATETIME NULL DEFAULT NULL COMMENT '수정일',
+    item_id BIGINT NOT NULL,
+    char_id BIGINT NOT NULL DEFAULT 0,
+    use_yn TINYINT(1) NOT NULL DEFAULT 0,
+    ego_name VARCHAR(50) NOT NULL DEFAULT '에고',
+    ego_type VARCHAR(30) NOT NULL DEFAULT '예의',
+    ego_lv INT NOT NULL DEFAULT 0,
+    ego_exp BIGINT NOT NULL DEFAULT 0,
+    need_exp BIGINT NOT NULL DEFAULT 100,
+    talk_lv INT NOT NULL DEFAULT 1,
+    ctrl_lv INT NOT NULL DEFAULT 1,
+    last_talk BIGINT NOT NULL DEFAULT 0,
+    last_warn BIGINT NOT NULL DEFAULT 0,
+    bond INT NOT NULL DEFAULT 0,
+    bond_reason VARCHAR(40) NOT NULL DEFAULT '',
+    reg_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    mod_date DATETIME NULL DEFAULT NULL,
     PRIMARY KEY (item_id),
     INDEX ego_char_idx (char_id),
     INDEX ego_name_idx (ego_name),
@@ -38,15 +35,15 @@ CREATE TABLE IF NOT EXISTS ego (
 
 CREATE TABLE IF NOT EXISTS ego_skill (
     id BIGINT NOT NULL AUTO_INCREMENT,
-    item_id BIGINT NOT NULL COMMENT '에고무기 아이템 objectId',
-    skill VARCHAR(40) NOT NULL COMMENT '능력 코드',
-    skill_lv INT NOT NULL DEFAULT 1 COMMENT '능력 레벨',
-    rate_bonus INT NOT NULL DEFAULT 0 COMMENT '추가 확률',
-    dmg_bonus INT NOT NULL DEFAULT 0 COMMENT '추가 피해',
-    last_proc BIGINT NOT NULL DEFAULT 0 COMMENT '마지막 발동 시간',
-    use_yn TINYINT(1) NOT NULL DEFAULT 1 COMMENT '사용 여부',
-    reg_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '생성일',
-    mod_date DATETIME NULL DEFAULT NULL COMMENT '수정일',
+    item_id BIGINT NOT NULL,
+    skill VARCHAR(40) NOT NULL,
+    skill_lv INT NOT NULL DEFAULT 1,
+    rate_bonus INT NOT NULL DEFAULT 0,
+    dmg_bonus INT NOT NULL DEFAULT 0,
+    last_proc BIGINT NOT NULL DEFAULT 0,
+    use_yn TINYINT(1) NOT NULL DEFAULT 1,
+    reg_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    mod_date DATETIME NULL DEFAULT NULL,
     PRIMARY KEY (id),
     UNIQUE KEY ego_skill_uk (item_id, skill),
     INDEX ego_skill_item_idx (item_id),
@@ -54,16 +51,16 @@ CREATE TABLE IF NOT EXISTS ego_skill (
 ) ENGINE=InnoDB DEFAULT CHARSET=euckr COLLATE=euckr_korean_ci COMMENT='에고무기 능력 정보';
 
 CREATE TABLE IF NOT EXISTS ego_skill_base (
-    skill VARCHAR(40) NOT NULL COMMENT '능력 코드',
-    label VARCHAR(50) NOT NULL COMMENT '표시명',
+    skill VARCHAR(40) NOT NULL,
+    label VARCHAR(50) NOT NULL,
     memo VARCHAR(255) NOT NULL DEFAULT '',
-    base_rate INT NOT NULL DEFAULT 3 COMMENT '기본 발동률',
-    lv_rate INT NOT NULL DEFAULT 1 COMMENT '레벨당 발동률',
-    max_rate INT NOT NULL DEFAULT 25 COMMENT '최대 발동률',
-    min_lv INT NOT NULL DEFAULT 1 COMMENT '최소 에고 레벨',
-    cool_ms INT NOT NULL DEFAULT 0 COMMENT '쿨타임 ms',
-    effect INT NOT NULL DEFAULT 0 COMMENT 'S_ObjectEffect 이펙트 번호',
-    use_yn TINYINT(1) NOT NULL DEFAULT 1 COMMENT '사용 여부',
+    base_rate INT NOT NULL DEFAULT 3,
+    lv_rate INT NOT NULL DEFAULT 1,
+    max_rate INT NOT NULL DEFAULT 25,
+    min_lv INT NOT NULL DEFAULT 1,
+    cool_ms INT NOT NULL DEFAULT 0,
+    effect INT NOT NULL DEFAULT 0,
+    use_yn TINYINT(1) NOT NULL DEFAULT 1,
     PRIMARY KEY (skill)
 ) ENGINE=InnoDB DEFAULT CHARSET=euckr COLLATE=euckr_korean_ci COMMENT='에고 능력 기본값';
 
@@ -77,7 +74,7 @@ CREATE TABLE IF NOT EXISTS ego_log (
     base_dmg INT NOT NULL DEFAULT 0,
     final_dmg INT NOT NULL DEFAULT 0,
     add_dmg INT NOT NULL DEFAULT 0,
-    reg_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '기록일',
+    reg_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
     INDEX ego_log_item_idx (item_id),
     INDEX ego_log_char_idx (char_id),
@@ -87,37 +84,37 @@ CREATE TABLE IF NOT EXISTS ego_log (
 
 CREATE TABLE IF NOT EXISTS ego_talk_pack (
     id BIGINT NOT NULL AUTO_INCREMENT,
-    genre VARCHAR(30) NOT NULL COMMENT '장르',
-    tone VARCHAR(30) NOT NULL DEFAULT '예의' COMMENT '말투',
-    keyword VARCHAR(80) NOT NULL DEFAULT '' COMMENT '예비 키워드',
-    message VARCHAR(255) NOT NULL COMMENT '대사',
-    use_yn TINYINT(1) NOT NULL DEFAULT 1 COMMENT '사용 여부',
-    reg_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '생성일',
-    mod_date DATETIME NULL DEFAULT NULL COMMENT '수정일',
+    genre VARCHAR(30) NOT NULL,
+    tone VARCHAR(30) NOT NULL DEFAULT '예의',
+    keyword VARCHAR(80) NOT NULL DEFAULT '',
+    message VARCHAR(255) NOT NULL,
+    use_yn TINYINT(1) NOT NULL DEFAULT 1,
+    reg_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    mod_date DATETIME NULL DEFAULT NULL,
     PRIMARY KEY (id),
     INDEX ego_talk_pack_idx (genre, tone, use_yn),
     UNIQUE KEY ego_talk_pack_uk (genre, tone, message)
 ) ENGINE=InnoDB DEFAULT CHARSET=euckr COLLATE=euckr_korean_ci COMMENT='에고 DB 대사팩';
 
 CREATE TABLE IF NOT EXISTS ego_config (
-    config_key VARCHAR(80) NOT NULL COMMENT '설정 키',
-    config_value VARCHAR(255) NOT NULL DEFAULT '' COMMENT '설정 값',
-    memo VARCHAR(255) NOT NULL DEFAULT '' COMMENT '설명',
-    use_yn TINYINT(1) NOT NULL DEFAULT 1 COMMENT '사용 여부',
-    reg_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '생성일',
-    mod_date DATETIME NULL DEFAULT NULL COMMENT '수정일',
+    config_key VARCHAR(80) NOT NULL,
+    config_value VARCHAR(255) NOT NULL DEFAULT '',
+    memo VARCHAR(255) NOT NULL DEFAULT '',
+    use_yn TINYINT(1) NOT NULL DEFAULT 1,
+    reg_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    mod_date DATETIME NULL DEFAULT NULL,
     PRIMARY KEY (config_key)
 ) ENGINE=InnoDB DEFAULT CHARSET=euckr COLLATE=euckr_korean_ci COMMENT='에고 공통 설정';
 
 CREATE TABLE IF NOT EXISTS ego_level (
-    ego_lv INT NOT NULL COMMENT '레벨 0~10',
-    need_exp BIGINT NOT NULL DEFAULT 0 COMMENT '다음 레벨 필요 경험치',
-    proc_bonus INT NOT NULL DEFAULT 0 COMMENT '스킬 발동률 추가',
-    critical_chance INT NOT NULL DEFAULT 0 COMMENT '치명 발동률 추가',
-    critical_damage INT NOT NULL DEFAULT 0 COMMENT '치명 추가 피해',
-    counter_chance INT NOT NULL DEFAULT 0 COMMENT '피격 반격 확률',
-    counter_power INT NOT NULL DEFAULT 0 COMMENT '반격 피해 비율',
-    counter_critical INT NOT NULL DEFAULT 0 COMMENT '반격 치명 확률',
+    ego_lv INT NOT NULL,
+    need_exp BIGINT NOT NULL DEFAULT 0,
+    proc_bonus INT NOT NULL DEFAULT 0,
+    critical_chance INT NOT NULL DEFAULT 0,
+    critical_damage INT NOT NULL DEFAULT 0,
+    counter_chance INT NOT NULL DEFAULT 0,
+    counter_power INT NOT NULL DEFAULT 0,
+    counter_critical INT NOT NULL DEFAULT 0,
     memo VARCHAR(255) NOT NULL DEFAULT '',
     use_yn TINYINT(1) NOT NULL DEFAULT 1,
     reg_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -126,21 +123,38 @@ CREATE TABLE IF NOT EXISTS ego_level (
 ) ENGINE=InnoDB DEFAULT CHARSET=euckr COLLATE=euckr_korean_ci COMMENT='에고 레벨 통합 설정';
 
 CREATE TABLE IF NOT EXISTS ego_weapon_rule (
-    type2 VARCHAR(40) NOT NULL COMMENT 'item.type2 원본 값',
-    display_name VARCHAR(50) NOT NULL DEFAULT '' COMMENT '표시명',
-    default_ability VARCHAR(40) NOT NULL DEFAULT 'EGO_BALANCE' COMMENT '기본 능력',
-    allowed_abilities VARCHAR(255) NOT NULL DEFAULT '' COMMENT '허용 능력 콤마 구분',
-    use_yn TINYINT(1) NOT NULL DEFAULT 1 COMMENT '에고 생성 허용 여부',
+    type2 VARCHAR(40) NOT NULL,
+    display_name VARCHAR(50) NOT NULL DEFAULT '',
+    default_ability VARCHAR(40) NOT NULL DEFAULT 'EGO_BALANCE',
+    allowed_abilities VARCHAR(255) NOT NULL DEFAULT '',
+    use_yn TINYINT(1) NOT NULL DEFAULT 1,
     reg_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     mod_date DATETIME NULL DEFAULT NULL,
     PRIMARY KEY (type2)
 ) ENGINE=InnoDB DEFAULT CHARSET=euckr COLLATE=euckr_korean_ci COMMENT='에고 무기 타입/능력 허용 규칙';
 
--- Legacy fallback tables. Java uses the merged tables first and falls back only for old servers.
+CREATE TABLE IF NOT EXISTS ego_item_template (
+    item_code INT NOT NULL,
+    item_name VARCHAR(80) NOT NULL,
+    java_class VARCHAR(120) NOT NULL DEFAULT 'lineage.world.object.item.EgoChangeOrb',
+    item_type1 VARCHAR(40) NOT NULL DEFAULT 'etc',
+    item_type2 VARCHAR(40) NOT NULL DEFAULT 'normal',
+    name_id VARCHAR(80) NOT NULL DEFAULT '$900001',
+    inv_gfx INT NOT NULL DEFAULT 4038,
+    ground_gfx INT NOT NULL DEFAULT 4038,
+    stackable TINYINT(1) NOT NULL DEFAULT 1,
+    memo VARCHAR(255) NOT NULL DEFAULT '',
+    use_yn TINYINT(1) NOT NULL DEFAULT 1,
+    reg_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    mod_date DATETIME NULL DEFAULT NULL,
+    PRIMARY KEY (item_code),
+    UNIQUE KEY ego_item_template_name_uk (item_name)
+) ENGINE=InnoDB DEFAULT CHARSET=euckr COLLATE=euckr_korean_ci COMMENT='에고 전용 아이템 DB 템플릿';
+
 CREATE TABLE IF NOT EXISTS ego_bond (
-    item_id BIGINT NOT NULL COMMENT '에고무기 아이템 objectId',
-    bond INT NOT NULL DEFAULT 0 COMMENT '유대감 0~1000',
-    last_reason VARCHAR(40) NOT NULL DEFAULT '' COMMENT '마지막 증가 사유',
+    item_id BIGINT NOT NULL,
+    bond INT NOT NULL DEFAULT 0,
+    last_reason VARCHAR(40) NOT NULL DEFAULT '',
     reg_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     mod_date DATETIME NULL DEFAULT NULL,
     PRIMARY KEY (item_id),
@@ -172,21 +186,18 @@ CREATE TABLE IF NOT EXISTS ego_level_bonus (
     PRIMARY KEY (ego_lv)
 ) ENGINE=InnoDB DEFAULT CHARSET=euckr COLLATE=euckr_korean_ci COMMENT='구버전 레벨 보너스 fallback';
 
--- ------------------------------------------------------------
--- Safe migration: old structure cleanup and merged-column patch
--- ------------------------------------------------------------
 DROP TABLE IF EXISTS ego_talk;
 DROP TABLE IF EXISTS ego_type;
 DROP TABLE IF EXISTS ego_view;
 DROP TABLE IF EXISTS `에고모양`;
 
 SET @sql := IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ego' AND COLUMN_NAME = 'bond') = 0,
-    'ALTER TABLE ego ADD COLUMN bond INT NOT NULL DEFAULT 0 COMMENT ''유대감 0~1000''',
+    'ALTER TABLE ego ADD COLUMN bond INT NOT NULL DEFAULT 0',
     'SELECT ''ego.bond already exists'' AS info');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 SET @sql := IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ego' AND COLUMN_NAME = 'bond_reason') = 0,
-    'ALTER TABLE ego ADD COLUMN bond_reason VARCHAR(40) NOT NULL DEFAULT '''' COMMENT ''마지막 유대감 사유''',
+    'ALTER TABLE ego ADD COLUMN bond_reason VARCHAR(40) NOT NULL DEFAULT ''''',
     'SELECT ''ego.bond_reason already exists'' AS info');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
@@ -205,26 +216,18 @@ SET @sql := IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHE
     'SELECT ''ego.prev_shield not exists'' AS info');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
-UPDATE ego e
-INNER JOIN ego_bond b ON e.item_id = b.item_id
+UPDATE ego e INNER JOIN ego_bond b ON e.item_id = b.item_id
 SET e.bond = b.bond, e.bond_reason = b.last_reason, e.mod_date = NOW();
 
--- Existing duplicate talk-pack rows are collapsed before unique key creation.
 DELETE t1 FROM ego_talk_pack t1
 INNER JOIN ego_talk_pack t2
-    ON t1.id > t2.id
-   AND t1.genre = t2.genre
-   AND t1.tone = t2.tone
-   AND t1.message = t2.message;
+    ON t1.id > t2.id AND t1.genre = t2.genre AND t1.tone = t2.tone AND t1.message = t2.message;
 
 SET @sql := IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ego_talk_pack' AND INDEX_NAME = 'ego_talk_pack_uk') = 0,
     'ALTER TABLE ego_talk_pack ADD UNIQUE KEY ego_talk_pack_uk (genre, tone, message)',
     'SELECT ''ego_talk_pack_uk already exists'' AS info');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
--- ------------------------------------------------------------
--- Default config data. Existing operator-tuned values are preserved.
--- ------------------------------------------------------------
 INSERT INTO ego_skill_base (skill, label, memo, base_rate, lv_rate, max_rate, min_lv, cool_ms, effect, use_yn) VALUES
 ('EGO_BALANCE', '공명', '균형형 추가 피해', 3, 1, 25, 1, 0, 3940, 1),
 ('BLOOD_DRAIN', '흡혈', 'HP 회복', 3, 1, 20, 1, 0, 8150, 1),
@@ -240,6 +243,8 @@ INSERT INTO ego_skill_base (skill, label, memo, base_rate, lv_rate, max_rate, mi
 ON DUPLICATE KEY UPDATE label=VALUES(label), memo=VALUES(memo);
 
 INSERT INTO ego_config (config_key, config_value, memo, use_yn) VALUES
+('change_orb_item_code', '900001', '에고 변경구슬 아이템코드', 1),
+('change_orb_item_name', '에고 변경구슬', '에고 변경구슬 아이템명', 1),
 ('genre_talk_delay_ms', '1200', '장르대화 연속 입력 방지 딜레이 ms', 1),
 ('auto_talk_hp_warn_rate', '25', 'HP 자동 위험 대사 기준', 1),
 ('auto_talk_mp_warn_rate', '15', 'MP 자동 안내 대사 기준', 1),
@@ -263,6 +268,24 @@ INSERT INTO ego_config (config_key, config_value, memo, use_yn) VALUES
 ('area_range', '2', '광역 능력 범위', 1),
 ('area_max_target', '4', '광역 능력 최대 대상 수', 1)
 ON DUPLICATE KEY UPDATE memo=VALUES(memo), use_yn=VALUES(use_yn);
+
+INSERT INTO ego_item_template (item_code, item_name, java_class, item_type1, item_type2, name_id, inv_gfx, ground_gfx, stackable, memo, use_yn) VALUES
+(900001, '에고 변경구슬', 'lineage.world.object.item.EgoChangeOrb', 'etc', 'normal', '$900001', 4038, 4038, 1, '착용 중인 에고무기의 능력과 대화 성향을 랜덤 재선택하는 소모 아이템', 1)
+ON DUPLICATE KEY UPDATE item_name=VALUES(item_name), java_class=VALUES(java_class), memo=VALUES(memo), use_yn=VALUES(use_yn);
+
+-- 빛나형 item 테이블 컬럼이 있는 서버에서는 보조 등록을 시도한다. 컬럼 구조가 다르면 ego_item_template 기준으로 수동 등록한다.
+SET @has_bitna_item := (
+    SELECT IF(COUNT(*) >= 10, 1, 0)
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = 'item'
+      AND COLUMN_NAME IN ('아이템코드','아이템이름','구분1','구분2','NAMEID','미확인 아이템','재질','무게','인벤ID','GFXID')
+);
+SET @sql := IF(@has_bitna_item = 1,
+    'INSERT INTO item (`아이템코드`,`아이템이름`,`구분1`,`구분2`,`NAMEID`,`미확인 아이템`,`재질`,`현금거래`,`작은 몬스터`,`큰 몬스터`,`무게`,`인벤ID`,`GFXID`,`ACTION1`,`ACTION2`,`판매`,`겹침`,`거래`,`드랍`,`창고`,`창고_혈맹`,`창고_요숲`,`인첸트`,`안전인첸트`,`최고인챈`,`군주`,`기사`,`요정`,`마법사`,`다크엘프`,`용기사`,`환술사`) SELECT 900001,''에고 변경구슬'',''etc'',''normal'',''$900001'',''에고 변경구슬'',''gem'',''false'',0,0,''1'',4038,4038,0,0,''true'',''true'',''true'',''true'',''true'',''true'',''true'',''false'',0,0,1,1,1,1,1,1,1 WHERE NOT EXISTS (SELECT 1 FROM item WHERE `아이템이름`=''에고 변경구슬'' OR `아이템코드`=900001)',
+    'SELECT ''item table skipped. use ego_item_template to register 에고 변경구슬 manually'' AS info'
+);
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 INSERT INTO ego_level (ego_lv, need_exp, proc_bonus, critical_chance, critical_damage, counter_chance, counter_power, counter_critical, memo, use_yn) VALUES
 (0,100,0,0,0,0,0,0,'Lv.0 전투능력 없음',1),
@@ -305,9 +328,6 @@ INSERT INTO ego_talk_pack (genre, tone, keyword, message, use_yn) VALUES
 ('아무','예의반대','','대사는 내가 해줄 테니 전투는 네가 해.',1)
 ON DUPLICATE KEY UPDATE keyword=VALUES(keyword);
 
--- ------------------------------------------------------------
--- Data normalization
--- ------------------------------------------------------------
 UPDATE ego SET ego_type='예의' WHERE ego_type IS NULL OR ego_type='' OR ego_type NOT IN ('예의','예의반대');
 UPDATE ego SET ego_lv=0 WHERE ego_lv < 0;
 UPDATE ego SET ego_lv=10 WHERE ego_lv > 10;
@@ -319,3 +339,4 @@ SHOW TABLES LIKE 'ego%';
 SELECT * FROM ego_level ORDER BY ego_lv;
 SELECT * FROM ego_config ORDER BY config_key;
 SELECT * FROM ego_weapon_rule ORDER BY type2;
+SELECT * FROM ego_item_template ORDER BY item_code;
