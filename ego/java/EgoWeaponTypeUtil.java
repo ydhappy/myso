@@ -28,7 +28,7 @@ public final class EgoWeaponTypeUtil {
     }
 
     public static String getOriginalType2(ItemInstance item) {
-        if (item == null || item.getItem() == null || item.getItem().getType2() == null)
+        if (item == null || item.getItem() == null)
             return "";
         return normalizeType(item.getItem().getType2());
     }
@@ -39,6 +39,8 @@ public final class EgoWeaponTypeUtil {
 
     public static boolean isSupportedType(String type2) {
         String type = normalizeType(type2);
+        if (type.length() == 0)
+            return false;
         if (EgoWeaponRule.hasRule(type))
             return EgoWeaponRule.isSupportedType(type);
         return TYPE_DAGGER.equals(type)
@@ -54,19 +56,19 @@ public final class EgoWeaponTypeUtil {
     public static boolean isWeaponSlot(ItemInstance item) {
         if (item == null || item.getItem() == null)
             return false;
-        return item.getItem().getSlot() == Lineage.SLOT_WEAPON;
+        try {
+            return item.getItem().getSlot() == Lineage.SLOT_WEAPON;
+        } catch (Throwable e) {
+            return false;
+        }
     }
 
     public static boolean isValidEgoBaseWeapon(ItemInstance item) {
         if (!isWeaponSlot(item))
             return false;
-
         String originalType = getOriginalType2(item);
         if (TYPE_FISHING_ROD.equals(originalType))
             return false;
-        if (originalType.length() == 0)
-            return false;
-
         return isSupportedType(originalType);
     }
 
@@ -120,10 +122,8 @@ public final class EgoWeaponTypeUtil {
 
     public static String getDisplayTypeName(ItemInstance item) {
         String type = getOriginalType2(item);
-
         if (EgoWeaponRule.hasRule(type))
             return EgoWeaponRule.displayName(type, type.length() == 0 ? "알 수 없음" : type);
-
         if (TYPE_DAGGER.equals(type)) return "단검";
         if (TYPE_SWORD.equals(type)) return "한손검";
         if (TYPE_TWO_HAND_SWORD.equals(type)) return "양손검";
@@ -138,9 +138,6 @@ public final class EgoWeaponTypeUtil {
     }
 
     public static String getDefaultAbilityType(ItemInstance item) {
-        if (item == null)
-            return "EGO_BALANCE";
-
         String type2 = getOriginalType2(item);
         String javaDefault = getJavaDefaultAbilityType(item);
         if (EgoWeaponRule.hasRule(type2))
@@ -149,40 +146,33 @@ public final class EgoWeaponTypeUtil {
     }
 
     private static String getJavaDefaultAbilityType(ItemInstance item) {
-        if (item == null)
-            return "EGO_BALANCE";
-
-        String name = item.getName() == null ? "" : item.getName().toLowerCase();
-
-        if (name.contains("피") || name.contains("blood") || name.contains("흡혈")) return "BLOOD_DRAIN";
-        if (name.contains("마나") || name.contains("지식") || name.contains("mana")) return "MANA_DRAIN";
-        if (name.contains("화염") || name.contains("불") || name.contains("flame") || name.contains("fire")) return "FLAME_BRAND";
-        if (name.contains("얼음") || name.contains("서리") || name.contains("frost") || name.contains("ice")) return "FROST_BIND";
-        if (name.contains("수호") || name.contains("가디언") || name.contains("guardian")) return "GUARDIAN_SHIELD";
+        String name = safeItemName(item).toLowerCase();
+        if (name.indexOf("피") >= 0 || name.indexOf("blood") >= 0 || name.indexOf("흡혈") >= 0) return "BLOOD_DRAIN";
+        if (name.indexOf("마나") >= 0 || name.indexOf("지식") >= 0 || name.indexOf("mana") >= 0) return "MANA_DRAIN";
+        if (name.indexOf("화염") >= 0 || name.indexOf("불") >= 0 || name.indexOf("flame") >= 0 || name.indexOf("fire") >= 0) return "FLAME_BRAND";
+        if (name.indexOf("얼음") >= 0 || name.indexOf("서리") >= 0 || name.indexOf("frost") >= 0 || name.indexOf("ice") >= 0) return "FROST_BIND";
+        if (name.indexOf("수호") >= 0 || name.indexOf("가디언") >= 0 || name.indexOf("guardian") >= 0) return "GUARDIAN_SHIELD";
         if (isMagicWeapon(item)) return "MANA_DRAIN";
         if (isSpear(item)) return "AREA_SLASH";
         if (isHeavyMelee(item)) return "CRITICAL_BURST";
-        if (isBow(item)) return "EGO_BALANCE";
         return "EGO_BALANCE";
     }
 
     public static boolean isAbilityAllowed(String abilityType, ItemInstance item) {
-        if (abilityType == null || !isValidEgoBaseWeapon(item))
+        String ability = normalizeAbility(abilityType);
+        if (ability.length() == 0 || !isValidEgoBaseWeapon(item))
             return false;
-
         String type2 = getOriginalType2(item);
-        boolean javaFallback = isJavaAbilityAllowed(abilityType, item);
+        boolean javaFallback = isJavaAbilityAllowed(ability, item);
         if (EgoWeaponRule.hasRule(type2))
-            return EgoWeaponRule.isAbilityAllowed(type2, abilityType, javaFallback);
+            return EgoWeaponRule.isAbilityAllowed(type2, ability, javaFallback);
         return javaFallback;
     }
 
     private static boolean isJavaAbilityAllowed(String abilityType, ItemInstance item) {
-        if (abilityType == null || !isValidEgoBaseWeapon(item))
+        String type = normalizeAbility(abilityType);
+        if (type.length() == 0 || !isValidEgoBaseWeapon(item))
             return false;
-
-        String type = abilityType.trim().toUpperCase();
-
         if ("EGO_BALANCE".equals(type)) return true;
         if ("BLOOD_DRAIN".equals(type)) return isMelee(item);
         if ("MANA_DRAIN".equals(type)) return isMagicWeapon(item) || isDagger(item) || isOneHandSword(item);
@@ -194,7 +184,6 @@ public final class EgoWeaponTypeUtil {
         if ("FROST_BIND".equals(type)) return isMagicWeapon(item) || isSpear(item) || isBow(item);
         if ("EGO_COUNTER".equals(type)) return true;
         if ("EGO_REVENGE".equals(type)) return true;
-
         return false;
     }
 
@@ -215,11 +204,28 @@ public final class EgoWeaponTypeUtil {
         return EgoWeaponRule.supportedText(fallback);
     }
 
+    private static String safeItemName(ItemInstance item) {
+        if (item == null)
+            return "";
+        try {
+            String name = item.getName();
+            return name == null ? "" : name.trim();
+        } catch (Throwable e) {
+            return "";
+        }
+    }
+
+    private static String normalizeAbility(String ability) {
+        if (ability == null)
+            return "";
+        return ability.trim().toUpperCase();
+    }
+
     private static String normalizeType(String type) {
         if (type == null)
             return "";
         type = type.trim().toLowerCase();
-        if ("twohand_sword".equals(type) || "two_handed_sword".equals(type))
+        if ("twohand_sword".equals(type) || "two_handed_sword".equals(type) || "twohandsword".equals(type))
             return TYPE_TWO_HAND_SWORD;
         return type;
     }
