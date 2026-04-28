@@ -23,7 +23,7 @@ import lineage.world.object.instance.PcInstance;
  * - 에고 레벨은 0~10 고정한다.
  * - Lv.0은 스킬/치명/반격/스턴 없음이다.
  * - ego_type은 현재 말투 저장소로 사용한다: 예의 / 예의반대.
- * - 에고삭제는 착용 중인 해당 에고무기 1개만 ego/ego_skill/ego_log/ego_bond에서 정리한다.
+ * - 에고 구슬은 최초 생성과 주인 재인식만 담당한다.
  */
 public final class EgoWeaponDatabase {
 
@@ -282,7 +282,44 @@ public final class EgoWeaponDatabase {
         }
     }
 
-    /** 에고삭제: 착용 중인 해당 아이템 1개만 ego / ego_skill / ego_log / ego_bond 정리. */
+    /** 기존 에고무기의 능력/레벨/대화는 유지하고 현재 캐릭터만 주인으로 재인식한다. */
+    public static boolean recognizeOwner(PcInstance pc, ItemInstance item) {
+        if (pc == null || item == null)
+            return false;
+        final long itemObjId = item.getObjectId();
+        if (itemObjId <= 0L)
+            return false;
+
+        synchronized (itemLock(itemObjId)) {
+            EgoWeaponInfo info = find(itemObjId);
+            if (info == null || !info.enabled)
+                return false;
+            long charId = pc.getObjectId();
+            if (info.chaObjId == charId)
+                return true;
+
+            Connection con = null;
+            PreparedStatement st = null;
+            try {
+                con = DatabaseConnection.getLineage();
+                st = con.prepareStatement("UPDATE ego SET char_id=?, mod_date=NOW() WHERE item_id=? AND use_yn=1");
+                st.setLong(1, charId);
+                st.setLong(2, itemObjId);
+                int count = st.executeUpdate();
+                if (count <= 0)
+                    return false;
+                info.chaObjId = charId;
+                return true;
+            } catch (Exception e) {
+                log("recognizeOwner(PcInstance pc, ItemInstance item)", e);
+            } finally {
+                DatabaseConnection.close(con, st);
+            }
+            return false;
+        }
+    }
+
+    /** 구버전 호환용. 신규 정책에서는 사용하지 않는다. */
     public static boolean disableEgo(ItemInstance item) {
         if (item == null)
             return false;
