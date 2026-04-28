@@ -4,6 +4,7 @@
 -- Runtime DB charset target: euckr
 -- Policy: no one-click delete, no full reset, no direct item table insert.
 -- Final policy: ego orb creation, probabilistic proc, damage + HP/MP absorb + stun/slow.
+-- DB/Java 1:1 ability names: BALANCE, BLOOD, MANA, CRIT, SHIELD, AREA, EXECUTE, FIRE, FROST, COUNTER, REVENGE.
 -- ============================================================
 
 SET NAMES utf8;
@@ -139,45 +140,12 @@ CREATE TABLE IF NOT EXISTS ego_item_template (
     UNIQUE KEY ego_item_template_name_uk (item_name)
 ) ENGINE=InnoDB DEFAULT CHARSET=euckr COLLATE=euckr_korean_ci COMMENT='에고 전용 아이템 DB 템플릿';
 
-CREATE TABLE IF NOT EXISTS ego_bond (
-    item_id BIGINT NOT NULL,
-    bond INT NOT NULL DEFAULT 0,
-    last_reason VARCHAR(40) NOT NULL DEFAULT '',
-    reg_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    mod_date DATETIME NULL DEFAULT NULL,
-    PRIMARY KEY (item_id),
-    INDEX ego_bond_idx (bond)
-) ENGINE=InnoDB DEFAULT CHARSET=euckr COLLATE=euckr_korean_ci COMMENT='에고 유대감';
-
-CREATE TABLE IF NOT EXISTS ego_level_exp (
-    ego_lv INT NOT NULL,
-    need_exp BIGINT NOT NULL DEFAULT 0,
-    memo VARCHAR(255) NOT NULL DEFAULT '',
-    use_yn TINYINT(1) NOT NULL DEFAULT 1,
-    reg_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    mod_date DATETIME NULL DEFAULT NULL,
-    PRIMARY KEY (ego_lv)
-) ENGINE=InnoDB DEFAULT CHARSET=euckr COLLATE=euckr_korean_ci COMMENT='구버전 레벨 경험치 fallback';
-
-CREATE TABLE IF NOT EXISTS ego_level_bonus (
-    ego_lv INT NOT NULL,
-    proc_bonus INT NOT NULL DEFAULT 0,
-    critical_chance INT NOT NULL DEFAULT 0,
-    critical_damage INT NOT NULL DEFAULT 0,
-    counter_chance INT NOT NULL DEFAULT 0,
-    counter_power INT NOT NULL DEFAULT 0,
-    counter_critical INT NOT NULL DEFAULT 0,
-    memo VARCHAR(255) NOT NULL DEFAULT '',
-    use_yn TINYINT(1) NOT NULL DEFAULT 1,
-    reg_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    mod_date DATETIME NULL DEFAULT NULL,
-    PRIMARY KEY (ego_lv)
-) ENGINE=InnoDB DEFAULT CHARSET=euckr COLLATE=euckr_korean_ci COMMENT='구버전 레벨 보너스 fallback';
-
 DROP TABLE IF EXISTS ego_talk;
 DROP TABLE IF EXISTS ego_type;
 DROP TABLE IF EXISTS ego_view;
 DROP TABLE IF EXISTS ego_weapon_rule;
+DROP TABLE IF EXISTS ego_level_exp;
+DROP TABLE IF EXISTS ego_level_bonus;
 DROP TABLE IF EXISTS `에고모양`;
 
 SET @sql := IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ego' AND COLUMN_NAME = 'bond') = 0,
@@ -199,19 +167,33 @@ SET @sql := IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_S
     'SELECT ''ego_talk_pack_uk already exists'' AS info');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
+UPDATE ego_skill SET skill='BALANCE' WHERE skill='EGO_BALANCE';
+UPDATE ego_skill SET skill='BLOOD' WHERE skill='BLOOD_DRAIN';
+UPDATE ego_skill SET skill='MANA' WHERE skill='MANA_DRAIN';
+UPDATE ego_skill SET skill='CRIT' WHERE skill='CRITICAL_BURST';
+UPDATE ego_skill SET skill='SHIELD' WHERE skill='GUARDIAN_SHIELD';
+UPDATE ego_skill SET skill='AREA' WHERE skill='AREA_SLASH';
+UPDATE ego_skill SET skill='EXECUTE' WHERE skill='EXECUTION';
+UPDATE ego_skill SET skill='FIRE' WHERE skill='FLAME_BRAND';
+UPDATE ego_skill SET skill='FROST' WHERE skill='FROST_BIND';
+UPDATE ego_skill SET skill='COUNTER' WHERE skill='EGO_COUNTER';
+UPDATE ego_skill SET skill='REVENGE' WHERE skill='EGO_REVENGE';
+
 INSERT INTO ego_skill_base (skill, label, memo, base_rate, lv_rate, max_rate, min_lv, cool_ms, effect, use_yn) VALUES
-('EGO_BALANCE', '공명', '균형형 추가 피해', 3, 1, 25, 1, 0, 3940, 1),
-('BLOOD_DRAIN', '흡혈', 'HP 흡수', 3, 1, 20, 1, 0, 8150, 1),
-('MANA_DRAIN', '흡마', 'MP 흡수', 3, 1, 20, 1, 0, 7300, 1),
-('CRITICAL_BURST', '치명', '치명 추가 피해', 2, 1, 35, 1, 0, 12487, 1),
-('GUARDIAN_SHIELD', '수호', '위험 시 HP 흡수', 3, 1, 25, 1, 3000, 6321, 1),
-('AREA_SLASH', '광역', '주변 몬스터 피해', 2, 1, 20, 5, 3000, 12248, 1),
-('EXECUTION', '처형', '낮은 HP 대상 추가 피해', 2, 1, 20, 7, 0, 8683, 1),
-('FLAME_BRAND', '화염', '화염 추가 피해', 3, 1, 25, 1, 0, 1811, 1),
-('FROST_BIND', '서리', '서리 추가 피해', 3, 1, 25, 1, 0, 3684, 1),
-('EGO_COUNTER', '반격', '피격/자동 반격', 35, 5, 100, 5, 2500, 10710, 1),
-('EGO_REVENGE', '복수', 'Lv.10 스턴 연동 반격', 50, 0, 50, 10, 6000, 4183, 1)
-ON DUPLICATE KEY UPDATE label=VALUES(label), memo=VALUES(memo);
+('BALANCE', '공명', '균형형 추가 피해', 3, 1, 25, 1, 0, 3940, 1),
+('BLOOD', '흡혈', 'HP 흡수', 3, 1, 20, 1, 0, 8150, 1),
+('MANA', '흡마', 'MP 흡수', 3, 1, 20, 1, 0, 7300, 1),
+('CRIT', '치명', '치명 추가 피해', 2, 1, 35, 1, 0, 12487, 1),
+('SHIELD', '수호', '위험 시 HP 흡수', 3, 1, 25, 1, 3000, 6321, 1),
+('AREA', '광역', '주변 몬스터 피해', 2, 1, 20, 5, 3000, 12248, 1),
+('EXECUTE', '처형', '낮은 HP 대상 추가 피해', 2, 1, 20, 7, 0, 8683, 1),
+('FIRE', '화염', '화염 추가 피해', 3, 1, 25, 1, 0, 1811, 1),
+('FROST', '서리', '서리 추가 피해', 3, 1, 25, 1, 0, 3684, 1),
+('COUNTER', '반격', '피격/자동 반격', 35, 5, 100, 5, 2500, 10710, 1),
+('REVENGE', '복수', 'Lv.10 스턴 연동 반격', 50, 0, 50, 10, 6000, 4183, 1)
+ON DUPLICATE KEY UPDATE label=VALUES(label), memo=VALUES(memo), base_rate=VALUES(base_rate), lv_rate=VALUES(lv_rate), max_rate=VALUES(max_rate), min_lv=VALUES(min_lv), cool_ms=VALUES(cool_ms), effect=VALUES(effect), use_yn=VALUES(use_yn);
+
+DELETE FROM ego_skill_base WHERE skill IN ('EGO_BALANCE','BLOOD_DRAIN','MANA_DRAIN','CRITICAL_BURST','GUARDIAN_SHIELD','AREA_SLASH','EXECUTION','FLAME_BRAND','FROST_BIND','EGO_COUNTER','EGO_REVENGE');
 
 INSERT INTO ego_config (config_key, config_value, memo, use_yn) VALUES
 ('ego_orb_item_code', '900001', '에고 구슬 아이템코드', 1),
@@ -284,7 +266,7 @@ INSERT INTO ego_level (ego_lv, need_exp, proc_bonus, critical_chance, critical_d
 (8,7500,10,15,12,100,38,20,'Lv.8',1),
 (9,10000,12,18,15,100,46,25,'Lv.9',1),
 (10,0,15,25,20,100,60,35,'Lv.10 스턴 연동',1)
-ON DUPLICATE KEY UPDATE memo=VALUES(memo);
+ON DUPLICATE KEY UPDATE memo=VALUES(memo), need_exp=VALUES(need_exp), proc_bonus=VALUES(proc_bonus), critical_chance=VALUES(critical_chance), critical_damage=VALUES(critical_damage), counter_chance=VALUES(counter_chance), counter_power=VALUES(counter_power), counter_critical=VALUES(counter_critical), use_yn=VALUES(use_yn);
 
 INSERT INTO ego_talk_pack (genre, tone, keyword, message, use_yn) VALUES
 ('드라마','예의','','오늘의 전투는 조용히 시작됐지만, 끝은 분명 주인님의 선택으로 기록될 것입니다.',1),
@@ -297,7 +279,7 @@ INSERT INTO ego_talk_pack (genre, tone, keyword, message, use_yn) VALUES
 ('무협','예의반대','','강호였으면 너 지금 하수 티 난다. 자세 고쳐.',1),
 ('아무','예의','','살아남은 자만이 다음 대사를 말할 수 있습니다.',1),
 ('아무','예의반대','','대사는 내가 해줄 테니 전투는 네가 해.',1)
-ON DUPLICATE KEY UPDATE keyword=VALUES(keyword);
+ON DUPLICATE KEY UPDATE keyword=VALUES(keyword), use_yn=VALUES(use_yn);
 
 UPDATE ego SET ego_type='예의' WHERE ego_type IS NULL OR ego_type='' OR ego_type NOT IN ('예의','예의반대');
 UPDATE ego SET ego_lv=0 WHERE ego_lv < 0;
@@ -309,4 +291,5 @@ SELECT 'EGO_SCHEMA_SQL_OK' AS result;
 SHOW TABLES LIKE 'ego%';
 SELECT * FROM ego_level ORDER BY ego_lv;
 SELECT * FROM ego_config ORDER BY config_key;
+SELECT * FROM ego_skill_base ORDER BY skill;
 SELECT * FROM ego_item_template ORDER BY item_code;
