@@ -22,7 +22,7 @@ import lineage.world.object.instance.PcInstance;
  * - 에고 레벨은 ego_level 1개 테이블 기준이다.
  * - 에고 레벨은 0~10 고정한다.
  * - Lv.0은 스킬/치명/반격/스턴 없음이다.
- * - ego_type은 현재 말투 저장소로 사용한다: 예의 / 예의반대.
+ * - ego_type은 현재 말투 저장소로 사용한다: 예의 / 예의반대 / 싸이코패스.
  * - 에고 구슬은 최초 생성과 주인 재인식만 담당한다.
  * - 단순 능력명 입력은 런타임 enum명으로 안전 정규화한다.
  */
@@ -530,6 +530,8 @@ public final class EgoWeaponDatabase {
         String t = tone.trim();
         if (t.length() == 0)
             return "예의";
+        if ("싸이코패스".equals(t) || "사이코패스".equals(t) || "psycho".equalsIgnoreCase(t) || "psychopath".equalsIgnoreCase(t))
+            return "싸이코패스";
         if ("예의반대".equals(t) || "반말".equals(t) || "막말".equals(t) || "싸가지".equals(t))
             return "예의반대";
         return "예의";
