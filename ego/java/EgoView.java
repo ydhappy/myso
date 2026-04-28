@@ -23,7 +23,7 @@ import lineage.world.object.instance.PcInstance;
  * - type2 변형 없음.
  * - 인벤토리/바닥 이미지 변경 없음.
  * - 원본 아이템 템플릿의 inv_gfx / ground_gfx 그대로 사용.
- * - 에고 표시는 아이템 이름 뒤 [에고] 표식과 정보 문구만 추가한다.
+ * - 에고 표시는 아이템 이름 뒤 [에고] [Lv.x 에고이름] 문구만 추가한다.
  */
 public final class EgoView {
 
@@ -83,21 +83,21 @@ public final class EgoView {
             return baseName;
         if (!isEgo(item))
             return baseName;
-        if (baseName.indexOf("[에고]") >= 0 || baseName.indexOf("[에고:") >= 0)
+        if (baseName.indexOf("[에고]") >= 0 || baseName.indexOf("[Lv.") >= 0)
             return EgoMessageUtil.clientColor(baseName);
 
         String fixedName = displayName(item, baseName);
         EgoWeaponInfo ego = EgoWeaponDatabase.find(item);
-        String label = label(item);
-        String skill = skillName(item);
         int level = ego == null ? 1 : Math.max(1, ego.level);
+        String egoName = ego == null ? "에고" : safe(ego.egoName);
+        if (egoName.length() == 0)
+            egoName = "에고";
 
         StringBuilder sb = new StringBuilder(fixedName);
         sb.append(" ").append(EGO_MARK);
-        sb.append(" ").append(EgoMessageUtil.COLOR_INFO).append("(").append(label).append(" Lv.").append(level);
-        if (skill.length() > 0)
-            sb.append(" ").append(skill);
-        sb.append(")").append(EgoMessageUtil.COLOR_WHITE);
+        sb.append(" ").append(EgoMessageUtil.COLOR_INFO);
+        sb.append("[Lv.").append(level).append(" ").append(egoName).append("]");
+        sb.append(EgoMessageUtil.COLOR_WHITE);
         return EgoMessageUtil.clientColor(sb.toString());
     }
 
@@ -110,9 +110,14 @@ public final class EgoView {
         long exp = ego == null ? 0 : Math.max(0, ego.exp);
         long need = ego == null ? 100 : Math.max(1, ego.maxExp);
         String skill = skillName(item);
+        String egoName = ego == null ? "에고" : safe(ego.egoName);
+        if (egoName.length() == 0)
+            egoName = "에고";
 
         StringBuilder sb = new StringBuilder();
-        sb.append("에고: ").append(label).append(" / 레벨: ").append(level);
+        sb.append("에고명: ").append(egoName);
+        sb.append(" / 종류: ").append(label);
+        sb.append(" / 레벨: ").append(level);
         sb.append(" / 경험치: ").append(exp).append("/").append(need);
         if (skill.length() > 0)
             sb.append(" / 능력: ").append(skill);
