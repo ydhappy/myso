@@ -12,11 +12,11 @@ import lineage.world.object.instance.PcInstance;
 /**
  * 에고무기 메시지 유틸.
  *
- * 최종 출력 정책:
- * - 사용자의 에고 호출 일반채팅은 외부 방송하지 않고 소비한다.
- * - 짧은 에고 대답은 말풍선 패킷으로 본인에게만 보낸다.
- * - 긴 상태/도움말/커맨드 결과는 편지처럼 보이도록 HTML 창으로 보낸다.
- * - HTML 템플릿이 없을 경우에도 시스템 메시지 fallback으로 내용은 확인 가능하다.
+ * 출력 정책:
+ * - 에고 호출 일반채팅은 외부 방송하지 않고 소비한다.
+ * - 짧은 대답은 본인에게만 보이는 말풍선으로 보낸다.
+ * - 긴 상태/도움말/커맨드 결과는 HTML 편지창으로 보낸다.
+ * - HTML 템플릿이 없거나 패킷 시그니처가 다른 서버에서는 시스템 메시지로 fallback한다.
  */
 public final class EgoMessageUtil {
 
@@ -28,6 +28,8 @@ public final class EgoMessageUtil {
 
     private static final String PREFIX = "[에고] ";
     private static final int BUBBLE_MAX_LENGTH = 72;
+    private static final int LETTER_LINE_WIDTH = 46;
+    private static final int LETTER_MAX_LINES = 18;
     private static final String HTML_LETTER = "egoletter";
 
     private EgoMessageUtil() {
@@ -54,23 +56,28 @@ public final class EgoMessageUtil {
     public static void reply(PcInstance pc, String color, String message) {
         if (pc == null || message == null)
             return;
-        String msg = message.trim();
+        String msg = normalize(message);
         if (msg.length() == 0)
             return;
 
-        if (isLongMessage(msg)) {
+        if (isLongMessage(msg))
             letter(pc, "에고의 답장", msg);
-        } else {
+        else
             bubble(pc, color, msg);
-        }
     }
 
     /** 본인에게만 보이는 에고 말풍선. 주변에는 방송하지 않는다. */
     public static void bubble(PcInstance pc, String color, String message) {
         if (pc == null || message == null)
             return;
-        String msg = withPrefix(color, message.trim());
-        pc.toSender(S_ObjectChatting.clone(BasePacketPooling.getPool(S_ObjectChatting.class), pc, Lineage.CHATTING_MODE_NORMAL, msg));
+        String msg = withPrefix(color, normalize(message));
+        if (msg.length() == 0)
+            return;
+        try {
+            pc.toSender(S_ObjectChatting.clone(BasePacketPooling.getPool(S_ObjectChatting.class), pc, Lineage.CHATTING_MODE_NORMAL, msg));
+        } catch (Throwable e) {
+            raw(pc, msg);
+        }
     }
 
     /** 편지형 긴 메시지. 클라이언트 html/egoletter.htm 필요. */
@@ -79,8 +86,8 @@ public final class EgoMessageUtil {
             return;
 
         List<String> list = new ArrayList<String>();
-        list.add(title == null || title.trim().length() == 0 ? "에고의 답장" : title.trim());
-        list.addAll(splitLines(stripColor(message), 46, 18));
+        list.add(normalize(title).length() == 0 ? "에고의 답장" : normalize(title));
+        list.addAll(splitLines(stripColor(message), LETTER_LINE_WIDTH, LETTER_MAX_LINES));
 
         try {
             pc.toSender(S_Html.clone(BasePacketPooling.getPool(S_Html.class), pc, HTML_LETTER, null, list));
@@ -93,7 +100,13 @@ public final class EgoMessageUtil {
     public static void raw(PcInstance pc, String message) {
         if (pc == null || message == null)
             return;
-        ChattingController.toChatting(pc, message, Lineage.CHATTING_MODE_MESSAGE);
+        String msg = normalize(message);
+        if (msg.length() == 0)
+            return;
+        try {
+            ChattingController.toChatting(pc, msg, Lineage.CHATTING_MODE_MESSAGE);
+        } catch (Throwable e) {
+        }
     }
 
     /** 일반 채팅으로 입력된 에고 호출을 외부 방송하지 않고 소비한다. */
@@ -106,39 +119,65 @@ public final class EgoMessageUtil {
     }
 
     private static String withPrefix(String color, String message) {
-        String msg = message == null ? "" : message.trim();
-        String c = color == null || color.length() == 0 ? COLOR_NORMAL : color;
-        if (!hasColor(msg))
-            msg = c + msg;
-        if (!msg.contains("[에고]")) {
+        String msg = normalize(message);
+        if (msg.length() == 0)
+            return "";
+        String c = validColor(color) ? color : COLOR_NORMAL;
+
+        if (containsEgoPrefix(msg)) {
             if (hasColor(msg))
-                msg = msg.substring(0, 3) + PREFIX + msg.substring(3);
-            else
-                msg = c + PREFIX + msg;
+                return msg;
+            return c + msg;
         }
-        return msg;
+
+        if (hasColor(msg)) {
+            String actualColor = msg.substring(0, 2);
+            String body = msg.substring(2).trim();
+            return actualColor + PREFIX + body;
+        }
+        return c + PREFIX + msg;
+    }
+
+    private static boolean containsEgoPrefix(String msg) {
+        return msg != null && msg.indexOf("[에고]") >= 0;
     }
 
     private static boolean hasColor(String message) {
-        return message != null && message.startsWith("\f") && message.length() >= 3;
+        return validColor(message) && message.length() >= 2;
+    }
+
+    private static boolean validColor(String value) {
+        return value != null && value.length() >= 2 && value.charAt(0) == '\f';
     }
 
     private static String stripColor(String value) {
         if (value == null)
             return "";
-        return value.replaceAll("\\f.", "").replace("[에고] ", "").trim();
+        return value.replaceAll("\\f.", "").replace("[에고] ", "").replace("[에고]", "").trim();
+    }
+
+    private static String normalize(String value) {
+        if (value == null)
+            return "";
+        return value.replace('\r', '\n').replaceAll("\n{3,}", "\n\n").trim();
     }
 
     private static List<String> splitLines(String text, int width, int maxLines) {
         List<String> out = new ArrayList<String>();
         if (text == null)
             return out;
+        if (width <= 0)
+            width = LETTER_LINE_WIDTH;
+        if (maxLines <= 0)
+            maxLines = LETTER_MAX_LINES;
+
         String[] rawLines = text.replace("\r", "").split("\n");
-        for (String raw : rawLines) {
-            String line = raw == null ? "" : raw.trim();
+        for (int i = 0; i < rawLines.length; i++) {
+            String line = rawLines[i] == null ? "" : rawLines[i].trim();
             while (line.length() > width) {
-                out.add(line.substring(0, width));
-                line = line.substring(width).trim();
+                int cut = findCutPoint(line, width);
+                out.add(line.substring(0, cut).trim());
+                line = line.substring(cut).trim();
                 if (out.size() >= maxLines)
                     return out;
             }
@@ -150,5 +189,14 @@ public final class EgoMessageUtil {
         if (out.isEmpty())
             out.add("...");
         return out;
+    }
+
+    private static int findCutPoint(String line, int width) {
+        if (line == null || line.length() <= width)
+            return line == null ? 0 : line.length();
+        int cut = line.lastIndexOf(' ', width);
+        if (cut <= width / 2)
+            cut = width;
+        return Math.max(1, cut);
     }
 }
