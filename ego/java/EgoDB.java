@@ -3,6 +3,7 @@ package lineage.database;
 import java.sql.Connection;
 import java.util.List;
 
+import lineage.bean.database.Item;
 import lineage.database.EgoWeaponDatabase.EgoAbilityInfo;
 import lineage.database.EgoWeaponDatabase.EgoWeaponInfo;
 import lineage.world.controller.EgoBond;
@@ -11,20 +12,29 @@ import lineage.world.controller.EgoTalkPack;
 import lineage.world.controller.EgoWeaponAbilityController;
 import lineage.world.object.instance.ItemInstance;
 import lineage.world.object.instance.PcInstance;
+import lineage.world.object.item.EgoOrb;
 
 /**
- * 에고 DB 통합 Facade.
+ * 에고 DB/아이템 Hook 통합 Facade.
+ *
+ * 외부 DB 로드, 에고 조회/생성/성장, 에고 구슬 아이템 Hook을 이 파일 1개로 처리한다.
  *
  * 로드 순서:
- * 1) EgoConfig                 공통 설정
- * 2) EgoWeaponDatabase         에고 기본/스킬 + EgoLevel 통합 로드
- * 3) EgoWeaponAbilityController 스킬베이스/전투 설정
- * 4) EgoBond                   유대감
- * 5) EgoTalkPack               DB 대사팩
+ * 1) EgoConfig
+ * 2) EgoWeaponDatabase + EgoLevel
+ * 3) EgoWeaponAbilityController
+ * 4) EgoBond
+ * 5) EgoTalkPack
  *
- * 무기 타입별 규칙은 제거했다. 무기 슬롯이면 에고 대상이며 낚싯대만 제외한다.
+ * ItemDatabase Hook 연결:
+ * ItemInstance egoItem = EgoDB.newInstance(i, item);
+ * if (egoItem != null)
+ *     return egoItem;
  */
 public final class EgoDB {
+
+    public static final int EGO_ORB_ITEM_CODE = 900001;
+    public static final String EGO_ORB_ITEM_NAME = "에고 구슬";
 
     private EgoDB() {
     }
@@ -88,5 +98,34 @@ public final class EgoDB {
 
     public static boolean addExp(ItemInstance item, long exp) {
         return EgoWeaponDatabase.addExp(item, exp);
+    }
+
+    public static ItemInstance newInstance(Item itemTemplate, ItemInstance pooledItem) {
+        if (!isEgoOrb(itemTemplate))
+            return null;
+        return EgoOrb.clone(pooledItem);
+    }
+
+    public static ItemInstance newInstance(Item itemTemplate) {
+        return newInstance(itemTemplate, null);
+    }
+
+    public static boolean isEgoOrb(Item itemTemplate) {
+        if (itemTemplate == null)
+            return false;
+        try {
+            if (itemTemplate.getItemCode() == EGO_ORB_ITEM_CODE)
+                return true;
+        } catch (Throwable e) {
+        }
+        try {
+            String name = itemTemplate.getName();
+            if (name == null)
+                return false;
+            String n = name.trim();
+            return EGO_ORB_ITEM_NAME.equals(n);
+        } catch (Throwable e) {
+            return false;
+        }
     }
 }
