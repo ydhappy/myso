@@ -1,7 +1,6 @@
 package lineage.world.controller;
 
 import java.sql.Connection;
-import java.util.StringTokenizer;
 
 import lineage.database.EgoDB;
 import lineage.world.object.Character;
@@ -13,8 +12,13 @@ import lineage.world.object.instance.RobotInstance;
 /**
  * 에고 시스템 단일 진입점.
  *
- * 초보자 적용 시 가능하면 이 클래스만 기존 서버 코드에 연결하세요.
- * 내부 구현 파일들은 기능별로 나뉘어 있지만, 외부 연결은 EgoCore로 최소화합니다.
+ * 외부 연결은 아래 5개만 사용한다.
+ * - init/reload: 서버 시작/관리자 리로드
+ * - chat: 일반 채팅 처리
+ * - tick: 캐릭터 주기 처리
+ * - attack/defense: 전투 보정
+ *
+ * 에고 생성은 점명령이 아니라 EgoOrb 아이템 사용으로만 처리한다.
  */
 public final class EgoCore {
 
@@ -27,7 +31,7 @@ public final class EgoCore {
         EgoDB.init(con);
     }
 
-    /** 리로드 시 호출. */
+    /** 서버 관리 리로드 시 호출. 점명령 연결은 제공하지 않는다. */
     public static void reload(Connection con) {
         EgoSchema.silentCheck(con);
         EgoDB.reload(con);
@@ -41,21 +45,6 @@ public final class EgoCore {
     /** DB 테이블/컬럼 연결성이 현재 Java 기준을 만족하는지 확인. */
     public static boolean schemaOk(Connection con) {
         return EgoSchema.isValid(con);
-    }
-
-    /** CommandController 호환용. 에고 생명주기 점명령은 더 이상 처리하지 않는다. */
-    public static boolean command(object o, String key, StringTokenizer st) {
-        return EgoCmd.run(o, key, st);
-    }
-
-    /** CommandController가 남은 인자를 문자열로 넘기는 서버용 편의 오버로드. */
-    public static boolean command(object o, String key, String args) {
-        return EgoCmd.run(o, key, new StringTokenizer(args == null ? "" : args));
-    }
-
-    /** CommandController가 인자 없이 key만 넘기는 서버용 편의 오버로드. */
-    public static boolean command(object o, String key) {
-        return EgoCmd.run(o, key, new StringTokenizer(""));
     }
 
     /** ChattingController 일반채팅 처리. true면 주변 방송 중단. */
