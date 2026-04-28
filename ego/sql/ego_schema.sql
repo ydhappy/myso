@@ -2,9 +2,9 @@
 -- EGO SCHEMA SQL
 -- File encoding: UTF-8
 -- Runtime DB charset target: euckr
--- Purpose: consolidated install/update/migration SQL for the ego system.
--- Policy: no full data purge, no table drop reset script.
--- Rerun policy: preserve operator-tuned balance/config values.
+-- Purpose: consolidated install/update SQL for the ego system.
+-- Policy: no one-click delete, no full reset, no direct item table insert.
+-- Final orb policy: 에고 구슬 creates ego on equipped weapon; existing ego weapon only re-recognizes owner.
 -- ============================================================
 
 SET NAMES utf8;
@@ -136,7 +136,7 @@ CREATE TABLE IF NOT EXISTS ego_weapon_rule (
 CREATE TABLE IF NOT EXISTS ego_item_template (
     item_code INT NOT NULL,
     item_name VARCHAR(80) NOT NULL,
-    java_class VARCHAR(120) NOT NULL DEFAULT 'lineage.world.object.item.EgoChangeOrb',
+    java_class VARCHAR(120) NOT NULL DEFAULT 'lineage.world.object.item.EgoOrb',
     item_type1 VARCHAR(40) NOT NULL DEFAULT 'etc',
     item_type2 VARCHAR(40) NOT NULL DEFAULT 'normal',
     name_id VARCHAR(80) NOT NULL DEFAULT '$900001',
@@ -243,8 +243,8 @@ INSERT INTO ego_skill_base (skill, label, memo, base_rate, lv_rate, max_rate, mi
 ON DUPLICATE KEY UPDATE label=VALUES(label), memo=VALUES(memo);
 
 INSERT INTO ego_config (config_key, config_value, memo, use_yn) VALUES
-('change_orb_item_code', '900001', '에고 변경구슬 아이템코드', 1),
-('change_orb_item_name', '에고 변경구슬', '에고 변경구슬 아이템명', 1),
+('ego_orb_item_code', '900001', '에고 구슬 아이템코드', 1),
+('ego_orb_item_name', '에고 구슬', '에고 구슬 아이템명', 1),
 ('genre_talk_delay_ms', '1200', '장르대화 연속 입력 방지 딜레이 ms', 1),
 ('auto_talk_hp_warn_rate', '25', 'HP 자동 위험 대사 기준', 1),
 ('auto_talk_mp_warn_rate', '15', 'MP 자동 안내 대사 기준', 1),
@@ -269,13 +269,13 @@ INSERT INTO ego_config (config_key, config_value, memo, use_yn) VALUES
 ('area_max_target', '4', '광역 능력 최대 대상 수', 1)
 ON DUPLICATE KEY UPDATE memo=VALUES(memo), use_yn=VALUES(use_yn);
 
+DELETE FROM ego_config WHERE config_key IN ('change_orb_item_code', 'change_orb_item_name');
+DELETE FROM ego_item_template WHERE item_name='에고 변경구슬' AND item_code<>900001;
 INSERT INTO ego_item_template (item_code, item_name, java_class, item_type1, item_type2, name_id, inv_gfx, ground_gfx, stackable, memo, use_yn) VALUES
-(900001, '에고 변경구슬', 'lineage.world.object.item.EgoChangeOrb', 'etc', 'normal', '$900001', 4038, 4038, 1, '착용 중인 에고무기의 능력과 대화 성향을 랜덤 재선택하는 소모 아이템', 1)
+(900001, '에고 구슬', 'lineage.world.object.item.EgoOrb', 'etc', 'normal', '$900001', 4038, 4038, 1, '착용 무기에 에고를 최초 생성한다. 이미 에고무기면 능력/대화/레벨 변경 없이 주인만 재인식한다.', 1)
 ON DUPLICATE KEY UPDATE item_name=VALUES(item_name), java_class=VALUES(java_class), memo=VALUES(memo), use_yn=VALUES(use_yn);
 
--- item 테이블은 서버마다 필수 컬럼이 다르므로 여기서 직접 INSERT하지 않는다.
--- 아래 결과를 보고 서버 item 테이블 구조에 맞게 수동 등록한다.
-SELECT 'REGISTER_EGO_CHANGE_ORB_MANUALLY' AS guide,
+SELECT 'REGISTER_EGO_ORB_MANUALLY' AS guide,
        item_code,
        item_name,
        java_class,
@@ -286,7 +286,7 @@ SELECT 'REGISTER_EGO_CHANGE_ORB_MANUALLY' AS guide,
        ground_gfx,
        stackable
 FROM ego_item_template
-WHERE item_name='에고 변경구슬';
+WHERE item_name='에고 구슬';
 
 INSERT INTO ego_level (ego_lv, need_exp, proc_bonus, critical_chance, critical_damage, counter_chance, counter_power, counter_critical, memo, use_yn) VALUES
 (0,100,0,0,0,0,0,0,'Lv.0 전투능력 없음',1),
