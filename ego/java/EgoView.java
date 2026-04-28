@@ -23,11 +23,9 @@ import lineage.world.object.instance.PcInstance;
  * - type2 변형 없음.
  * - 인벤토리/바닥 이미지 변경 없음.
  * - 원본 아이템 템플릿의 inv_gfx / ground_gfx 그대로 사용.
- * - 에고 표시는 아이템 이름 뒤 [에고] [Lv.x 에고이름] 문구만 추가한다.
+ * - 인벤토리 이름에는 아이템명 뒤 [Lv.x 에고이름]만 추가한다.
  */
 public final class EgoView {
-
-    private static final String EGO_MARK = EgoMessageUtil.COLOR_NORMAL + "[에고]" + EgoMessageUtil.COLOR_WHITE;
 
     private EgoView() {
     }
@@ -83,7 +81,7 @@ public final class EgoView {
             return baseName;
         if (!isEgo(item))
             return baseName;
-        if (baseName.indexOf("[에고]") >= 0 || baseName.indexOf("[Lv.") >= 0)
+        if (baseName.indexOf("[Lv.") >= 0)
             return EgoMessageUtil.clientColor(baseName);
 
         String fixedName = displayName(item, baseName);
@@ -94,7 +92,6 @@ public final class EgoView {
             egoName = "에고";
 
         StringBuilder sb = new StringBuilder(fixedName);
-        sb.append(" ").append(EGO_MARK);
         sb.append(" ").append(EgoMessageUtil.COLOR_INFO);
         sb.append("[Lv.").append(level).append(" ").append(egoName).append("]");
         sb.append(EgoMessageUtil.COLOR_WHITE);
@@ -104,7 +101,6 @@ public final class EgoView {
     public static String info(ItemInstance item) {
         if (item == null || !isEgo(item))
             return "";
-        String label = label(item);
         EgoWeaponInfo ego = EgoWeaponDatabase.find(item);
         int level = ego == null ? 1 : Math.max(1, ego.level);
         long exp = ego == null ? 0 : Math.max(0, ego.exp);
@@ -116,7 +112,6 @@ public final class EgoView {
 
         StringBuilder sb = new StringBuilder();
         sb.append("에고명: ").append(egoName);
-        sb.append(" / 종류: ").append(label);
         sb.append(" / 레벨: ").append(level);
         sb.append(" / 경험치: ").append(exp).append("/").append(need);
         if (skill.length() > 0)
