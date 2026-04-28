@@ -27,7 +27,7 @@ public final class EgoCore {
         EgoDB.init(con);
     }
 
-    /** .에고리로드 등 운영자 리로드 시 호출. */
+    /** 리로드 시 호출. */
     public static void reload(Connection con) {
         EgoSchema.silentCheck(con);
         EgoDB.reload(con);
@@ -43,7 +43,7 @@ public final class EgoCore {
         return EgoSchema.isValid(con);
     }
 
-    /** CommandController에서 명령어 처리. true면 기존 명령 처리 중단. */
+    /** CommandController 호환용. 에고 생명주기 점명령은 더 이상 처리하지 않는다. */
     public static boolean command(object o, String key, StringTokenizer st) {
         return EgoCmd.run(o, key, st);
     }
@@ -62,23 +62,31 @@ public final class EgoCore {
     public static boolean chat(object o, String msg) {
         if (!(o instanceof PcInstance) || o instanceof RobotInstance)
             return false;
-        return EgoTalk.chat((PcInstance) o, msg);
+        PcInstance pc = (PcInstance) o;
+        EgoOwnerRecognition.recognize(pc);
+        return EgoTalk.chat(pc, msg);
     }
 
     /** 캐릭터 상태 루프/AI 루프에서 자동 경고 및 자동 대사 처리. */
     public static void tick(object o) {
         if (!(o instanceof PcInstance) || o instanceof RobotInstance)
             return;
-        EgoTalk.warning((PcInstance) o);
+        PcInstance pc = (PcInstance) o;
+        EgoOwnerRecognition.recognize(pc);
+        EgoTalk.warning(pc);
     }
 
     /** DamageController.getDamage 최종 return 직전 공격 보정. */
     public static int attack(Character cha, object target, ItemInstance weapon, int damage) {
+        if (cha instanceof PcInstance)
+            EgoOwnerRecognition.recognize((PcInstance) cha, weapon);
         return EgoSkill.attack(cha, target, weapon, damage);
     }
 
     /** DamageController.toDamage HP 감소 직전 피격 보정. */
     public static int defense(Character defender, Character attacker, int damage) {
+        if (defender instanceof PcInstance)
+            EgoOwnerRecognition.recognize((PcInstance) defender);
         return EgoSkill.defense(defender, attacker, damage);
     }
 }
