@@ -2,7 +2,7 @@ package lineage.database;
 
 import lineage.bean.database.Item;
 import lineage.world.object.instance.ItemInstance;
-import lineage.world.object.item.EgoChangeOrb;
+import lineage.world.object.item.EgoOrb;
 
 /**
  * 에고 전용 아이템 생성 Hook.
@@ -15,7 +15,7 @@ import lineage.world.object.item.EgoChangeOrb;
  *
  * 목적:
  * - 서버마다 item 테이블 구조가 달라도 Java 아이템 클래스 연결 누락을 줄인다.
- * - 에고 변경구슬 DB 등록 후 실제 더블클릭 로직이 EgoChangeOrb로 연결되도록 한다.
+ * - 에고 구슬 DB 등록 후 실제 더블클릭 로직이 EgoOrb로 연결되도록 한다.
  */
 public final class EgoItemDatabaseHook {
 
@@ -23,16 +23,16 @@ public final class EgoItemDatabaseHook {
     }
 
     public static ItemInstance newInstance(Item itemTemplate, ItemInstance pooledItem) {
-        if (!isEgoChangeOrb(itemTemplate))
+        if (!isEgoOrb(itemTemplate))
             return null;
-        return EgoChangeOrb.clone(pooledItem);
+        return EgoOrb.clone(pooledItem);
     }
 
     public static ItemInstance newInstance(Item itemTemplate) {
         return newInstance(itemTemplate, null);
     }
 
-    public static boolean isEgoChangeOrb(Item itemTemplate) {
+    public static boolean isEgoOrb(Item itemTemplate) {
         if (itemTemplate == null)
             return false;
         try {
@@ -42,8 +42,11 @@ public final class EgoItemDatabaseHook {
         }
         try {
             String name = itemTemplate.getName();
-            if (name != null && "에고 변경구슬".equals(name.trim()))
-                return true;
+            if (name != null) {
+                String n = name.trim();
+                if ("에고 구슬".equals(n) || "에고 변경구슬".equals(n))
+                    return true;
+            }
         } catch (Throwable e) {
         }
         return false;
