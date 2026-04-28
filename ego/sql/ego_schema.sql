@@ -5,6 +5,7 @@
 -- Policy: no one-click delete, no full reset, no direct item table insert.
 -- Java runtime ability names are kept 1:1 with EgoWeaponAbilityController.
 -- Simple input aliases are normalized in EgoWeaponDatabase.
+-- Ego personality styles: 예의, 예의반대, 싸이코패스.
 -- ============================================================
 
 SET NAMES utf8;
@@ -202,6 +203,12 @@ INSERT INTO ego_config (config_key, config_value, memo, use_yn) VALUES
 ('genre_talk_delay_ms', '1200', '장르대화 연속 입력 방지 딜레이 ms', 1),
 ('auto_talk_hp_warn_rate', '25', 'HP 자동 위험 대사 기준', 1),
 ('auto_talk_mp_warn_rate', '15', 'MP 자동 안내 대사 기준', 1),
+('auto_talk_idle_hp_rate', '80', '자동 안정 대사 HP 기준', 1),
+('auto_talk_idle_mp_rate', '50', '자동 안정 대사 MP 기준', 1),
+('auto_talk_hp_warn_delay_ms', '15000', 'HP 자동 경고 딜레이 ms', 1),
+('auto_talk_mp_warn_delay_ms', '20000', 'MP 자동 경고 딜레이 ms', 1),
+('auto_talk_boss_warn_delay_ms', '30000', '보스 자동 경고 딜레이 ms', 1),
+('auto_talk_idle_delay_ms', '180000', '안정 상태 자동 대사 딜레이 ms', 1),
 ('attack_ego_exp', '1', '공격 중 획득 경험치', 1),
 ('attack_exp_delay_ms', '3000', '공격 경험치 획득 딜레이 ms', 1),
 ('kill_ego_exp', '5', '몬스터 처치 경험치', 1),
@@ -234,7 +241,7 @@ INSERT INTO ego_config (config_key, config_value, memo, use_yn) VALUES
 ('execution_target_hp_rate', '20', '처형 발동 대상 HP 기준', 1),
 ('area_range', '2', '광역 능력 범위', 1),
 ('area_max_target', '4', '광역 능력 최대 대상 수', 1)
-ON DUPLICATE KEY UPDATE memo=VALUES(memo), use_yn=VALUES(use_yn);
+ON DUPLICATE KEY UPDATE config_value=VALUES(config_value), memo=VALUES(memo), use_yn=VALUES(use_yn);
 
 DELETE FROM ego_config WHERE config_key IN ('change_orb_item_code', 'change_orb_item_name', 'combo_heal_rate', 'combo_heal_max_rate');
 DELETE FROM ego_item_template WHERE item_name='에고 변경구슬' AND item_code<>900001;
@@ -259,17 +266,26 @@ ON DUPLICATE KEY UPDATE memo=VALUES(memo), need_exp=VALUES(need_exp), proc_bonus
 INSERT INTO ego_talk_pack (genre, tone, keyword, message, use_yn) VALUES
 ('드라마','예의','','오늘의 전투는 조용히 시작됐지만, 끝은 분명 주인님의 선택으로 기록될 것입니다.',1),
 ('드라마','예의반대','','드라마 찍냐? 그래도 주인공이면 끝까지 서 있어야지.',1),
+('드라마','싸이코패스','','좋아. 지금 장면은 조용히 금이 가고 있어. 네가 무너지지 않으면 더 아름답겠지.',1),
 ('영화','예의','','지금은 예고편이 아닙니다. 주인님의 선택이 곧 본편입니다.',1),
 ('영화','예의반대','','엔딩 크레딧 보고 싶으면 지금 죽지 마라.',1),
+('영화','싸이코패스','','카메라가 있다면 지금 네 손끝을 찍었을 거야. 떨림까지 전부 기록되니까.',1),
 ('웹툰','예의','','한 컷 한 컷 쌓이면 성장 서사가 됩니다. 지금의 작은 경험치도 의미 있습니다.',1),
 ('웹툰','예의반대','','이번 회차 제목은 물약 안 먹다 큰일 날 뻔함이냐?',1),
+('웹툰','싸이코패스','','이번 컷은 마음에 들어. 네가 버티면 다음 컷은 더 잔인하게 빛날 거야.',1),
 ('무협','예의','','강호에서 오래 살아남는 이는 먼저 베는 자가 아니라 먼저 읽는 자입니다.',1),
 ('무협','예의반대','','강호였으면 너 지금 하수 티 난다. 자세 고쳐.',1),
+('무협','싸이코패스','','검끝이 조용할수록 속은 더 시끄럽지. 좋아, 그 소리를 따라 베어.',1),
+('공포','싸이코패스','','뒤를 봐. 아무것도 없다면 더 좋아. 공포는 보이지 않을 때 가장 오래 남거든.',1),
+('빌런','싸이코패스','','정답은 간단해. 망설임을 버려. 다만 네가 어디까지 버릴 수 있는지 보자.',1),
 ('아무','예의','','살아남은 자만이 다음 대사를 말할 수 있습니다.',1),
-('아무','예의반대','','대사는 내가 해줄 테니 전투는 네가 해.',1)
+('아무','예의반대','','대사는 내가 해줄 테니 전투는 네가 해.',1),
+('아무','싸이코패스','','아직 살아 있네. 좋아. 더 보여줘. 네 한계가 어디서 부서지는지 궁금하거든.',1)
 ON DUPLICATE KEY UPDATE keyword=VALUES(keyword), use_yn=VALUES(use_yn);
 
-UPDATE ego SET ego_type='예의' WHERE ego_type IS NULL OR ego_type='' OR ego_type NOT IN ('예의','예의반대');
+UPDATE ego SET ego_type='싸이코패스' WHERE ego_type IN ('사이코패스','psycho','psychopath');
+UPDATE ego SET ego_type='예의반대' WHERE ego_type IN ('반말','막말','싸가지');
+UPDATE ego SET ego_type='예의' WHERE ego_type IS NULL OR ego_type='' OR ego_type NOT IN ('예의','예의반대','싸이코패스');
 UPDATE ego SET ego_lv=0 WHERE ego_lv < 0;
 UPDATE ego SET ego_lv=10 WHERE ego_lv > 10;
 UPDATE ego e INNER JOIN ego_level l ON e.ego_lv=l.ego_lv SET e.need_exp=l.need_exp WHERE l.use_yn=1;
@@ -281,3 +297,4 @@ SELECT * FROM ego_level ORDER BY ego_lv;
 SELECT * FROM ego_config ORDER BY config_key;
 SELECT * FROM ego_skill_base ORDER BY skill;
 SELECT * FROM ego_item_template ORDER BY item_code;
+SELECT genre, tone, message FROM ego_talk_pack WHERE tone='싸이코패스' ORDER BY genre, id;
