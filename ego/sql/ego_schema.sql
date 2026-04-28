@@ -4,6 +4,7 @@
 -- Runtime DB charset target: euckr
 -- Purpose: one consolidated install/update/migration SQL for the ego system.
 -- Policy: no full data purge, no table drop reset script.
+-- Rerun policy: preserve operator-tuned balance/config values.
 -- ============================================================
 
 SET NAMES utf8;
@@ -94,7 +95,8 @@ CREATE TABLE IF NOT EXISTS ego_talk_pack (
     reg_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '생성일',
     mod_date DATETIME NULL DEFAULT NULL COMMENT '수정일',
     PRIMARY KEY (id),
-    INDEX ego_talk_pack_idx (genre, tone, use_yn)
+    INDEX ego_talk_pack_idx (genre, tone, use_yn),
+    UNIQUE KEY ego_talk_pack_uk (genre, tone, message)
 ) ENGINE=InnoDB DEFAULT CHARSET=euckr COLLATE=euckr_korean_ci COMMENT='에고 DB 대사팩';
 
 CREATE TABLE IF NOT EXISTS ego_config (
@@ -207,8 +209,21 @@ UPDATE ego e
 INNER JOIN ego_bond b ON e.item_id = b.item_id
 SET e.bond = b.bond, e.bond_reason = b.last_reason, e.mod_date = NOW();
 
+-- Existing duplicate talk-pack rows are collapsed before unique key creation.
+DELETE t1 FROM ego_talk_pack t1
+INNER JOIN ego_talk_pack t2
+    ON t1.id > t2.id
+   AND t1.genre = t2.genre
+   AND t1.tone = t2.tone
+   AND t1.message = t2.message;
+
+SET @sql := IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ego_talk_pack' AND INDEX_NAME = 'ego_talk_pack_uk') = 0,
+    'ALTER TABLE ego_talk_pack ADD UNIQUE KEY ego_talk_pack_uk (genre, tone, message)',
+    'SELECT ''ego_talk_pack_uk already exists'' AS info');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
 -- ------------------------------------------------------------
--- Default config data
+-- Default config data. Existing operator-tuned values are preserved.
 -- ------------------------------------------------------------
 INSERT INTO ego_skill_base (skill, label, memo, base_rate, lv_rate, max_rate, min_lv, cool_ms, effect, use_yn) VALUES
 ('EGO_BALANCE', '공명', '균형형 추가 피해', 3, 1, 25, 1, 0, 3940, 1),
@@ -222,7 +237,7 @@ INSERT INTO ego_skill_base (skill, label, memo, base_rate, lv_rate, max_rate, mi
 ('FROST_BIND', '서리', '서리 추가 피해', 3, 1, 25, 1, 0, 3684, 1),
 ('EGO_COUNTER', '반격', '피격/자동 반격', 35, 5, 100, 5, 2500, 10710, 1),
 ('EGO_REVENGE', '복수', 'Lv.10 스턴 연동 반격', 50, 0, 50, 10, 6000, 4183, 1)
-ON DUPLICATE KEY UPDATE label=VALUES(label), memo=VALUES(memo), base_rate=VALUES(base_rate), lv_rate=VALUES(lv_rate), max_rate=VALUES(max_rate), min_lv=VALUES(min_lv), cool_ms=VALUES(cool_ms), effect=VALUES(effect), use_yn=VALUES(use_yn);
+ON DUPLICATE KEY UPDATE label=VALUES(label), memo=VALUES(memo);
 
 INSERT INTO ego_config (config_key, config_value, memo, use_yn) VALUES
 ('genre_talk_delay_ms', '1200', '장르대화 연속 입력 방지 딜레이 ms', 1),
@@ -261,7 +276,7 @@ INSERT INTO ego_level (ego_lv, need_exp, proc_bonus, critical_chance, critical_d
 (8,7500,10,15,12,100,38,20,'Lv.8',1),
 (9,10000,12,18,15,100,46,25,'Lv.9',1),
 (10,0,15,25,20,100,60,35,'Lv.10 스턴 연동',1)
-ON DUPLICATE KEY UPDATE need_exp=VALUES(need_exp), proc_bonus=VALUES(proc_bonus), critical_chance=VALUES(critical_chance), critical_damage=VALUES(critical_damage), counter_chance=VALUES(counter_chance), counter_power=VALUES(counter_power), counter_critical=VALUES(counter_critical), memo=VALUES(memo), use_yn=VALUES(use_yn);
+ON DUPLICATE KEY UPDATE memo=VALUES(memo);
 
 INSERT INTO ego_weapon_rule (type2, display_name, default_ability, allowed_abilities, use_yn) VALUES
 ('dagger','단검','EGO_BALANCE','EGO_BALANCE,BLOOD_DRAIN,MANA_DRAIN,CRITICAL_BURST,GUARDIAN_SHIELD,EXECUTION,FLAME_BRAND,EGO_COUNTER,EGO_REVENGE',1),
@@ -273,7 +288,9 @@ INSERT INTO ego_weapon_rule (type2, display_name, default_ability, allowed_abili
 ('staff','지팡이','MANA_DRAIN','EGO_BALANCE,MANA_DRAIN,GUARDIAN_SHIELD,FLAME_BRAND,FROST_BIND,EGO_COUNTER,EGO_REVENGE',1),
 ('wand','완드','MANA_DRAIN','EGO_BALANCE,MANA_DRAIN,GUARDIAN_SHIELD,FLAME_BRAND,FROST_BIND,EGO_COUNTER,EGO_REVENGE',1),
 ('fishing_rod','낚싯대','EGO_BALANCE','',0)
-ON DUPLICATE KEY UPDATE display_name=VALUES(display_name), default_ability=VALUES(default_ability), allowed_abilities=VALUES(allowed_abilities), use_yn=VALUES(use_yn);
+ON DUPLICATE KEY UPDATE display_name=VALUES(display_name);
+
+UPDATE ego_weapon_rule SET use_yn=0, allowed_abilities='' WHERE type2='fishing_rod';
 
 INSERT INTO ego_talk_pack (genre, tone, keyword, message, use_yn) VALUES
 ('드라마','예의','','오늘의 전투는 조용히 시작됐지만, 끝은 분명 주인님의 선택으로 기록될 것입니다.',1),
@@ -285,7 +302,8 @@ INSERT INTO ego_talk_pack (genre, tone, keyword, message, use_yn) VALUES
 ('무협','예의','','강호에서 오래 살아남는 이는 먼저 베는 자가 아니라 먼저 읽는 자입니다.',1),
 ('무협','예의반대','','강호였으면 너 지금 하수 티 난다. 자세 고쳐.',1),
 ('아무','예의','','살아남은 자만이 다음 대사를 말할 수 있습니다.',1),
-('아무','예의반대','','대사는 내가 해줄 테니 전투는 네가 해.',1);
+('아무','예의반대','','대사는 내가 해줄 테니 전투는 네가 해.',1)
+ON DUPLICATE KEY UPDATE keyword=VALUES(keyword);
 
 -- ------------------------------------------------------------
 -- Data normalization
