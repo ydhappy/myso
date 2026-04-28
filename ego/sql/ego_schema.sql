@@ -197,7 +197,7 @@ SET @sql := IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHE
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 SET @sql := IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ego' AND COLUMN_NAME = 'bond_reason') = 0,
-    'ALTER TABLE ego ADD COLUMN bond_reason VARCHAR(40) NOT NULL DEFAULT ''''',
+    'ALTER TABLE ego ADD COLUMN bond_reason VARCHAR(40) NOT NULL DEFAULT ""',
     'SELECT ''ego.bond_reason already exists'' AS info');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
@@ -273,19 +273,20 @@ INSERT INTO ego_item_template (item_code, item_name, java_class, item_type1, ite
 (900001, '에고 변경구슬', 'lineage.world.object.item.EgoChangeOrb', 'etc', 'normal', '$900001', 4038, 4038, 1, '착용 중인 에고무기의 능력과 대화 성향을 랜덤 재선택하는 소모 아이템', 1)
 ON DUPLICATE KEY UPDATE item_name=VALUES(item_name), java_class=VALUES(java_class), memo=VALUES(memo), use_yn=VALUES(use_yn);
 
--- 빛나형 item 테이블 컬럼이 있는 서버에서는 보조 등록을 시도한다. 컬럼 구조가 다르면 ego_item_template 기준으로 수동 등록한다.
-SET @has_bitna_item := (
-    SELECT IF(COUNT(*) >= 10, 1, 0)
-    FROM INFORMATION_SCHEMA.COLUMNS
-    WHERE TABLE_SCHEMA = DATABASE()
-      AND TABLE_NAME = 'item'
-      AND COLUMN_NAME IN ('아이템코드','아이템이름','구분1','구분2','NAMEID','미확인 아이템','재질','무게','인벤ID','GFXID')
-);
-SET @sql := IF(@has_bitna_item = 1,
-    'INSERT INTO item (`아이템코드`,`아이템이름`,`구분1`,`구분2`,`NAMEID`,`미확인 아이템`,`재질`,`현금거래`,`작은 몬스터`,`큰 몬스터`,`무게`,`인벤ID`,`GFXID`,`ACTION1`,`ACTION2`,`판매`,`겹침`,`거래`,`드랍`,`창고`,`창고_혈맹`,`창고_요숲`,`인첸트`,`안전인첸트`,`최고인챈`,`군주`,`기사`,`요정`,`마법사`,`다크엘프`,`용기사`,`환술사`) SELECT 900001,''에고 변경구슬'',''etc'',''normal'',''$900001'',''에고 변경구슬'',''gem'',''false'',0,0,''1'',4038,4038,0,0,''true'',''true'',''true'',''true'',''true'',''true'',''true'',''false'',0,0,1,1,1,1,1,1,1 WHERE NOT EXISTS (SELECT 1 FROM item WHERE `아이템이름`=''에고 변경구슬'' OR `아이템코드`=900001)',
-    'SELECT ''item table skipped. use ego_item_template to register 에고 변경구슬 manually'' AS info'
-);
-PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+-- item 테이블은 서버마다 필수 컬럼이 다르므로 여기서 직접 INSERT하지 않는다.
+-- 아래 결과를 보고 서버 item 테이블 구조에 맞게 수동 등록한다.
+SELECT 'REGISTER_EGO_CHANGE_ORB_MANUALLY' AS guide,
+       item_code,
+       item_name,
+       java_class,
+       item_type1,
+       item_type2,
+       name_id,
+       inv_gfx,
+       ground_gfx,
+       stackable
+FROM ego_item_template
+WHERE item_name='에고 변경구슬';
 
 INSERT INTO ego_level (ego_lv, need_exp, proc_bonus, critical_chance, critical_damage, counter_chance, counter_power, counter_critical, memo, use_yn) VALUES
 (0,100,0,0,0,0,0,0,'Lv.0 전투능력 없음',1),
