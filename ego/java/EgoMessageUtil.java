@@ -12,24 +12,25 @@ import lineage.world.object.instance.PcInstance;
 /**
  * 에고무기 메시지 유틸.
  *
- * 출력 정책:
- * - 에고 호출 일반채팅은 외부 방송하지 않고 소비한다.
- * - 짧은 대답은 본인에게만 보이는 말풍선으로 보낸다.
- * - 긴 상태/도움말/커맨드 결과는 HTML 편지창으로 보낸다.
- * - HTML 템플릿이 없거나 패킷 시그니처가 다른 서버에서는 시스템 메시지로 fallback한다.
+ * 클라이언트 출력 안정화:
+ * - 클라 색상코드는 Java form-feed 문자(\f)가 아니라 실제 문자열 "\\fY" 형식으로 보낸다.
+ * - HTML request 값은 null 대신 빈 문자열을 사용한다.
+ * - egoletter.htm의 $0~$18 치환값을 항상 채운다.
+ * - 패킷 실패 시 시스템 메시지로 fallback한다.
  */
 public final class EgoMessageUtil {
 
-    public static final String COLOR_NORMAL = "\fY";
-    public static final String COLOR_DANGER = "\fR";
-    public static final String COLOR_INFO = "\fS";
-    public static final String COLOR_WHITE = "\fW";
-    public static final String COLOR_GENRE = "\fU";
+    public static final String COLOR_NORMAL = "\\fY";
+    public static final String COLOR_DANGER = "\\fR";
+    public static final String COLOR_INFO = "\\fS";
+    public static final String COLOR_WHITE = "\\fW";
+    public static final String COLOR_GENRE = "\\fU";
 
     private static final String PREFIX = "[에고] ";
     private static final int BUBBLE_MAX_LENGTH = 72;
     private static final int LETTER_LINE_WIDTH = 46;
     private static final int LETTER_MAX_LINES = 18;
+    private static final int LETTER_PARAM_COUNT = 19;
     private static final String HTML_LETTER = "egoletter";
 
     private EgoMessageUtil() {
@@ -50,6 +51,13 @@ public final class EgoMessageUtil {
     /** 장르/감성 대사용 색상. 클라이언트가 \fU를 지원하지 않으면 일반색처럼 표시된다. */
     public static void genre(PcInstance pc, String message) {
         reply(pc, COLOR_GENRE, message);
+    }
+
+    /** 직접 시스템 메시지를 보낼 때도 색상코드를 클라이언트 형식으로 보정한다. */
+    public static String clientColor(String value) {
+        if (value == null)
+            return "";
+        return value.replace("\r\n", "\n").replace('\r', '\n').replace("\f", "\\f");
     }
 
     /** 짧으면 말풍선, 길면 편지형 HTML로 출력. */
@@ -86,11 +94,12 @@ public final class EgoMessageUtil {
             return;
 
         List<String> list = new ArrayList<String>();
-        list.add(normalize(title).length() == 0 ? "에고의 답장" : normalize(title));
+        list.add(stripColor(normalize(title).length() == 0 ? "에고의 답장" : normalize(title)));
         list.addAll(splitLines(stripColor(message), LETTER_LINE_WIDTH, LETTER_MAX_LINES));
+        padLetterParams(list);
 
         try {
-            pc.toSender(S_Html.clone(BasePacketPooling.getPool(S_Html.class), pc, HTML_LETTER, null, list));
+            pc.toSender(S_Html.clone(BasePacketPooling.getPool(S_Html.class), pc, HTML_LETTER, "", list));
         } catch (Throwable e) {
             raw(pc, withPrefix(COLOR_INFO, message));
         }
@@ -100,7 +109,7 @@ public final class EgoMessageUtil {
     public static void raw(PcInstance pc, String message) {
         if (pc == null || message == null)
             return;
-        String msg = normalize(message);
+        String msg = normalize(clientColor(message));
         if (msg.length() == 0)
             return;
         try {
@@ -119,20 +128,22 @@ public final class EgoMessageUtil {
     }
 
     private static String withPrefix(String color, String message) {
-        String msg = normalize(message);
+        String msg = normalize(clientColor(message));
         if (msg.length() == 0)
             return "";
-        String c = validColor(color) ? color : COLOR_NORMAL;
+        String c = normalizeColor(color);
+        if (c.length() == 0)
+            c = COLOR_NORMAL;
 
         if (containsEgoPrefix(msg)) {
             if (hasColor(msg))
-                return msg;
+                return clientColor(msg);
             return c + msg;
         }
 
         if (hasColor(msg)) {
-            String actualColor = msg.substring(0, 2);
-            String body = msg.substring(2).trim();
+            String actualColor = normalizeColor(msg);
+            String body = msg.substring(colorLength(msg)).trim();
             return actualColor + PREFIX + body;
         }
         return c + PREFIX + msg;
@@ -143,23 +154,57 @@ public final class EgoMessageUtil {
     }
 
     private static boolean hasColor(String message) {
-        return validColor(message) && message.length() >= 2;
+        return colorLength(message) > 0;
     }
 
-    private static boolean validColor(String value) {
-        return value != null && value.length() >= 2 && value.charAt(0) == '\f';
+    private static int colorLength(String value) {
+        if (value == null)
+            return 0;
+        if (value.length() >= 3 && value.charAt(0) == '\\' && value.charAt(1) == 'f')
+            return 3;
+        if (value.length() >= 2 && value.charAt(0) == '\f')
+            return 2;
+        return 0;
+    }
+
+    private static String normalizeColor(String value) {
+        if (value == null)
+            return "";
+        String v = clientColor(value);
+        if (v.length() >= 3 && v.charAt(0) == '\\' && v.charAt(1) == 'f')
+            return v.substring(0, 3);
+        return "";
     }
 
     private static String stripColor(String value) {
         if (value == null)
             return "";
-        return value.replaceAll("\\f.", "").replace("[에고] ", "").replace("[에고]", "").trim();
+        String v = clientColor(value);
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < v.length();) {
+            if (i + 2 < v.length() && v.charAt(i) == '\\' && v.charAt(i + 1) == 'f') {
+                i += 3;
+                continue;
+            }
+            sb.append(v.charAt(i));
+            i++;
+        }
+        return sb.toString().replace("[에고] ", "").replace("[에고]", "").trim();
     }
 
     private static String normalize(String value) {
         if (value == null)
             return "";
-        return value.replace("\r\n", "\n").replace('\r', '\n').replaceAll("\n{3,}", "\n\n").trim();
+        return clientColor(value).replaceAll("\n{3,}", "\n\n").trim();
+    }
+
+    private static void padLetterParams(List<String> list) {
+        if (list == null)
+            return;
+        while (list.size() < LETTER_PARAM_COUNT)
+            list.add("");
+        while (list.size() > LETTER_PARAM_COUNT)
+            list.remove(list.size() - 1);
     }
 
     private static List<String> splitLines(String text, int width, int maxLines) {
@@ -171,7 +216,7 @@ public final class EgoMessageUtil {
         if (maxLines <= 0)
             maxLines = LETTER_MAX_LINES;
 
-        String[] rawLines = text.replace("\r\n", "\n").replace("\r", "").split("\n");
+        String[] rawLines = clientColor(text).replace("\r\n", "\n").replace("\r", "").split("\n");
         for (int i = 0; i < rawLines.length; i++) {
             String line = rawLines[i] == null ? "" : rawLines[i].trim();
             while (line.length() > width) {
