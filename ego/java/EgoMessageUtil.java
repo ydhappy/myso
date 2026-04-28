@@ -14,6 +14,7 @@ import lineage.world.object.instance.PcInstance;
  *
  * 클라이언트 출력 안정화:
  * - 클라 색상코드는 Java form-feed 문자(\f)가 아니라 실제 문자열 "\\fY" 형식으로 보낸다.
+ * - 줄바꿈 뒤에도 색상코드를 다시 붙여 다음 줄 색상 초기화를 방지한다.
  * - HTML request 값은 null 대신 빈 문자열을 사용한다.
  * - egoletter.htm의 $0~$18 치환값을 항상 채운다.
  * - 패킷 실패 시 시스템 메시지로 fallback한다.
@@ -58,6 +59,53 @@ public final class EgoMessageUtil {
         if (value == null)
             return "";
         return value.replace("\r\n", "\n").replace('\r', '\n').replace("\f", "\\f");
+    }
+
+    /**
+     * 클라이언트가 줄바꿈 뒤 색상을 초기화하는 경우를 방지한다.
+     * 각 줄이 색상코드로 시작하지 않으면 직전 줄의 마지막 색상코드를 다시 붙인다.
+     */
+    public static String keepColorOnNewLines(String value) {
+        return keepColorOnNewLines(value, COLOR_NORMAL);
+    }
+
+    public static String keepColorOnNewLines(String value, String defaultColor) {
+        String msg = clientColor(value);
+        if (msg.length() == 0 || msg.indexOf('\n') < 0)
+            return msg;
+
+        String active = normalizeColor(defaultColor);
+        if (active.length() == 0)
+            active = COLOR_NORMAL;
+
+        int firstColorLen = colorLength(msg);
+        if (firstColorLen > 0)
+            active = msg.substring(0, firstColorLen);
+
+        String[] lines = msg.split("\n", -1);
+        StringBuilder sb = new StringBuilder(msg.length() + lines.length * 3);
+        for (int i = 0; i < lines.length; i++) {
+            if (i > 0)
+                sb.append('\n');
+
+            String line = lines[i];
+            if (line == null || line.length() == 0) {
+                continue;
+            }
+
+            int len = colorLength(line);
+            if (len > 0) {
+                sb.append(line);
+                active = line.substring(0, len);
+            } else {
+                sb.append(active).append(line);
+            }
+
+            String last = lastColor(line);
+            if (last.length() > 0)
+                active = last;
+        }
+        return sb.toString();
     }
 
     /** 짧으면 말풍선, 길면 편지형 HTML로 출력. */
@@ -109,7 +157,7 @@ public final class EgoMessageUtil {
     public static void raw(PcInstance pc, String message) {
         if (pc == null || message == null)
             return;
-        String msg = normalize(clientColor(message));
+        String msg = normalize(keepColorOnNewLines(clientColor(message)));
         if (msg.length() == 0)
             return;
         try {
@@ -135,18 +183,20 @@ public final class EgoMessageUtil {
         if (c.length() == 0)
             c = COLOR_NORMAL;
 
+        String out;
         if (containsEgoPrefix(msg)) {
             if (hasColor(msg))
-                return clientColor(msg);
-            return c + msg;
-        }
-
-        if (hasColor(msg)) {
+                out = clientColor(msg);
+            else
+                out = c + msg;
+        } else if (hasColor(msg)) {
             String actualColor = normalizeColor(msg);
             String body = msg.substring(colorLength(msg)).trim();
-            return actualColor + PREFIX + body;
+            out = actualColor + PREFIX + body;
+        } else {
+            out = c + PREFIX + msg;
         }
-        return c + PREFIX + msg;
+        return keepColorOnNewLines(out, c);
     }
 
     private static boolean containsEgoPrefix(String msg) {
@@ -174,6 +224,20 @@ public final class EgoMessageUtil {
         if (v.length() >= 3 && v.charAt(0) == '\\' && v.charAt(1) == 'f')
             return v.substring(0, 3);
         return "";
+    }
+
+    private static String lastColor(String value) {
+        if (value == null)
+            return "";
+        String v = clientColor(value);
+        String last = "";
+        for (int i = 0; i + 2 < v.length(); i++) {
+            if (v.charAt(i) == '\\' && v.charAt(i + 1) == 'f') {
+                last = v.substring(i, i + 3);
+                i += 2;
+            }
+        }
+        return last;
     }
 
     private static String stripColor(String value) {
