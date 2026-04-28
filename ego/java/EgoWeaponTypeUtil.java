@@ -6,11 +6,8 @@ import lineage.world.object.instance.ItemInstance;
 /**
  * 에고무기 대상 판정 유틸.
  *
- * 최종 정책:
- * - 타입별 허용/차단 규칙은 사용하지 않는다.
- * - 무기 슬롯이면 에고 대상이다.
- * - 단, 원본 type2가 fishing_rod인 낚싯대는 제외한다.
- * - 능력은 타입에 묶지 않고 전체 후보에서 랜덤 선택한다.
+ * 무기 슬롯이면 에고 대상이며 낚싯대만 제외한다.
+ * 능력명은 DB ego_skill.skill / ego_skill_base.skill / Java enum이 1:1로 같은 단순명을 사용한다.
  */
 public final class EgoWeaponTypeUtil {
 
@@ -47,23 +44,23 @@ public final class EgoWeaponTypeUtil {
         return isWeaponSlot(item) && !isFishingRod(item);
     }
 
-    public static boolean isAbilityAllowed(String abilityType, ItemInstance item) {
-        return normalizeAbility(abilityType).length() > 0 && isValidEgoBaseWeapon(item);
+    public static boolean isAbilityAllowed(String ability, ItemInstance item) {
+        return normalizeAbility(ability).length() > 0 && isValidEgoBaseWeapon(item);
     }
 
     public static String getDefaultAbilityType(ItemInstance item) {
         String name = safeItemName(item).toLowerCase();
         if (name.indexOf("피") >= 0 || name.indexOf("blood") >= 0 || name.indexOf("흡혈") >= 0)
-            return "BLOOD_DRAIN";
+            return "BLOOD";
         if (name.indexOf("마나") >= 0 || name.indexOf("지식") >= 0 || name.indexOf("mana") >= 0)
-            return "MANA_DRAIN";
+            return "MANA";
         if (name.indexOf("화염") >= 0 || name.indexOf("불") >= 0 || name.indexOf("flame") >= 0 || name.indexOf("fire") >= 0)
-            return "FLAME_BRAND";
+            return "FIRE";
         if (name.indexOf("얼음") >= 0 || name.indexOf("서리") >= 0 || name.indexOf("frost") >= 0 || name.indexOf("ice") >= 0)
-            return "FROST_BIND";
+            return "FROST";
         if (name.indexOf("수호") >= 0 || name.indexOf("가디언") >= 0 || name.indexOf("guardian") >= 0)
-            return "GUARDIAN_SHIELD";
-        return "EGO_BALANCE";
+            return "SHIELD";
+        return "BALANCE";
     }
 
     public static String getDisplayTypeName(ItemInstance item) {
@@ -74,7 +71,7 @@ public final class EgoWeaponTypeUtil {
         return "무기 아님";
     }
 
-    public static String getAbilityDenyReason(String abilityType, ItemInstance item) {
+    public static String getAbilityDenyReason(String ability, ItemInstance item) {
         if (item == null)
             return "착용 무기가 없습니다.";
         if (!isWeaponSlot(item))
