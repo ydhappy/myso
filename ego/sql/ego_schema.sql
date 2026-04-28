@@ -2,9 +2,8 @@
 -- EGO SCHEMA SQL
 -- File encoding: UTF-8
 -- Runtime DB charset target: euckr
--- Purpose: consolidated install/update SQL for the ego system.
 -- Policy: no one-click delete, no full reset, no direct item table insert.
--- Final policy: no weapon type rule table; weapon slot items are eligible except fishing_rod.
+-- Final policy: ego orb creation, probabilistic proc, damage + HP/MP absorb + stun/slow.
 -- ============================================================
 
 SET NAMES utf8;
@@ -148,7 +147,7 @@ CREATE TABLE IF NOT EXISTS ego_bond (
     mod_date DATETIME NULL DEFAULT NULL,
     PRIMARY KEY (item_id),
     INDEX ego_bond_idx (bond)
-) ENGINE=InnoDB DEFAULT CHARSET=euckr COLLATE=euckr_korean_ci COMMENT='구버전 유대감 fallback';
+) ENGINE=InnoDB DEFAULT CHARSET=euckr COLLATE=euckr_korean_ci COMMENT='에고 유대감';
 
 CREATE TABLE IF NOT EXISTS ego_level_exp (
     ego_lv INT NOT NULL,
@@ -191,24 +190,6 @@ SET @sql := IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHE
     'SELECT ''ego.bond_reason already exists'' AS info');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
-SET @sql := IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ego' AND INDEX_NAME = 'ego_bond_idx') = 0,
-    'ALTER TABLE ego ADD INDEX ego_bond_idx (bond)',
-    'SELECT ''ego_bond_idx already exists'' AS info');
-PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
-
-SET @sql := IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ego' AND COLUMN_NAME = 'form') > 0,
-    'ALTER TABLE ego DROP COLUMN form',
-    'SELECT ''ego.form not exists'' AS info');
-PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
-
-SET @sql := IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ego' AND COLUMN_NAME = 'prev_shield') > 0,
-    'ALTER TABLE ego DROP COLUMN prev_shield',
-    'SELECT ''ego.prev_shield not exists'' AS info');
-PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
-
-UPDATE ego e INNER JOIN ego_bond b ON e.item_id = b.item_id
-SET e.bond = b.bond, e.bond_reason = b.last_reason, e.mod_date = NOW();
-
 DELETE t1 FROM ego_talk_pack t1
 INNER JOIN ego_talk_pack t2
     ON t1.id > t2.id AND t1.genre = t2.genre AND t1.tone = t2.tone AND t1.message = t2.message;
@@ -220,10 +201,10 @@ PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 INSERT INTO ego_skill_base (skill, label, memo, base_rate, lv_rate, max_rate, min_lv, cool_ms, effect, use_yn) VALUES
 ('EGO_BALANCE', '공명', '균형형 추가 피해', 3, 1, 25, 1, 0, 3940, 1),
-('BLOOD_DRAIN', '흡혈', 'HP 회복', 3, 1, 20, 1, 0, 8150, 1),
-('MANA_DRAIN', '흡마', 'MP 회복', 3, 1, 20, 1, 0, 7300, 1),
+('BLOOD_DRAIN', '흡혈', 'HP 흡수', 3, 1, 20, 1, 0, 8150, 1),
+('MANA_DRAIN', '흡마', 'MP 흡수', 3, 1, 20, 1, 0, 7300, 1),
 ('CRITICAL_BURST', '치명', '치명 추가 피해', 2, 1, 35, 1, 0, 12487, 1),
-('GUARDIAN_SHIELD', '수호', '위험 시 HP 회복', 3, 1, 25, 1, 3000, 6321, 1),
+('GUARDIAN_SHIELD', '수호', '위험 시 HP 흡수', 3, 1, 25, 1, 3000, 6321, 1),
 ('AREA_SLASH', '광역', '주변 몬스터 피해', 2, 1, 20, 5, 3000, 12248, 1),
 ('EXECUTION', '처형', '낮은 HP 대상 추가 피해', 2, 1, 20, 7, 0, 8683, 1),
 ('FLAME_BRAND', '화염', '화염 추가 피해', 3, 1, 25, 1, 0, 1811, 1),
@@ -246,8 +227,10 @@ INSERT INTO ego_config (config_key, config_value, memo, use_yn) VALUES
 ('proc_message_delay_ms', '1500', '능력 발동 메시지 딜레이 ms', 1),
 ('combo_add_damage_rate', '12', '공통 에고 발동 추가 피해율', 1),
 ('combo_add_damage_level_rate', '2', '에고 레벨당 공통 추가 피해율', 1),
-('combo_heal_rate', '5', '공통 에고 발동 HP 회복율', 1),
-('combo_heal_max_rate', '12', '공통 에고 발동 HP 회복율 상한', 1),
+('combo_hp_absorb_rate', '5', '공통 에고 발동 HP 흡수율', 1),
+('combo_hp_absorb_max_rate', '12', '공통 에고 발동 HP 흡수율 상한', 1),
+('combo_mp_absorb_rate', '3', '공통 에고 발동 MP 흡수율', 1),
+('combo_mp_absorb_max_rate', '8', '공통 에고 발동 MP 흡수율 상한', 1),
 ('combo_stun_chance', '4', '공통 에고 발동 스턴 기본 확률', 1),
 ('combo_stun_level_bonus', '1', '에고 레벨당 공통 스턴 확률 보너스', 1),
 ('combo_slow_chance', '9', '공통 에고 발동 슬로우 기본 확률', 1),
@@ -264,13 +247,13 @@ INSERT INTO ego_config (config_key, config_value, memo, use_yn) VALUES
 ('stun_time', '2', '에고 스턴 시간 초', 1),
 ('stun_effect', '4183', '에고 스턴 이펙트 번호', 1),
 ('stun_cool_ms', '6000', '에고 스턴 쿨타임 ms', 1),
-('guardian_shield_hp_rate', '40', '수호 의지 발동 HP 기준', 1),
+('guardian_shield_hp_rate', '40', '수호 흡수 발동 HP 기준', 1),
 ('execution_target_hp_rate', '20', '처형 발동 대상 HP 기준', 1),
 ('area_range', '2', '광역 능력 범위', 1),
 ('area_max_target', '4', '광역 능력 최대 대상 수', 1)
 ON DUPLICATE KEY UPDATE memo=VALUES(memo), use_yn=VALUES(use_yn);
 
-DELETE FROM ego_config WHERE config_key IN ('change_orb_item_code', 'change_orb_item_name');
+DELETE FROM ego_config WHERE config_key IN ('change_orb_item_code', 'change_orb_item_name', 'combo_heal_rate', 'combo_heal_max_rate');
 DELETE FROM ego_item_template WHERE item_name='에고 변경구슬' AND item_code<>900001;
 INSERT INTO ego_item_template (item_code, item_name, java_class, item_type1, item_type2, name_id, inv_gfx, ground_gfx, stackable, memo, use_yn) VALUES
 (900001, '에고 구슬', 'lineage.world.object.item.EgoOrb', 'etc', 'normal', '$900001', 4038, 4038, 1, '착용 무기에 에고를 최초 생성한다. 이미 에고무기면 능력/대화/레벨 변경 없이 주인만 재인식한다.', 1)
@@ -297,7 +280,7 @@ INSERT INTO ego_level (ego_lv, need_exp, proc_bonus, critical_chance, critical_d
 (4,1500,3,4,4,0,0,0,'Lv.4',1),
 (5,2400,4,6,6,35,18,8,'Lv.5 피격 반격 시작',1),
 (6,3600,6,9,8,100,24,12,'Lv.6 자동반격 시작',1),
-(7,5200,8,12,10,100,30,16,'Lv.7',1),
+(7,5200,8,12,10,30,16,'Lv.7',1),
 (8,7500,10,15,12,100,38,20,'Lv.8',1),
 (9,10000,12,18,15,100,46,25,'Lv.9',1),
 (10,0,15,25,20,100,60,35,'Lv.10 스턴 연동',1)
