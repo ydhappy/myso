@@ -8,22 +8,21 @@ import lineage.database.EgoWeaponDatabase.EgoWeaponInfo;
 import lineage.world.controller.EgoBond;
 import lineage.world.controller.EgoConfig;
 import lineage.world.controller.EgoTalkPack;
-import lineage.world.controller.EgoView;
 import lineage.world.controller.EgoWeaponAbilityController;
-import lineage.world.controller.EgoWeaponRule;
 import lineage.world.object.instance.ItemInstance;
 import lineage.world.object.instance.PcInstance;
 
 /**
- * 짧은 이름용 에고 DB 클래스.
+ * 에고 DB 통합 Facade.
  *
  * 로드 순서:
- * 1) EgoConfig           공통 설정
- * 2) EgoWeaponRule       무기 규칙
- * 3) EgoWeaponDatabase   에고 기본/스킬 + EgoLevel 통합 로드 + EgoView 로드
- * 4) EgoWeaponAbilityController 스킬베이스/전투 설정
- * 5) EgoBond             유대감, ego.bond 우선
- * 6) EgoTalkPack         DB 대사팩
+ * 1) EgoConfig                 공통 설정
+ * 2) EgoWeaponDatabase         에고 기본/스킬 + EgoLevel 통합 로드
+ * 3) EgoWeaponAbilityController 스킬베이스/전투 설정
+ * 4) EgoBond                   유대감
+ * 5) EgoTalkPack               DB 대사팩
+ *
+ * 무기 타입별 규칙은 제거했다. 무기 슬롯이면 에고 대상이며 낚싯대만 제외한다.
  */
 public final class EgoDB {
 
@@ -36,7 +35,6 @@ public final class EgoDB {
 
     public static void reload(Connection con) {
         EgoConfig.reload(con);
-        EgoWeaponRule.reload(con);
         EgoWeaponDatabase.reload(con);
         EgoWeaponAbilityController.reloadConfig();
         EgoBond.reload(con);

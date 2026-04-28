@@ -9,16 +9,13 @@ import java.util.Map;
 /**
  * 에고 DB 스키마 중앙 연결표/검증기.
  *
- * 목적:
- * - 테이블명/컬럼명 기준을 한곳에 모은다.
- * - Java 코드와 SQL 스키마 연결 누락을 빠르게 확인한다.
- * - 서버 시작/리로드 시 선택적으로 검증할 수 있다.
+ * 기준 SQL:
+ * - ego/sql/ego_schema.sql
  *
- * 병합 우선 구조:
- * - ego_level_exp + ego_level_bonus -> ego_level
- * - ego_bond -> ego.bond / ego.bond_reason
- *
- * 구버전 테이블은 fallback 허용.
+ * 정책:
+ * - 신규/기존 서버 모두 ego_schema.sql 1개만 적용한다.
+ * - 원클릭 전체삭제/전체초기화 SQL은 제공하지 않는다.
+ * - ego_weapon_rule, ego_level_exp, ego_level_bonus는 사용하지 않는다.
  */
 public final class EgoSchema {
 
@@ -29,7 +26,8 @@ public final class EgoSchema {
     public static final String T_EGO_TALK_PACK = "ego_talk_pack";
     public static final String T_EGO_CONFIG = "ego_config";
     public static final String T_EGO_LEVEL = "ego_level";
-    public static final String T_EGO_WEAPON_RULE = "ego_weapon_rule";
+    public static final String T_EGO_BOND = "ego_bond";
+    public static final String T_EGO_ITEM_TEMPLATE = "ego_item_template";
 
     private static final Map<String, String[]> REQUIRED = new LinkedHashMap<String, String[]>();
 
@@ -57,8 +55,11 @@ public final class EgoSchema {
             "ego_lv", "need_exp", "proc_bonus", "critical_chance", "critical_damage", "counter_chance", "counter_power", "counter_critical",
             "memo", "use_yn", "reg_date", "mod_date"
         });
-        REQUIRED.put(T_EGO_WEAPON_RULE, new String[] {
-            "type2", "display_name", "default_ability", "allowed_abilities", "use_yn", "reg_date", "mod_date"
+        REQUIRED.put(T_EGO_BOND, new String[] {
+            "item_id", "bond", "last_reason", "reg_date", "mod_date"
+        });
+        REQUIRED.put(T_EGO_ITEM_TEMPLATE, new String[] {
+            "item_code", "item_name", "java_class", "item_type1", "item_type2", "name_id", "inv_gfx", "ground_gfx", "stackable", "memo", "use_yn", "reg_date", "mod_date"
         });
     }
 
@@ -84,6 +85,7 @@ public final class EgoSchema {
         Result result = new Result();
         StringBuilder sb = new StringBuilder();
         sb.append("[에고 스키마 연결성 점검]\n");
+        sb.append("기준 SQL: ego/sql/ego_schema.sql\n");
 
         if (con == null) {
             result.ok = false;
@@ -118,7 +120,7 @@ public final class EgoSchema {
             if (allOk)
                 sb.append("RESULT: OK\n");
             else
-                sb.append("RESULT: FAIL - ego/sql/ego_merge_schema_euckr.sql 또는 ego_install_euckr.sql 적용 필요\n");
+                sb.append("RESULT: FAIL - ego/sql/ego_schema.sql 적용 후 .에고리로드 필요\n");
 
             result.ok = allOk;
             result.message = sb.toString();

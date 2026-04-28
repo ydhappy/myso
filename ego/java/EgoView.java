@@ -23,11 +23,9 @@ import lineage.world.object.instance.PcInstance;
  * - type2 변형 없음.
  * - 인벤토리/바닥 이미지 변경 없음.
  * - 원본 아이템 템플릿의 inv_gfx / ground_gfx 그대로 사용.
- * - 에고 표시는 아이템 이름 뒤 [에고] 표식과 정보 문구만 추가한다.
+ * - 인벤토리 이름에는 아이템명 뒤 [Lv.x 에고이름]만 추가한다.
  */
 public final class EgoView {
-
-    private static final String EGO_MARK = "\fY[에고]\fW";
 
     private EgoView() {
     }
@@ -75,44 +73,44 @@ public final class EgoView {
     public static String displayName(ItemInstance item, String baseName) {
         if (item == null)
             return baseName == null ? "" : baseName;
-        return fixNameIdBaseName(item, baseName == null ? item.getName() : baseName);
+        return stripEgoDisplaySuffix(fixNameIdBaseName(item, baseName == null ? item.getName() : baseName));
     }
 
     public static String name(ItemInstance item, String baseName) {
         if (item == null || baseName == null)
             return baseName;
         if (!isEgo(item))
-            return baseName;
-        if (baseName.indexOf("[에고]") >= 0 || baseName.indexOf("[에고:") >= 0)
-            return baseName;
+            return stripEgoDisplaySuffix(baseName);
 
         String fixedName = displayName(item, baseName);
         EgoWeaponInfo ego = EgoWeaponDatabase.find(item);
-        String label = label(item);
-        String skill = skillName(item);
         int level = ego == null ? 1 : Math.max(1, ego.level);
+        String egoName = ego == null ? "에고" : safe(ego.egoName);
+        if (egoName.length() == 0)
+            egoName = "에고";
 
         StringBuilder sb = new StringBuilder(fixedName);
-        sb.append(" ").append(EGO_MARK);
-        sb.append(" \fS(").append(label).append(" Lv.").append(level);
-        if (skill.length() > 0)
-            sb.append(" ").append(skill);
-        sb.append(")\fW");
-        return sb.toString();
+        sb.append(" ").append(EgoMessageUtil.COLOR_INFO);
+        sb.append("[Lv.").append(level).append(" ").append(egoName).append("]");
+        sb.append(EgoMessageUtil.COLOR_WHITE);
+        return EgoMessageUtil.clientColor(sb.toString());
     }
 
     public static String info(ItemInstance item) {
         if (item == null || !isEgo(item))
             return "";
-        String label = label(item);
         EgoWeaponInfo ego = EgoWeaponDatabase.find(item);
         int level = ego == null ? 1 : Math.max(1, ego.level);
         long exp = ego == null ? 0 : Math.max(0, ego.exp);
         long need = ego == null ? 100 : Math.max(1, ego.maxExp);
         String skill = skillName(item);
+        String egoName = ego == null ? "에고" : safe(ego.egoName);
+        if (egoName.length() == 0)
+            egoName = "에고";
 
         StringBuilder sb = new StringBuilder();
-        sb.append("에고: ").append(label).append(" / 레벨: ").append(level);
+        sb.append("에고명: ").append(egoName);
+        sb.append(" / 레벨: ").append(level);
         sb.append(" / 경험치: ").append(exp).append("/").append(need);
         if (skill.length() > 0)
             sb.append(" / 능력: ").append(skill);
@@ -166,6 +164,40 @@ public final class EgoView {
 
     public static String label(ItemInstance item) {
         return EgoWeaponTypeUtil.getDisplayTypeName(item);
+    }
+
+    private static String stripEgoDisplaySuffix(String value) {
+        String result = value == null ? "" : EgoMessageUtil.clientColor(value).trim();
+        result = removeColor(result).trim();
+
+        int egoIdx = result.indexOf(" [에고]");
+        if (egoIdx >= 0)
+            result = result.substring(0, egoIdx).trim();
+
+        int lvIdx = result.indexOf(" [Lv.");
+        if (lvIdx >= 0)
+            result = result.substring(0, lvIdx).trim();
+
+        return result;
+    }
+
+    private static String removeColor(String value) {
+        if (value == null)
+            return "";
+        StringBuilder sb = new StringBuilder(value.length());
+        for (int i = 0; i < value.length();) {
+            if (i + 2 < value.length() && value.charAt(i) == '\\' && value.charAt(i + 1) == 'f') {
+                i += 3;
+                continue;
+            }
+            if (i + 1 < value.length() && value.charAt(i) == '\f') {
+                i += 2;
+                continue;
+            }
+            sb.append(value.charAt(i));
+            i++;
+        }
+        return sb.toString();
     }
 
     private static String fixNameIdBaseName(ItemInstance item, String baseName) {

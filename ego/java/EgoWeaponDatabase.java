@@ -18,20 +18,23 @@ import lineage.world.object.instance.PcInstance;
 /**
  * 에고무기 DB 헬퍼.
  *
- * 최종 정책:
- * - 에고 레벨/경험치/전투보너스는 EgoLevel 통합 캐시를 우선 사용.
- * - 에고 레벨은 0~10 고정.
- * - Lv.0은 스킬/치명/반격/스턴 없음.
- * - ego_type은 현재 말투 저장소로 사용: 예의 / 예의반대.
- * - 에고삭제는 ego/ego_skill/ego_log 완전삭제.
+ * 정책:
+ * - 에고 레벨은 ego_level 1개 테이블 기준이다.
+ * - 에고 레벨은 0~10 고정한다.
+ * - Lv.0은 스킬/치명/반격/스턴 없음이다.
+ * - ego_type은 현재 말투 저장소로 사용한다: 예의 / 예의반대.
+ * - 에고 구슬은 최초 생성과 주인 재인식만 담당한다.
+ * - 단순 능력명 입력은 런타임 enum명으로 안전 정규화한다.
  */
 public final class EgoWeaponDatabase {
 
     public static final int MIN_EGO_LEVEL = 0;
     public static final int MAX_EGO_LEVEL = 10;
+    private static final int MAX_EGO_NAME_LENGTH = 20;
 
     private static final Map<Long, EgoWeaponInfo> egoMap = new ConcurrentHashMap<Long, EgoWeaponInfo>();
     private static final Map<Long, List<EgoAbilityInfo>> abilityMap = new ConcurrentHashMap<Long, List<EgoAbilityInfo>>();
+    private static final Map<Long, Object> itemLocks = new ConcurrentHashMap<Long, Object>();
 
     private EgoWeaponDatabase() {
     }
@@ -53,42 +56,40 @@ public final class EgoWeaponDatabase {
         PreparedStatement st = null;
         ResultSet rs = null;
         boolean closeCon = false;
-
         try {
             if (con == null) {
                 con = DatabaseConnection.getLineage();
                 closeCon = true;
             }
-
             if (!tableExists(con, "ego"))
                 return;
-
             st = con.prepareStatement("SELECT * FROM ego WHERE use_yn=1");
             rs = st.executeQuery();
-
             while (rs.next()) {
                 EgoWeaponInfo info = new EgoWeaponInfo();
                 info.itemObjId = rs.getLong("item_id");
                 info.chaObjId = rs.getLong("char_id");
                 info.enabled = rs.getBoolean("use_yn");
-                info.egoName = rs.getString("ego_name");
+                info.egoName = normalizeName(rs.getString("ego_name"));
                 info.personality = normalizeTone(rs.getString("ego_type"));
                 info.level = clampLevel(rs.getInt("ego_lv"));
-                info.exp = Math.max(0, rs.getLong("ego_exp"));
+                info.exp = Math.max(0L, rs.getLong("ego_exp"));
                 info.maxExp = getNeedExp(info.level);
-                if (info.maxExp > 0 && info.exp >= info.maxExp)
-                    info.exp = info.maxExp - 1;
-                if (info.level >= MAX_EGO_LEVEL)
-                    info.exp = 0;
+                if (info.maxExp > 0L && info.exp >= info.maxExp)
+                    info.exp = info.maxExp - 1L;
+                if (info.level >= MAX_EGO_LEVEL) {
+                    info.level = MAX_EGO_LEVEL;
+                    info.exp = 0L;
+                    info.maxExp = 0L;
+                }
                 info.talkLevel = Math.max(1, rs.getInt("talk_lv"));
                 info.controlLevel = Math.max(1, rs.getInt("ctrl_lv"));
-                info.lastTalkTime = rs.getLong("last_talk");
-                info.lastWarningTime = rs.getLong("last_warn");
+                info.lastTalkTime = Math.max(0L, rs.getLong("last_talk"));
+                info.lastWarningTime = Math.max(0L, rs.getLong("last_warn"));
                 egoMap.put(info.itemObjId, info);
             }
         } catch (Exception e) {
-            lineage.share.System.printf("%s : loadEgoInfo(Connection con)\r\n", EgoWeaponDatabase.class.toString());
-            lineage.share.System.println(e);
+            log("loadEgoInfo(Connection con)", e);
         } finally {
             if (closeCon)
                 DatabaseConnection.close(con, st, rs);
@@ -101,30 +102,27 @@ public final class EgoWeaponDatabase {
         PreparedStatement st = null;
         ResultSet rs = null;
         boolean closeCon = false;
-
         try {
             if (con == null) {
                 con = DatabaseConnection.getLineage();
                 closeCon = true;
             }
-
             if (!tableExists(con, "ego_skill"))
                 return;
-
-            st = con.prepareStatement("SELECT * FROM ego_skill WHERE use_yn=1");
+            st = con.prepareStatement("SELECT * FROM ego_skill WHERE use_yn=1 ORDER BY id ASC");
             rs = st.executeQuery();
-
             while (rs.next()) {
                 EgoAbilityInfo info = new EgoAbilityInfo();
                 info.uid = rs.getLong("id");
                 info.itemObjId = rs.getLong("item_id");
-                info.abilityType = rs.getString("skill");
+                info.abilityType = normalizeAbility(rs.getString("skill"));
                 info.abilityLevel = Math.max(1, rs.getInt("skill_lv"));
                 info.procChanceBonus = rs.getInt("rate_bonus");
-                info.damageBonus = rs.getInt("dmg_bonus");
-                info.lastProcTime = rs.getLong("last_proc");
+                info.damageBonus = Math.max(0, rs.getInt("dmg_bonus"));
+                info.lastProcTime = Math.max(0L, rs.getLong("last_proc"));
                 info.enabled = rs.getBoolean("use_yn");
-
+                if (info.itemObjId <= 0L || info.abilityType.length() == 0)
+                    continue;
                 List<EgoAbilityInfo> list = abilityMap.get(info.itemObjId);
                 if (list == null) {
                     list = Collections.synchronizedList(new ArrayList<EgoAbilityInfo>());
@@ -133,8 +131,7 @@ public final class EgoWeaponDatabase {
                 list.add(info);
             }
         } catch (Exception e) {
-            lineage.share.System.printf("%s : loadAbilityInfo(Connection con)\r\n", EgoWeaponDatabase.class.toString());
-            lineage.share.System.println(e);
+            log("loadAbilityInfo(Connection con)", e);
         } finally {
             if (closeCon)
                 DatabaseConnection.close(con, st, rs);
@@ -144,7 +141,7 @@ public final class EgoWeaponDatabase {
     }
 
     public static EgoWeaponInfo find(long itemObjId) {
-        return egoMap.get(itemObjId);
+        return egoMap.get(Long.valueOf(itemObjId));
     }
 
     public static EgoWeaponInfo find(ItemInstance item) {
@@ -194,7 +191,7 @@ public final class EgoWeaponDatabase {
     public static List<EgoAbilityInfo> getAbilities(ItemInstance item) {
         if (item == null)
             return new ArrayList<EgoAbilityInfo>();
-        List<EgoAbilityInfo> list = abilityMap.get(item.getObjectId());
+        List<EgoAbilityInfo> list = abilityMap.get(Long.valueOf(item.getObjectId()));
         if (list == null)
             return new ArrayList<EgoAbilityInfo>();
         synchronized (list) {
@@ -210,259 +207,321 @@ public final class EgoWeaponDatabase {
     public static boolean enableEgo(PcInstance pc, ItemInstance item, String egoName, String personality) {
         if (pc == null || item == null)
             return false;
-
-        if (egoName == null || egoName.trim().length() == 0)
-            egoName = "에고";
-        egoName = egoName.trim();
-        personality = normalizeTone(personality);
-
-        Connection con = null;
-        PreparedStatement st = null;
-
-        try {
-            con = DatabaseConnection.getLineage();
-            st = con.prepareStatement(
-                "INSERT INTO ego " +
-                "(item_id, char_id, use_yn, ego_name, ego_type, ego_lv, ego_exp, need_exp, talk_lv, ctrl_lv, last_talk, last_warn) " +
-                "VALUES (?, ?, 1, ?, ?, 0, 0, ?, 1, 1, 0, 0) " +
-                "ON DUPLICATE KEY UPDATE char_id=?, use_yn=1, ego_name=?, ego_type=?, ego_lv=0, ego_exp=0, need_exp=?"
-            );
-            st.setLong(1, item.getObjectId());
-            st.setLong(2, pc.getObjectId());
-            st.setString(3, egoName);
-            st.setString(4, personality);
-            st.setLong(5, getNeedExp(0));
-            st.setLong(6, pc.getObjectId());
-            st.setString(7, egoName);
-            st.setString(8, personality);
-            st.setLong(9, getNeedExp(0));
-            st.executeUpdate();
-            DatabaseConnection.close(st);
-            st = null;
-            resetBond(con, item.getObjectId());
-
-            EgoWeaponInfo info = new EgoWeaponInfo();
-            info.itemObjId = item.getObjectId();
-            info.chaObjId = pc.getObjectId();
-            info.enabled = true;
-            info.egoName = egoName;
-            info.personality = personality;
-            info.level = 0;
-            info.exp = 0;
-            info.maxExp = getNeedExp(0);
-            info.talkLevel = 1;
-            info.controlLevel = 1;
-            egoMap.put(info.itemObjId, info);
-            return true;
-        } catch (Exception e) {
-            lineage.share.System.printf("%s : enableEgo(PcInstance pc, ItemInstance item, String egoName, String personality)\r\n", EgoWeaponDatabase.class.toString());
-            lineage.share.System.println(e);
-        } finally {
-            DatabaseConnection.close(con, st);
+        final long itemObjId = item.getObjectId();
+        if (itemObjId <= 0L)
+            return false;
+        synchronized (itemLock(itemObjId)) {
+            String name = normalizeName(egoName);
+            String tone = normalizeTone(personality);
+            long needExp = getNeedExp(0);
+            Connection con = null;
+            PreparedStatement st = null;
+            boolean oldAutoCommit = true;
+            try {
+                con = DatabaseConnection.getLineage();
+                oldAutoCommit = con.getAutoCommit();
+                con.setAutoCommit(false);
+                st = con.prepareStatement("INSERT INTO ego (item_id, char_id, use_yn, ego_name, ego_type, ego_lv, ego_exp, need_exp, talk_lv, ctrl_lv, last_talk, last_warn) VALUES (?, ?, 1, ?, ?, 0, 0, ?, 1, 1, 0, 0) ON DUPLICATE KEY UPDATE char_id=?, use_yn=1, ego_name=?, ego_type=?, ego_lv=0, ego_exp=0, need_exp=?, talk_lv=1, ctrl_lv=1, last_talk=0, last_warn=0, mod_date=NOW()");
+                st.setLong(1, itemObjId);
+                st.setLong(2, pc.getObjectId());
+                st.setString(3, name);
+                st.setString(4, tone);
+                st.setLong(5, needExp);
+                st.setLong(6, pc.getObjectId());
+                st.setString(7, name);
+                st.setString(8, tone);
+                st.setLong(9, needExp);
+                st.executeUpdate();
+                DatabaseConnection.close(st);
+                st = null;
+                resetBond(con, itemObjId);
+                con.commit();
+                EgoWeaponInfo info = new EgoWeaponInfo();
+                info.itemObjId = itemObjId;
+                info.chaObjId = pc.getObjectId();
+                info.enabled = true;
+                info.egoName = name;
+                info.personality = tone;
+                info.level = 0;
+                info.exp = 0L;
+                info.maxExp = needExp;
+                info.talkLevel = 1;
+                info.controlLevel = 1;
+                info.lastTalkTime = 0L;
+                info.lastWarningTime = 0L;
+                egoMap.put(Long.valueOf(itemObjId), info);
+                abilityMap.remove(Long.valueOf(itemObjId));
+                return true;
+            } catch (Exception e) {
+                rollback(con);
+                log("enableEgo(PcInstance pc, ItemInstance item, String egoName, String personality)", e);
+            } finally {
+                restoreAutoCommit(con, oldAutoCommit);
+                DatabaseConnection.close(con, st);
+            }
+            return false;
         }
-        return false;
     }
 
-    /** 에고삭제: ego / ego_skill / ego_log 완전삭제. */
+    public static boolean recognizeOwner(PcInstance pc, ItemInstance item) {
+        if (pc == null || item == null)
+            return false;
+        final long itemObjId = item.getObjectId();
+        if (itemObjId <= 0L)
+            return false;
+        synchronized (itemLock(itemObjId)) {
+            EgoWeaponInfo info = find(itemObjId);
+            if (info == null || !info.enabled)
+                return false;
+            long charId = pc.getObjectId();
+            if (info.chaObjId == charId)
+                return true;
+            Connection con = null;
+            PreparedStatement st = null;
+            try {
+                con = DatabaseConnection.getLineage();
+                st = con.prepareStatement("UPDATE ego SET char_id=?, mod_date=NOW() WHERE item_id=? AND use_yn=1");
+                st.setLong(1, charId);
+                st.setLong(2, itemObjId);
+                int count = st.executeUpdate();
+                if (count <= 0)
+                    return false;
+                info.chaObjId = charId;
+                return true;
+            } catch (Exception e) {
+                log("recognizeOwner(PcInstance pc, ItemInstance item)", e);
+            } finally {
+                DatabaseConnection.close(con, st);
+            }
+            return false;
+        }
+    }
+
     public static boolean disableEgo(ItemInstance item) {
         if (item == null)
             return false;
-
-        Connection con = null;
-        PreparedStatement log = null;
-        PreparedStatement skill = null;
-        PreparedStatement ego = null;
-
-        try {
-            con = DatabaseConnection.getLineage();
-            con.setAutoCommit(false);
-
-            log = con.prepareStatement("DELETE FROM ego_log WHERE item_id=?");
-            log.setLong(1, item.getObjectId());
-            log.executeUpdate();
-
-            skill = con.prepareStatement("DELETE FROM ego_skill WHERE item_id=?");
-            skill.setLong(1, item.getObjectId());
-            skill.executeUpdate();
-
-            ego = con.prepareStatement("DELETE FROM ego WHERE item_id=?");
-            ego.setLong(1, item.getObjectId());
-            int count = ego.executeUpdate();
-
-            con.commit();
-
-            egoMap.remove(item.getObjectId());
-            abilityMap.remove(item.getObjectId());
-            return count > 0;
-        } catch (Exception e) {
-            try { if (con != null) con.rollback(); } catch (Exception ignore) {}
-            lineage.share.System.printf("%s : disableEgo(ItemInstance item)\r\n", EgoWeaponDatabase.class.toString());
-            lineage.share.System.println(e);
-        } finally {
-            try { if (con != null) con.setAutoCommit(true); } catch (Exception ignore) {}
-            DatabaseConnection.close(log);
-            DatabaseConnection.close(skill);
-            DatabaseConnection.close(con, ego);
+        final long itemObjId = item.getObjectId();
+        if (itemObjId <= 0L)
+            return false;
+        synchronized (itemLock(itemObjId)) {
+            Connection con = null;
+            PreparedStatement log = null;
+            PreparedStatement skill = null;
+            PreparedStatement bond = null;
+            PreparedStatement ego = null;
+            boolean oldAutoCommit = true;
+            try {
+                con = DatabaseConnection.getLineage();
+                oldAutoCommit = con.getAutoCommit();
+                con.setAutoCommit(false);
+                log = con.prepareStatement("DELETE FROM ego_log WHERE item_id=?");
+                log.setLong(1, itemObjId);
+                log.executeUpdate();
+                DatabaseConnection.close(log);
+                log = null;
+                skill = con.prepareStatement("DELETE FROM ego_skill WHERE item_id=?");
+                skill.setLong(1, itemObjId);
+                skill.executeUpdate();
+                DatabaseConnection.close(skill);
+                skill = null;
+                if (tableExists(con, "ego_bond")) {
+                    bond = con.prepareStatement("DELETE FROM ego_bond WHERE item_id=?");
+                    bond.setLong(1, itemObjId);
+                    bond.executeUpdate();
+                    DatabaseConnection.close(bond);
+                    bond = null;
+                }
+                ego = con.prepareStatement("DELETE FROM ego WHERE item_id=?");
+                ego.setLong(1, itemObjId);
+                int count = ego.executeUpdate();
+                con.commit();
+                egoMap.remove(Long.valueOf(itemObjId));
+                abilityMap.remove(Long.valueOf(itemObjId));
+                return count > 0;
+            } catch (Exception e) {
+                rollback(con);
+                log("disableEgo(ItemInstance item)", e);
+            } finally {
+                restoreAutoCommit(con, oldAutoCommit);
+                DatabaseConnection.close(log);
+                DatabaseConnection.close(skill);
+                DatabaseConnection.close(bond);
+                DatabaseConnection.close(con, ego);
+            }
+            return false;
         }
-        return false;
     }
 
     public static boolean setEgoName(ItemInstance item, String egoName) {
-        if (item == null || egoName == null || egoName.trim().length() == 0)
+        if (item == null)
             return false;
-
-        egoName = egoName.trim();
-        Connection con = null;
-        PreparedStatement st = null;
-
-        try {
-            con = DatabaseConnection.getLineage();
-            st = con.prepareStatement("UPDATE ego SET ego_name=?, mod_date=NOW() WHERE item_id=? AND use_yn=1");
-            st.setString(1, egoName);
-            st.setLong(2, item.getObjectId());
-            int count = st.executeUpdate();
-
-            EgoWeaponInfo info = find(item.getObjectId());
-            if (info != null)
-                info.egoName = egoName;
-
-            return count > 0;
-        } catch (Exception e) {
-            lineage.share.System.printf("%s : setEgoName(ItemInstance item, String egoName)\r\n", EgoWeaponDatabase.class.toString());
-            lineage.share.System.println(e);
-        } finally {
-            DatabaseConnection.close(con, st);
+        final long itemObjId = item.getObjectId();
+        if (itemObjId <= 0L)
+            return false;
+        synchronized (itemLock(itemObjId)) {
+            String name = normalizeName(egoName);
+            Connection con = null;
+            PreparedStatement st = null;
+            try {
+                con = DatabaseConnection.getLineage();
+                st = con.prepareStatement("UPDATE ego SET ego_name=?, mod_date=NOW() WHERE item_id=? AND use_yn=1");
+                st.setString(1, name);
+                st.setLong(2, itemObjId);
+                int count = st.executeUpdate();
+                if (count <= 0)
+                    return false;
+                EgoWeaponInfo info = find(itemObjId);
+                if (info != null)
+                    info.egoName = name;
+                return true;
+            } catch (Exception e) {
+                log("setEgoName(ItemInstance item, String egoName)", e);
+            } finally {
+                DatabaseConnection.close(con, st);
+            }
+            return false;
         }
-        return false;
     }
 
     public static boolean setTone(ItemInstance item, String tone) {
         if (item == null)
             return false;
-        tone = normalizeTone(tone);
-
-        Connection con = null;
-        PreparedStatement st = null;
-        try {
-            con = DatabaseConnection.getLineage();
-            st = con.prepareStatement("UPDATE ego SET ego_type=?, mod_date=NOW() WHERE item_id=? AND use_yn=1");
-            st.setString(1, tone);
-            st.setLong(2, item.getObjectId());
-            int count = st.executeUpdate();
-
-            EgoWeaponInfo info = find(item.getObjectId());
-            if (info != null)
-                info.personality = tone;
-            return count > 0;
-        } catch (Exception e) {
-            lineage.share.System.printf("%s : setTone(ItemInstance item, String tone)\r\n", EgoWeaponDatabase.class.toString());
-            lineage.share.System.println(e);
-        } finally {
-            DatabaseConnection.close(con, st);
+        final long itemObjId = item.getObjectId();
+        if (itemObjId <= 0L)
+            return false;
+        synchronized (itemLock(itemObjId)) {
+            String normalizedTone = normalizeTone(tone);
+            Connection con = null;
+            PreparedStatement st = null;
+            try {
+                con = DatabaseConnection.getLineage();
+                st = con.prepareStatement("UPDATE ego SET ego_type=?, mod_date=NOW() WHERE item_id=? AND use_yn=1");
+                st.setString(1, normalizedTone);
+                st.setLong(2, itemObjId);
+                int count = st.executeUpdate();
+                if (count <= 0)
+                    return false;
+                EgoWeaponInfo info = find(itemObjId);
+                if (info != null)
+                    info.personality = normalizedTone;
+                return true;
+            } catch (Exception e) {
+                log("setTone(ItemInstance item, String tone)", e);
+            } finally {
+                DatabaseConnection.close(con, st);
+            }
+            return false;
         }
-        return false;
     }
 
     public static boolean setAbility(ItemInstance item, String abilityType) {
-        if (item == null || abilityType == null || abilityType.trim().length() == 0)
+        if (item == null)
             return false;
-
-        abilityType = abilityType.trim().toUpperCase();
-        Connection con = null;
-        PreparedStatement off = null;
-        PreparedStatement upsert = null;
-
-        try {
-            con = DatabaseConnection.getLineage();
-            con.setAutoCommit(false);
-
-            off = con.prepareStatement("UPDATE ego_skill SET use_yn=0, mod_date=NOW() WHERE item_id=?");
-            off.setLong(1, item.getObjectId());
-            off.executeUpdate();
-
-            upsert = con.prepareStatement(
-                "INSERT INTO ego_skill (item_id, skill, skill_lv, use_yn, mod_date) " +
-                "VALUES (?, ?, 1, 1, NOW()) " +
-                "ON DUPLICATE KEY UPDATE skill_lv=GREATEST(skill_lv, 1), use_yn=1, mod_date=NOW()"
-            );
-            upsert.setLong(1, item.getObjectId());
-            upsert.setString(2, abilityType);
-            upsert.executeUpdate();
-
-            con.commit();
-
-            List<EgoAbilityInfo> list = Collections.synchronizedList(new ArrayList<EgoAbilityInfo>());
-            EgoAbilityInfo info = new EgoAbilityInfo();
-            info.itemObjId = item.getObjectId();
-            info.abilityType = abilityType;
-            info.abilityLevel = 1;
-            info.enabled = true;
-            list.add(info);
-            abilityMap.put(item.getObjectId(), list);
-            return true;
-        } catch (Exception e) {
-            try { if (con != null) con.rollback(); } catch (Exception ignore) {}
-            lineage.share.System.printf("%s : setAbility(ItemInstance item, String abilityType)\r\n", EgoWeaponDatabase.class.toString());
-            lineage.share.System.println(e);
-        } finally {
-            try { if (con != null) con.setAutoCommit(true); } catch (Exception ignore) {}
-            DatabaseConnection.close(off);
-            DatabaseConnection.close(con, upsert);
+        final long itemObjId = item.getObjectId();
+        if (itemObjId <= 0L)
+            return false;
+        synchronized (itemLock(itemObjId)) {
+            String ability = normalizeAbility(abilityType);
+            if (ability.length() == 0)
+                return false;
+            Connection con = null;
+            PreparedStatement off = null;
+            PreparedStatement upsert = null;
+            boolean oldAutoCommit = true;
+            try {
+                con = DatabaseConnection.getLineage();
+                oldAutoCommit = con.getAutoCommit();
+                con.setAutoCommit(false);
+                off = con.prepareStatement("UPDATE ego_skill SET use_yn=0, mod_date=NOW() WHERE item_id=?");
+                off.setLong(1, itemObjId);
+                off.executeUpdate();
+                DatabaseConnection.close(off);
+                off = null;
+                upsert = con.prepareStatement("INSERT INTO ego_skill (item_id, skill, skill_lv, rate_bonus, dmg_bonus, last_proc, use_yn, mod_date) VALUES (?, ?, 1, 0, 0, 0, 1, NOW()) ON DUPLICATE KEY UPDATE skill_lv=GREATEST(skill_lv, 1), use_yn=1, mod_date=NOW()");
+                upsert.setLong(1, itemObjId);
+                upsert.setString(2, ability);
+                upsert.executeUpdate();
+                con.commit();
+                List<EgoAbilityInfo> list = Collections.synchronizedList(new ArrayList<EgoAbilityInfo>());
+                EgoAbilityInfo info = new EgoAbilityInfo();
+                info.itemObjId = itemObjId;
+                info.abilityType = ability;
+                info.abilityLevel = 1;
+                info.procChanceBonus = 0;
+                info.damageBonus = 0;
+                info.lastProcTime = 0L;
+                info.enabled = true;
+                list.add(info);
+                abilityMap.put(Long.valueOf(itemObjId), list);
+                return true;
+            } catch (Exception e) {
+                rollback(con);
+                log("setAbility(ItemInstance item, String abilityType)", e);
+            } finally {
+                restoreAutoCommit(con, oldAutoCommit);
+                DatabaseConnection.close(off);
+                DatabaseConnection.close(con, upsert);
+            }
+            return false;
         }
-        return false;
     }
 
     public static boolean addExp(ItemInstance item, long addExp) {
-        if (item == null || addExp <= 0)
+        if (item == null || addExp <= 0L)
             return false;
-
-        EgoWeaponInfo info = find(item);
-        if (info == null || !info.enabled)
+        final long itemObjId = item.getObjectId();
+        if (itemObjId <= 0L)
             return false;
-
-        if (info.level >= MAX_EGO_LEVEL)
+        synchronized (itemLock(itemObjId)) {
+            EgoWeaponInfo info = find(itemObjId);
+            if (info == null || !info.enabled || info.level >= MAX_EGO_LEVEL)
+                return false;
+            int oldLevel = clampLevel(info.level);
+            long oldExp = Math.max(0L, info.exp);
+            long oldMaxExp = Math.max(0L, info.maxExp);
+            int newLevel = oldLevel;
+            long newExp = safeAdd(oldExp, addExp);
+            boolean levelUp = false;
+            while (newLevel < MAX_EGO_LEVEL) {
+                long need = getNeedExp(newLevel);
+                if (need <= 0L || newExp < need)
+                    break;
+                newExp -= need;
+                newLevel++;
+                levelUp = true;
+            }
+            long newMaxExp = getNeedExp(newLevel);
+            if (newLevel >= MAX_EGO_LEVEL) {
+                newLevel = MAX_EGO_LEVEL;
+                newExp = 0L;
+                newMaxExp = 0L;
+            }
+            Connection con = null;
+            PreparedStatement st = null;
+            try {
+                con = DatabaseConnection.getLineage();
+                st = con.prepareStatement("UPDATE ego SET ego_lv=?, ego_exp=?, need_exp=?, mod_date=NOW() WHERE item_id=? AND use_yn=1");
+                st.setInt(1, newLevel);
+                st.setLong(2, newExp);
+                st.setLong(3, newMaxExp);
+                st.setLong(4, itemObjId);
+                int count = st.executeUpdate();
+                if (count <= 0)
+                    return false;
+                info.level = newLevel;
+                info.exp = newExp;
+                info.maxExp = newMaxExp;
+                return levelUp;
+            } catch (Exception e) {
+                info.level = oldLevel;
+                info.exp = oldExp;
+                info.maxExp = oldMaxExp;
+                log("addExp(ItemInstance item, long addExp)", e);
+            } finally {
+                DatabaseConnection.close(con, st);
+            }
             return false;
-
-        info.level = clampLevel(info.level);
-        info.maxExp = getNeedExp(info.level);
-        info.exp = Math.max(0, info.exp + addExp);
-        boolean levelUp = false;
-
-        while (info.level < MAX_EGO_LEVEL) {
-            long need = getNeedExp(info.level);
-            if (need <= 0 || info.exp < need)
-                break;
-            info.exp -= need;
-            info.level++;
-            info.maxExp = getNeedExp(info.level);
-            levelUp = true;
         }
-
-        if (info.level >= MAX_EGO_LEVEL) {
-            info.level = MAX_EGO_LEVEL;
-            info.exp = 0;
-            info.maxExp = 0;
-        }
-
-        Connection con = null;
-        PreparedStatement st = null;
-
-        try {
-            con = DatabaseConnection.getLineage();
-            st = con.prepareStatement("UPDATE ego SET ego_lv=?, ego_exp=?, need_exp=?, mod_date=NOW() WHERE item_id=? AND use_yn=1");
-            st.setInt(1, info.level);
-            st.setLong(2, info.exp);
-            st.setLong(3, info.maxExp);
-            st.setLong(4, item.getObjectId());
-            st.executeUpdate();
-            return levelUp;
-        } catch (Exception e) {
-            lineage.share.System.printf("%s : addExp(ItemInstance item, long addExp)\r\n", EgoWeaponDatabase.class.toString());
-            lineage.share.System.println(e);
-        } finally {
-            DatabaseConnection.close(con, st);
-        }
-        return false;
     }
 
     public static String normalizeTone(String tone) {
@@ -476,6 +535,37 @@ public final class EgoWeaponDatabase {
         return "예의";
     }
 
+    private static String normalizeName(String name) {
+        if (name == null)
+            return "에고";
+        String n = name.trim();
+        if (n.length() == 0)
+            return "에고";
+        if (n.length() > MAX_EGO_NAME_LENGTH)
+            n = n.substring(0, MAX_EGO_NAME_LENGTH);
+        return n;
+    }
+
+    private static String normalizeAbility(String ability) {
+        if (ability == null)
+            return "";
+        String a = ability.trim().toUpperCase();
+        if (a.length() == 0)
+            return "";
+        if ("BALANCE".equals(a)) return "EGO_BALANCE";
+        if ("BLOOD".equals(a)) return "BLOOD_DRAIN";
+        if ("MANA".equals(a)) return "MANA_DRAIN";
+        if ("CRIT".equals(a)) return "CRITICAL_BURST";
+        if ("SHIELD".equals(a)) return "GUARDIAN_SHIELD";
+        if ("AREA".equals(a)) return "AREA_SLASH";
+        if ("EXECUTE".equals(a)) return "EXECUTION";
+        if ("FIRE".equals(a)) return "FLAME_BRAND";
+        if ("FROST".equals(a)) return "FROST_BIND";
+        if ("COUNTER".equals(a)) return "EGO_COUNTER";
+        if ("REVENGE".equals(a)) return "EGO_REVENGE";
+        return a;
+    }
+
     private static int clampLevel(int level) {
         if (level < MIN_EGO_LEVEL)
             return MIN_EGO_LEVEL;
@@ -484,18 +574,34 @@ public final class EgoWeaponDatabase {
         return level;
     }
 
+    private static long safeAdd(long a, long b) {
+        if (b <= 0L)
+            return a;
+        if (Long.MAX_VALUE - a < b)
+            return Long.MAX_VALUE;
+        return a + b;
+    }
+
+    private static Object itemLock(long itemObjId) {
+        Long key = Long.valueOf(itemObjId);
+        Object lock = itemLocks.get(key);
+        if (lock != null)
+            return lock;
+        Object newLock = new Object();
+        Object old = itemLocks.putIfAbsent(key, newLock);
+        return old == null ? newLock : old;
+    }
+
     private static boolean tableExists(Connection con, String table) {
         ResultSet rs = null;
         try {
             rs = con.getMetaData().getTables(null, null, table, null);
-            if (rs != null && rs.next())
-                return true;
+            return rs != null && rs.next();
         } catch (SQLException e) {
             return false;
         } finally {
             try { if (rs != null) rs.close(); } catch (Exception e) {}
         }
-        return false;
     }
 
     private static boolean columnExists(Connection con, String table, String column) {
@@ -528,6 +634,22 @@ public final class EgoWeaponDatabase {
         } catch (Exception e) {
         } finally {
             DatabaseConnection.close(st);
+        }
+    }
+
+    private static void rollback(Connection con) {
+        try { if (con != null) con.rollback(); } catch (Exception e) {}
+    }
+
+    private static void restoreAutoCommit(Connection con, boolean oldAutoCommit) {
+        try { if (con != null) con.setAutoCommit(oldAutoCommit); } catch (Exception e) {}
+    }
+
+    private static void log(String where, Exception e) {
+        try {
+            lineage.share.System.printf("%s : %s\r\n", EgoWeaponDatabase.class.toString(), where);
+            lineage.share.System.println(e);
+        } catch (Throwable ignore) {
         }
     }
 

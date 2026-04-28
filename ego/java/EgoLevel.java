@@ -8,19 +8,12 @@ import java.sql.SQLException;
 import lineage.database.DatabaseConnection;
 
 /**
- * 에고 레벨 통합 캐시.
+ * 에고 레벨 캐시.
  *
- * 병합 전:
- * - ego_level_exp    : 레벨별 필요 경험치
- * - ego_level_bonus  : 레벨별 전투 보너스
- *
- * 병합 후:
- * - ego_level        : 필요 경험치 + 전투 보너스 통합
- *
- * 동작:
- * 1순위 ego_level 사용
- * 2순위 구버전 ego_level_exp + ego_level_bonus 사용
- * 3순위 Java 기본값 사용
+ * DB/Java 1:1 기준:
+ * - Java는 ego_level 테이블만 읽는다.
+ * - ego_level_exp / ego_level_bonus fallback은 사용하지 않는다.
+ * - DB 값이 없거나 로드 실패 시 Java 기본값으로만 보정한다.
  */
 public final class EgoLevel {
 
@@ -47,10 +40,7 @@ public final class EgoLevel {
 
     public static void reload(Connection con) {
         resetDefault();
-        if (!loadMerged(con)) {
-            loadLegacyExp(con);
-            loadLegacyBonus(con);
-        }
+        load(con);
         needExp[MAX_LEVEL] = 0L;
     }
 
@@ -94,83 +84,22 @@ public final class EgoLevel {
         }
     }
 
-    private static boolean loadMerged(Connection con) {
+    private static void load(Connection con) {
         PreparedStatement st = null;
         ResultSet rs = null;
         boolean closeCon = false;
-        boolean loaded = false;
         try {
             if (con == null) {
                 con = DatabaseConnection.getLineage();
                 closeCon = true;
             }
             if (!tableExists(con, "ego_level"))
-                return false;
-            st = con.prepareStatement("SELECT * FROM ego_level WHERE use_yn=1");
+                return;
+            st = con.prepareStatement("SELECT ego_lv, need_exp, proc_bonus, critical_chance, critical_damage, counter_chance, counter_power, counter_critical FROM ego_level WHERE use_yn=1");
             rs = st.executeQuery();
             while (rs.next()) {
                 int lv = clamp(rs.getInt("ego_lv"));
                 needExp[lv] = Math.max(0L, rs.getLong("need_exp"));
-                procBonus[lv] = clampPercent(rs.getInt("proc_bonus"));
-                criticalChance[lv] = clampPercent(rs.getInt("critical_chance"));
-                criticalDamage[lv] = Math.max(0, rs.getInt("critical_damage"));
-                counterChance[lv] = clampPercent(rs.getInt("counter_chance"));
-                counterPower[lv] = Math.max(0, rs.getInt("counter_power"));
-                counterCritical[lv] = clampPercent(rs.getInt("counter_critical"));
-                loaded = true;
-            }
-        } catch (Exception e) {
-            return false;
-        } finally {
-            if (closeCon)
-                DatabaseConnection.close(con, st, rs);
-            else
-                DatabaseConnection.close(st, rs);
-        }
-        return loaded;
-    }
-
-    private static void loadLegacyExp(Connection con) {
-        PreparedStatement st = null;
-        ResultSet rs = null;
-        boolean closeCon = false;
-        try {
-            if (con == null) {
-                con = DatabaseConnection.getLineage();
-                closeCon = true;
-            }
-            if (!tableExists(con, "ego_level_exp"))
-                return;
-            st = con.prepareStatement("SELECT ego_lv, need_exp FROM ego_level_exp WHERE use_yn=1");
-            rs = st.executeQuery();
-            while (rs.next()) {
-                int lv = clamp(rs.getInt("ego_lv"));
-                needExp[lv] = Math.max(0L, rs.getLong("need_exp"));
-            }
-        } catch (Exception e) {
-        } finally {
-            if (closeCon)
-                DatabaseConnection.close(con, st, rs);
-            else
-                DatabaseConnection.close(st, rs);
-        }
-    }
-
-    private static void loadLegacyBonus(Connection con) {
-        PreparedStatement st = null;
-        ResultSet rs = null;
-        boolean closeCon = false;
-        try {
-            if (con == null) {
-                con = DatabaseConnection.getLineage();
-                closeCon = true;
-            }
-            if (!tableExists(con, "ego_level_bonus"))
-                return;
-            st = con.prepareStatement("SELECT * FROM ego_level_bonus WHERE use_yn=1");
-            rs = st.executeQuery();
-            while (rs.next()) {
-                int lv = clamp(rs.getInt("ego_lv"));
                 procBonus[lv] = clampPercent(rs.getInt("proc_bonus"));
                 criticalChance[lv] = clampPercent(rs.getInt("critical_chance"));
                 criticalDamage[lv] = Math.max(0, rs.getInt("critical_damage"));
@@ -191,14 +120,12 @@ public final class EgoLevel {
         ResultSet rs = null;
         try {
             rs = con.getMetaData().getTables(null, null, table, null);
-            if (rs != null && rs.next())
-                return true;
+            return rs != null && rs.next();
         } catch (SQLException e) {
             return false;
         } finally {
             try { if (rs != null) rs.close(); } catch (Exception e) {}
         }
-        return false;
     }
 
     private static int clamp(int level) {
