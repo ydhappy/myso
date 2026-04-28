@@ -3,8 +3,8 @@
 -- File encoding: UTF-8
 -- Runtime DB charset target: euckr
 -- Policy: no one-click delete, no full reset, no direct item table insert.
--- Final policy: ego orb creation, probabilistic proc, damage + HP/MP absorb + stun/slow.
--- DB/Java 1:1 ability names: BALANCE, BLOOD, MANA, CRIT, SHIELD, AREA, EXECUTE, FIRE, FROST, COUNTER, REVENGE.
+-- Java runtime ability names are kept 1:1 with EgoWeaponAbilityController.
+-- Simple input aliases are normalized in EgoWeaponDatabase.
 -- ============================================================
 
 SET NAMES utf8;
@@ -122,6 +122,16 @@ CREATE TABLE IF NOT EXISTS ego_level (
     PRIMARY KEY (ego_lv)
 ) ENGINE=InnoDB DEFAULT CHARSET=euckr COLLATE=euckr_korean_ci COMMENT='에고 레벨 통합 설정';
 
+CREATE TABLE IF NOT EXISTS ego_bond (
+    item_id BIGINT NOT NULL,
+    bond INT NOT NULL DEFAULT 0,
+    last_reason VARCHAR(40) NOT NULL DEFAULT '',
+    reg_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    mod_date DATETIME NULL DEFAULT NULL,
+    PRIMARY KEY (item_id),
+    INDEX ego_bond_idx (bond)
+) ENGINE=InnoDB DEFAULT CHARSET=euckr COLLATE=euckr_korean_ci COMMENT='에고 유대감 fallback';
+
 CREATE TABLE IF NOT EXISTS ego_item_template (
     item_code INT NOT NULL,
     item_name VARCHAR(80) NOT NULL,
@@ -158,42 +168,33 @@ SET @sql := IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHE
     'SELECT ''ego.bond_reason already exists'' AS info');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
-DELETE t1 FROM ego_talk_pack t1
-INNER JOIN ego_talk_pack t2
-    ON t1.id > t2.id AND t1.genre = t2.genre AND t1.tone = t2.tone AND t1.message = t2.message;
-
-SET @sql := IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ego_talk_pack' AND INDEX_NAME = 'ego_talk_pack_uk') = 0,
-    'ALTER TABLE ego_talk_pack ADD UNIQUE KEY ego_talk_pack_uk (genre, tone, message)',
-    'SELECT ''ego_talk_pack_uk already exists'' AS info');
-PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
-
-UPDATE ego_skill SET skill='BALANCE' WHERE skill='EGO_BALANCE';
-UPDATE ego_skill SET skill='BLOOD' WHERE skill='BLOOD_DRAIN';
-UPDATE ego_skill SET skill='MANA' WHERE skill='MANA_DRAIN';
-UPDATE ego_skill SET skill='CRIT' WHERE skill='CRITICAL_BURST';
-UPDATE ego_skill SET skill='SHIELD' WHERE skill='GUARDIAN_SHIELD';
-UPDATE ego_skill SET skill='AREA' WHERE skill='AREA_SLASH';
-UPDATE ego_skill SET skill='EXECUTE' WHERE skill='EXECUTION';
-UPDATE ego_skill SET skill='FIRE' WHERE skill='FLAME_BRAND';
-UPDATE ego_skill SET skill='FROST' WHERE skill='FROST_BIND';
-UPDATE ego_skill SET skill='COUNTER' WHERE skill='EGO_COUNTER';
-UPDATE ego_skill SET skill='REVENGE' WHERE skill='EGO_REVENGE';
+UPDATE ego_skill SET skill='EGO_BALANCE' WHERE skill='BALANCE';
+UPDATE ego_skill SET skill='BLOOD_DRAIN' WHERE skill='BLOOD';
+UPDATE ego_skill SET skill='MANA_DRAIN' WHERE skill='MANA';
+UPDATE ego_skill SET skill='CRITICAL_BURST' WHERE skill='CRIT';
+UPDATE ego_skill SET skill='GUARDIAN_SHIELD' WHERE skill='SHIELD';
+UPDATE ego_skill SET skill='AREA_SLASH' WHERE skill='AREA';
+UPDATE ego_skill SET skill='EXECUTION' WHERE skill='EXECUTE';
+UPDATE ego_skill SET skill='FLAME_BRAND' WHERE skill='FIRE';
+UPDATE ego_skill SET skill='FROST_BIND' WHERE skill='FROST';
+UPDATE ego_skill SET skill='EGO_COUNTER' WHERE skill='COUNTER';
+UPDATE ego_skill SET skill='EGO_REVENGE' WHERE skill='REVENGE';
 
 INSERT INTO ego_skill_base (skill, label, memo, base_rate, lv_rate, max_rate, min_lv, cool_ms, effect, use_yn) VALUES
-('BALANCE', '공명', '균형형 추가 피해', 3, 1, 25, 1, 0, 3940, 1),
-('BLOOD', '흡혈', 'HP 흡수', 3, 1, 20, 1, 0, 8150, 1),
-('MANA', '흡마', 'MP 흡수', 3, 1, 20, 1, 0, 7300, 1),
-('CRIT', '치명', '치명 추가 피해', 2, 1, 35, 1, 0, 12487, 1),
-('SHIELD', '수호', '위험 시 HP 흡수', 3, 1, 25, 1, 3000, 6321, 1),
-('AREA', '광역', '주변 몬스터 피해', 2, 1, 20, 5, 3000, 12248, 1),
-('EXECUTE', '처형', '낮은 HP 대상 추가 피해', 2, 1, 20, 7, 0, 8683, 1),
-('FIRE', '화염', '화염 추가 피해', 3, 1, 25, 1, 0, 1811, 1),
-('FROST', '서리', '서리 추가 피해', 3, 1, 25, 1, 0, 3684, 1),
-('COUNTER', '반격', '피격/자동 반격', 35, 5, 100, 5, 2500, 10710, 1),
-('REVENGE', '복수', 'Lv.10 스턴 연동 반격', 50, 0, 50, 10, 6000, 4183, 1)
+('EGO_BALANCE', '공명', '균형형 추가 피해', 3, 1, 25, 1, 0, 3940, 1),
+('BLOOD_DRAIN', '흡혈', 'HP 흡수', 3, 1, 20, 1, 0, 8150, 1),
+('MANA_DRAIN', '흡마', 'MP 흡수', 3, 1, 20, 1, 0, 7300, 1),
+('CRITICAL_BURST', '치명', '치명 추가 피해', 2, 1, 35, 1, 0, 12487, 1),
+('GUARDIAN_SHIELD', '수호', '위험 시 HP 흡수', 3, 1, 25, 1, 3000, 6321, 1),
+('AREA_SLASH', '광역', '주변 몬스터 피해', 2, 1, 20, 5, 3000, 12248, 1),
+('EXECUTION', '처형', '낮은 HP 대상 추가 피해', 2, 1, 20, 7, 0, 8683, 1),
+('FLAME_BRAND', '화염', '화염 추가 피해', 3, 1, 25, 1, 0, 1811, 1),
+('FROST_BIND', '서리', '서리 추가 피해', 3, 1, 25, 1, 0, 3684, 1),
+('EGO_COUNTER', '반격', '피격/자동 반격', 35, 5, 100, 5, 2500, 10710, 1),
+('EGO_REVENGE', '복수', 'Lv.10 스턴 연동 반격', 50, 0, 50, 10, 6000, 4183, 1)
 ON DUPLICATE KEY UPDATE label=VALUES(label), memo=VALUES(memo), base_rate=VALUES(base_rate), lv_rate=VALUES(lv_rate), max_rate=VALUES(max_rate), min_lv=VALUES(min_lv), cool_ms=VALUES(cool_ms), effect=VALUES(effect), use_yn=VALUES(use_yn);
 
-DELETE FROM ego_skill_base WHERE skill IN ('EGO_BALANCE','BLOOD_DRAIN','MANA_DRAIN','CRITICAL_BURST','GUARDIAN_SHIELD','AREA_SLASH','EXECUTION','FLAME_BRAND','FROST_BIND','EGO_COUNTER','EGO_REVENGE');
+DELETE FROM ego_skill_base WHERE skill IN ('BALANCE','BLOOD','MANA','CRIT','SHIELD','AREA','EXECUTE','FIRE','FROST','COUNTER','REVENGE');
 
 INSERT INTO ego_config (config_key, config_value, memo, use_yn) VALUES
 ('ego_orb_item_code', '900001', '에고 구슬 아이템코드', 1),
@@ -240,19 +241,6 @@ DELETE FROM ego_item_template WHERE item_name='에고 변경구슬' AND item_cod
 INSERT INTO ego_item_template (item_code, item_name, java_class, item_type1, item_type2, name_id, inv_gfx, ground_gfx, stackable, memo, use_yn) VALUES
 (900001, '에고 구슬', 'lineage.world.object.item.EgoOrb', 'etc', 'normal', '$900001', 4038, 4038, 1, '착용 무기에 에고를 최초 생성한다. 이미 에고무기면 능력/대화/레벨 변경 없이 주인만 재인식한다.', 1)
 ON DUPLICATE KEY UPDATE item_name=VALUES(item_name), java_class=VALUES(java_class), memo=VALUES(memo), use_yn=VALUES(use_yn);
-
-SELECT 'REGISTER_EGO_ORB_MANUALLY' AS guide,
-       item_code,
-       item_name,
-       java_class,
-       item_type1,
-       item_type2,
-       name_id,
-       inv_gfx,
-       ground_gfx,
-       stackable
-FROM ego_item_template
-WHERE item_name='에고 구슬';
 
 INSERT INTO ego_level (ego_lv, need_exp, proc_bonus, critical_chance, critical_damage, counter_chance, counter_power, counter_critical, memo, use_yn) VALUES
 (0,100,0,0,0,0,0,0,'Lv.0 전투능력 없음',1),
