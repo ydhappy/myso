@@ -27,7 +27,7 @@ import lineage.world.object.instance.PcInstance;
  */
 public final class EgoView {
 
-    private static final String EGO_MARK = "\fY[에고]\fW";
+    private static final String EGO_MARK = EgoMessageUtil.COLOR_NORMAL + "[에고]" + EgoMessageUtil.COLOR_WHITE;
 
     private EgoView() {
     }
@@ -84,7 +84,7 @@ public final class EgoView {
         if (!isEgo(item))
             return baseName;
         if (baseName.indexOf("[에고]") >= 0 || baseName.indexOf("[에고:") >= 0)
-            return baseName;
+            return EgoMessageUtil.clientColor(baseName);
 
         String fixedName = displayName(item, baseName);
         EgoWeaponInfo ego = EgoWeaponDatabase.find(item);
@@ -94,11 +94,11 @@ public final class EgoView {
 
         StringBuilder sb = new StringBuilder(fixedName);
         sb.append(" ").append(EGO_MARK);
-        sb.append(" \fS(").append(label).append(" Lv.").append(level);
+        sb.append(" ").append(EgoMessageUtil.COLOR_INFO).append("(").append(label).append(" Lv.").append(level);
         if (skill.length() > 0)
             sb.append(" ").append(skill);
-        sb.append(")\fW");
-        return sb.toString();
+        sb.append(")").append(EgoMessageUtil.COLOR_WHITE);
+        return EgoMessageUtil.clientColor(sb.toString());
     }
 
     public static String info(ItemInstance item) {
