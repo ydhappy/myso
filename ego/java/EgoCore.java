@@ -23,7 +23,7 @@ import lineage.world.object.instance.RobotInstance;
  * 외부 연결은 이 클래스 중심으로 사용한다.
  * - init/reload: 서버 시작/관리자 리로드
  * - chat/tick: 대화/상태 주기 처리
- * - attack/defense: 전투 보정
+ * - attack/defense/kill: 전투 보정/처치 경험치
  * - useOrb: 에고 구슬 사용 처리
  */
 public final class EgoCore {
@@ -72,13 +72,25 @@ public final class EgoCore {
     public static int attack(Character cha, object target, ItemInstance weapon, int damage) {
         if (cha instanceof PcInstance)
             EgoOwnerRecognition.recognize((PcInstance) cha, weapon);
-        return EgoSkill.attack(cha, target, weapon, damage);
+        return EgoWeaponAbilityController.applyAttackAbility(cha, target, weapon, damage);
     }
 
     public static int defense(Character defender, Character attacker, int damage) {
         if (defender instanceof PcInstance)
             EgoOwnerRecognition.recognize((PcInstance) defender);
-        return EgoSkill.defense(defender, attacker, damage);
+        return EgoWeaponAbilityController.applyDefenseAbility(defender, attacker, damage);
+    }
+
+    public static void kill(PcInstance pc, lineage.world.object.instance.MonsterInstance mon) {
+        EgoWeaponAbilityController.addKillExp(pc, mon);
+    }
+
+    public static boolean isEgo(ItemInstance weapon) {
+        return EgoWeaponAbilityController.isEgoWeapon(weapon);
+    }
+
+    public static int level(ItemInstance weapon) {
+        return EgoWeaponAbilityController.getEgoLevel(weapon);
     }
 }
 
