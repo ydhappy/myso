@@ -222,7 +222,7 @@ public final class EgoWeaponAbilityController {
         sendEffect(attacker, critical ? 12487 : 10710);
         safeCounterDamage(pc, attacker, counterDamage);
         EgoBond.addCounter(weapon);
-        say(pc, skill, String.format("\fY[에고] %s반격 발동. 피해 +%d%s", automatic ? "자동" : "", counterDamage, critical ? " / 치명" : ""));
+        say(pc, skill, String.format("\\fY[에고] %s반격 발동. 피해 +%d%s", automatic ? "자동" : "", counterDamage, critical ? " / 치명" : ""));
         writeLog(pc, attacker, weapon, skill, baseDamage, baseDamage + counterDamage);
 
         if (egoLevel >= getStunLevel())
@@ -253,7 +253,7 @@ public final class EgoWeaponAbilityController {
             target.toSender(S_ObjectEffect.clone(BasePacketPooling.getPool(S_ObjectEffect.class), target, stunEffect), true);
             BuffController.append(target, ShockStun.clone(BuffController.getPool(ShockStun.class), skill, time, target, stunEffect));
             EgoBond.addStun(weapon);
-            say(pc, "EGO_STUN", "\fR[에고] 스턴 성공.");
+            say(pc, "EGO_STUN", "\\fR[에고] 스턴 성공.");
             writeLog(pc, target, weapon, "EGO_STUN", 0, 0);
             return true;
         } catch (Throwable e) {
@@ -267,18 +267,18 @@ public final class EgoWeaponAbilityController {
                 int heal = Math.max(1, damage * (2 + egoLevel) / 100);
                 pc.setNowHp(Math.min(pc.getTotalHp(), pc.getNowHp() + heal));
                 sendEffect(target, effect > 0 ? effect : 8150);
-                say(pc, "BLOOD_DRAIN", String.format("\fR[에고] 생명 흡수 발동. HP +%d", heal));
+                say(pc, "BLOOD_DRAIN", String.format("\\fR[에고] 생명 흡수 발동. HP +%d", heal));
                 return damage + Math.max(1, egoLevel / 2);
             case MANA_DRAIN:
                 int mp = Math.max(1, egoLevel / 2);
                 pc.setNowMp(Math.min(pc.getTotalMp(), pc.getNowMp() + mp));
                 sendEffect(target, effect > 0 ? effect : 7300);
-                say(pc, "MANA_DRAIN", String.format("\fY[에고] 정신 흡수 발동. MP +%d", mp));
+                say(pc, "MANA_DRAIN", String.format("\\fY[에고] 정신 흡수 발동. MP +%d", mp));
                 return damage;
             case CRITICAL_BURST:
                 int criticalAdd = Math.max(1, egoLevel + EgoLevel.criticalDamage(egoLevel));
                 sendEffect(target, effect > 0 ? effect : 12487);
-                say(pc, "CRITICAL_BURST", String.format("\fY[에고] 치명 폭발 발동. 추가 피해 +%d", criticalAdd));
+                say(pc, "CRITICAL_BURST", String.format("\\fY[에고] 치명 폭발 발동. 추가 피해 +%d", criticalAdd));
                 return damage + criticalAdd;
             case GUARDIAN_SHIELD:
                 int hpRate = pc.getNowHp() * 100 / Math.max(1, pc.getTotalHp());
@@ -286,7 +286,7 @@ public final class EgoWeaponAbilityController {
                     int shieldHeal = Math.max(3, egoLevel * 2);
                     pc.setNowHp(Math.min(pc.getTotalHp(), pc.getNowHp() + shieldHeal));
                     sendEffect(pc, effect > 0 ? effect : 6321);
-                    say(pc, "GUARDIAN_SHIELD", String.format("\fY[에고] 수호 의지 발동. HP +%d", shieldHeal));
+                    say(pc, "GUARDIAN_SHIELD", String.format("\\fY[에고] 수호 의지 발동. HP +%d", shieldHeal));
                 }
                 return damage + Math.max(1, egoLevel / 3);
             case AREA_SLASH:
@@ -304,7 +304,7 @@ public final class EgoWeaponAbilityController {
                     count++;
                 }
                 if (count > 0)
-                    say(pc, "AREA_SLASH", String.format("\fY[에고] 공명 베기 발동. 주변 %d명에게 피해", count));
+                    say(pc, "AREA_SLASH", String.format("\\fY[에고] 공명 베기 발동. 주변 %d명에게 피해", count));
                 return damage;
             case EXECUTION:
                 if (target instanceof Character) {
@@ -313,7 +313,7 @@ public final class EgoWeaponAbilityController {
                     if (targetHpRate <= EgoConfig.percent("execution_target_hp_rate", 20)) {
                         int add = Math.max(2, egoLevel * 2);
                         sendEffect(target, effect > 0 ? effect : 8683);
-                        say(pc, "EXECUTION", String.format("\fR[에고] 처형 발동. 추가 피해 +%d", add));
+                        say(pc, "EXECUTION", String.format("\\fR[에고] 처형 발동. 추가 피해 +%d", add));
                         return damage + add;
                     }
                 }
@@ -321,18 +321,18 @@ public final class EgoWeaponAbilityController {
             case FLAME_BRAND:
                 int fireAdd = Math.max(1, 2 + egoLevel);
                 sendEffect(target, effect > 0 ? effect : 1811);
-                say(pc, "FLAME_BRAND", String.format("\fR[에고] 화염 각인 발동. 추가 피해 +%d", fireAdd));
+                say(pc, "FLAME_BRAND", String.format("\\fR[에고] 화염 각인 발동. 추가 피해 +%d", fireAdd));
                 return damage + fireAdd;
             case FROST_BIND:
                 int frostAdd = Math.max(1, egoLevel / 2);
                 sendEffect(target, effect > 0 ? effect : 3684);
-                say(pc, "FROST_BIND", "\fY[에고] 서리 충격 발동.");
+                say(pc, "FROST_BIND", "\\fY[에고] 서리 충격 발동.");
                 return damage + frostAdd;
             case EGO_BALANCE:
             default:
                 int balanceAdd = Math.max(1, egoLevel / 2);
                 sendEffect(target, effect > 0 ? effect : 3940);
-                say(pc, "EGO_BALANCE", String.format("\fY[에고] 공명 타격 발동. 추가 피해 +%d", balanceAdd));
+                say(pc, "EGO_BALANCE", String.format("\\fY[에고] 공명 타격 발동. 추가 피해 +%d", balanceAdd));
                 return damage + balanceAdd;
         }
     }
@@ -374,7 +374,7 @@ public final class EgoWeaponAbilityController {
         if (levelUp || afterLevel > beforeLevel) {
             sendEffect(pc, 3944);
             EgoBond.addLevelUp(weapon);
-            say(pc, "LEVEL_UP", String.format("\fY[에고] 의식이 성장했습니다. Lv.%d", afterLevel));
+            say(pc, "LEVEL_UP", String.format("\\fY[에고] 의식이 성장했습니다. Lv.%d", afterLevel));
             writeLog(pc, pc, weapon, "LEVEL_UP", 0, 0);
             EgoView.refreshInventory(pc, weapon);
             return;
@@ -383,7 +383,7 @@ public final class EgoWeaponAbilityController {
         if (forceMessage || Util.random(1, 100) <= EgoConfig.percent("exp_message_rate", 3)) {
             EgoWeaponInfo info = EgoWeaponDatabase.find(weapon);
             if (info != null)
-                say(pc, "EXP", String.format("\fS[에고] 경험치 +%d (%d/%d)", addExp, info.exp, info.maxExp));
+                say(pc, "EXP", String.format("\\fS[에고] 경험치 +%d (%d/%d)", addExp, info.exp, info.maxExp));
         }
     }
 
@@ -483,7 +483,7 @@ public final class EgoWeaponAbilityController {
         if (last != null && now - last.longValue() < delay)
             return;
         procMessageDelayMap.put(key, now);
-        ChattingController.toChatting(pc, msg, Lineage.CHATTING_MODE_MESSAGE);
+        ChattingController.toChatting(pc, EgoMessageUtil.clientColor(msg), Lineage.CHATTING_MODE_MESSAGE);
     }
 
     private static void loadSkillBase() {
