@@ -3,7 +3,7 @@
 -- File encoding: UTF-8
 -- Runtime DB charset target: euckr
 -- Purpose: one consolidated install/update/migration SQL for the ego system.
--- Policy: no one-click full delete, no full data purge, no table drop reset script.
+-- Policy: no full data purge, no table drop reset script.
 -- ============================================================
 
 SET NAMES utf8;
