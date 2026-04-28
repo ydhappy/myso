@@ -1,7 +1,7 @@
 package lineage.world.object.item;
 
 import lineage.network.packet.ClientBasePacket;
-import lineage.world.Character;
+import lineage.world.object.Character;
 import lineage.world.controller.EgoChangeOrbController;
 import lineage.world.object.instance.ItemInstance;
 import lineage.world.object.instance.PcInstance;
