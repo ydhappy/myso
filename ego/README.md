@@ -30,6 +30,9 @@ DamageController 기본 공식 유지
 SQL은 ego_schema.sql 1개만 사용
 문서는 사용방법.md, 업데이트내용.md 2개만 유지
 자동 설치/전체 초기화 관련 파일 없음
+점명령 생성/삭제/변경 없음
+에고 구슬로만 최초 생성
+에고무기 이동 시 주인 자동 재인식
 ```
 
 ## SQL 적용
@@ -55,14 +58,6 @@ DB 툴이 `SOURCE`를 지원하지 않으면 `ego/sql/ego_schema.sql` 내용을 
 ```java
 EgoCore.init(con);
 EgoCore.reload(con);
-```
-
-명령어:
-
-```java
-if (EgoCore.command(o, key, st)) {
-    return true;
-}
 ```
 
 일반 채팅:
@@ -97,21 +92,39 @@ if (o instanceof Character) {
 }
 ```
 
-## 명령어
+아이템 생성 Hook:
+
+```java
+ItemInstance egoItem = EgoItemDatabaseHook.newInstance(i, item);
+if (egoItem != null)
+    return egoItem;
+```
+
+## 에고 구슬
 
 ```text
-.에고도움
-.에고생성 이름
-.에고삭제 확인
-.에고정보
-.에고이름 이름
-.에고말투 예의
-.에고말투 예의반대
-.에고능력 코드
-.에고상대
-.에고주변
-.에고리로드
+아이템명: 에고 구슬
+기본 item_code: 900001
+Java 클래스: lineage.world.object.item.EgoOrb
 ```
+
+동작:
+
+```text
+에고가 없는 착용 무기: 에고 최초 생성, 능력/대화 랜덤 최초 선택, 구슬 1개 소모
+이미 에고무기: 능력/대화/레벨/경험치 변경 없음, 현재 캐릭터를 주인으로 재인식
+```
+
+## 점명령 정책
+
+```text
+.에고생성 없음
+.에고삭제 없음
+.에고능력 변경 없음
+.에고말투 변경 없음
+```
+
+생성은 `에고 구슬` 아이템 사용으로만 처리합니다. 삭제와 변경은 제공하지 않습니다.
 
 ## 문서
 
