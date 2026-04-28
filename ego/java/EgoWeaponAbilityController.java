@@ -29,18 +29,16 @@ import lineage.world.object.magic.ShockStun;
 import lineage.world.object.magic.Slow;
 
 /**
- * 에고무기 특별 능력 컨트롤러.
+ * 에고무기 전투 능력 컨트롤러.
  *
- * 단순 최종 정책:
+ * 단순 정책:
  * - 에고 능력은 확률 발동형이다.
- * - 발동 시 기본 능력 효과에 공통 보너스를 더한다.
- * - 공통 보너스: 추가 피해 + HP 회복 + 확률 스턴 + 확률 슬로우.
- * - 복잡한 액티브/광역/초월기 구조는 넣지 않는다.
+ * - 발동 시 추가 피해, HP 흡수, MP 흡수, 확률 스턴, 확률 슬로우를 처리한다.
+ * - 복잡한 액티브/초월기 구조는 넣지 않는다.
  */
 public final class EgoWeaponAbilityController {
 
     private static final int MAX_EGO_LEVEL = 10;
-
     private static final int DEFAULT_AREA_RANGE = 2;
     private static final int DEFAULT_AREA_MAX_TARGET = 4;
 
@@ -59,8 +57,10 @@ public final class EgoWeaponAbilityController {
 
     private static final int DEFAULT_COMBO_ADD_DAMAGE_RATE = 12;
     private static final int DEFAULT_COMBO_ADD_DAMAGE_LEVEL_RATE = 2;
-    private static final int DEFAULT_COMBO_HEAL_RATE = 5;
-    private static final int DEFAULT_COMBO_HEAL_MAX_RATE = 12;
+    private static final int DEFAULT_COMBO_HP_ABSORB_RATE = 5;
+    private static final int DEFAULT_COMBO_HP_ABSORB_MAX_RATE = 12;
+    private static final int DEFAULT_COMBO_MP_ABSORB_RATE = 3;
+    private static final int DEFAULT_COMBO_MP_ABSORB_MAX_RATE = 8;
     private static final int DEFAULT_COMBO_STUN_CHANCE = 4;
     private static final int DEFAULT_COMBO_STUN_LEVEL_BONUS = 1;
     private static final int DEFAULT_COMBO_SLOW_CHANCE = 9;
@@ -120,11 +120,10 @@ public final class EgoWeaponAbilityController {
         markProc(weapon, type.name());
 
         int result = applyAttackByType(pc, target, damage, effectiveLevel, base.effect, type);
-        int bonusDamage = abilityInfo == null ? 0 : Math.max(0, abilityInfo.damageBonus);
-        if (bonusDamage > 0 && result > 0)
-            result += bonusDamage;
+        if (abilityInfo != null && abilityInfo.damageBonus > 0)
+            result += abilityInfo.damageBonus;
 
-        result = applyCommonProcEffects(pc, target, weapon, damage, result, effectiveLevel, type);
+        result = applyCommonProcEffects(pc, target, weapon, damage, result, effectiveLevel);
 
         if (effectiveLevel >= getStunLevel() && target instanceof Character)
             tryEgoStun(pc, (Character) target, weapon, "EGO_STUN_ATTACK");
@@ -155,13 +154,11 @@ public final class EgoWeaponAbilityController {
             return damage;
 
         int newDamage = damage;
-
         if (egoLevel >= EgoConfig.getInt("counter_unlock_level", 5)) {
             int reduce = Math.max(1, egoLevel / 2);
             newDamage = Math.max(1, newDamage - reduce);
             tryCounter(pc, attacker, weapon, newDamage, egoLevel, false);
         }
-
         if (egoLevel >= EgoConfig.getInt("auto_counter_unlock_level", 6))
             tryCounter(pc, attacker, weapon, newDamage, egoLevel, true);
 
@@ -187,11 +184,7 @@ public final class EgoWeaponAbilityController {
     }
 
     public static boolean isEgoWeapon(ItemInstance weapon) {
-        if (weapon == null)
-            return false;
-        if (!EgoWeaponTypeUtil.isValidEgoBaseWeapon(weapon))
-            return false;
-        return EgoWeaponDatabase.isEgoWeapon(weapon);
+        return weapon != null && EgoWeaponTypeUtil.isValidEgoBaseWeapon(weapon) && EgoWeaponDatabase.isEgoWeapon(weapon);
     }
 
     public static int getEgoLevel(ItemInstance weapon) {
@@ -213,6 +206,126 @@ public final class EgoWeaponAbilityController {
         } catch (Exception e) {
             return EgoAbilityType.EGO_BALANCE;
         }
+    }
+
+    private static int applyAttackByType(PcInstance pc, object target, int damage, int egoLevel, int effect, EgoAbilityType type) {
+        switch (type) {
+            case BLOOD_DRAIN:
+                int hpAbsorb = Math.max(1, damage * (2 + egoLevel) / 100);
+                pc.setNowHp(Math.min(pc.getTotalHp(), pc.getNowHp() + hpAbsorb));
+                sendEffect(target, effect > 0 ? effect : 8150);
+                say(pc, "BLOOD_DRAIN", String.format("\\fR[에고] 생명 흡수 발동. HP +%d", hpAbsorb));
+                return damage + Math.max(1, egoLevel / 2);
+            case MANA_DRAIN:
+                int mpAbsorb = Math.max(1, egoLevel / 2);
+                pc.setNowMp(Math.min(pc.getTotalMp(), pc.getNowMp() + mpAbsorb));
+                sendEffect(target, effect > 0 ? effect : 7300);
+                say(pc, "MANA_DRAIN", String.format("\\fY[에고] 정신 흡수 발동. MP +%d", mpAbsorb));
+                return damage;
+            case CRITICAL_BURST:
+                int criticalAdd = Math.max(1, egoLevel + EgoLevel.criticalDamage(egoLevel));
+                sendEffect(target, effect > 0 ? effect : 12487);
+                say(pc, "CRITICAL_BURST", String.format("\\fY[에고] 치명 폭발 발동. 추가 피해 +%d", criticalAdd));
+                return damage + criticalAdd;
+            case GUARDIAN_SHIELD:
+                int hpRate = pc.getNowHp() * 100 / Math.max(1, pc.getTotalHp());
+                if (hpRate <= EgoConfig.percent("guardian_shield_hp_rate", 40)) {
+                    int shieldAbsorb = Math.max(3, egoLevel * 2);
+                    pc.setNowHp(Math.min(pc.getTotalHp(), pc.getNowHp() + shieldAbsorb));
+                    sendEffect(pc, effect > 0 ? effect : 6321);
+                    say(pc, "GUARDIAN_SHIELD", String.format("\\fY[에고] 수호 흡수 발동. HP +%d", shieldAbsorb));
+                }
+                return damage + Math.max(1, egoLevel / 3);
+            case AREA_SLASH:
+                int splashDamage = Math.max(1, damage * (8 + egoLevel) / 100);
+                int count = 0;
+                int areaRange = EgoConfig.getInt("area_range", DEFAULT_AREA_RANGE);
+                int areaMaxTarget = EgoConfig.getInt("area_max_target", DEFAULT_AREA_MAX_TARGET);
+                for (MonsterInstance mon : findNearbyMonsters(pc, target, areaRange)) {
+                    if (count >= areaMaxTarget)
+                        break;
+                    if (mon.getObjectId() == target.getObjectId())
+                        continue;
+                    safeSplashDamage(pc, mon, splashDamage);
+                    sendEffect(mon, effect > 0 ? effect : 12248);
+                    count++;
+                }
+                if (count > 0)
+                    say(pc, "AREA_SLASH", String.format("\\fY[에고] 공명 베기 발동. 주변 %d명에게 피해", count));
+                return damage;
+            case EXECUTION:
+                if (target instanceof Character) {
+                    Character t = (Character) target;
+                    int targetHpRate = t.getNowHp() * 100 / Math.max(1, t.getTotalHp());
+                    if (targetHpRate <= EgoConfig.percent("execution_target_hp_rate", 20)) {
+                        int add = Math.max(2, egoLevel * 2);
+                        sendEffect(target, effect > 0 ? effect : 8683);
+                        say(pc, "EXECUTION", String.format("\\fR[에고] 처형 발동. 추가 피해 +%d", add));
+                        return damage + add;
+                    }
+                }
+                return damage;
+            case FLAME_BRAND:
+                int fireAdd = Math.max(1, 2 + egoLevel);
+                sendEffect(target, effect > 0 ? effect : 1811);
+                say(pc, "FLAME_BRAND", String.format("\\fR[에고] 화염 각인 발동. 추가 피해 +%d", fireAdd));
+                return damage + fireAdd;
+            case FROST_BIND:
+                int frostAdd = Math.max(1, egoLevel / 2);
+                sendEffect(target, effect > 0 ? effect : 3684);
+                say(pc, "FROST_BIND", "\\fY[에고] 서리 충격 발동.");
+                return damage + frostAdd;
+            case EGO_BALANCE:
+            default:
+                int balanceAdd = Math.max(1, egoLevel / 2);
+                sendEffect(target, effect > 0 ? effect : 3940);
+                say(pc, "EGO_BALANCE", String.format("\\fY[에고] 공명 타격 발동. 추가 피해 +%d", balanceAdd));
+                return damage + balanceAdd;
+        }
+    }
+
+    private static int applyCommonProcEffects(PcInstance pc, object target, ItemInstance weapon, int baseDamage, int currentDamage, int egoLevel) {
+        if (pc == null || target == null || weapon == null || currentDamage <= 0)
+            return currentDamage;
+
+        int addRate = EgoConfig.getInt("combo_add_damage_rate", DEFAULT_COMBO_ADD_DAMAGE_RATE)
+                    + egoLevel * EgoConfig.getInt("combo_add_damage_level_rate", DEFAULT_COMBO_ADD_DAMAGE_LEVEL_RATE);
+        addRate = Math.max(0, Math.min(80, addRate));
+        int addDamage = Math.max(1, baseDamage * addRate / 100);
+        int result = currentDamage + addDamage;
+
+        int hpRate = EgoConfig.getInt("combo_hp_absorb_rate", DEFAULT_COMBO_HP_ABSORB_RATE) + Math.max(0, egoLevel / 2);
+        int hpMaxRate = EgoConfig.getInt("combo_hp_absorb_max_rate", DEFAULT_COMBO_HP_ABSORB_MAX_RATE);
+        hpRate = Math.max(0, Math.min(Math.max(1, hpMaxRate), hpRate));
+        int hpAbsorb = Math.max(1, baseDamage * hpRate / 100);
+        pc.setNowHp(Math.min(pc.getTotalHp(), pc.getNowHp() + hpAbsorb));
+
+        int mpRate = EgoConfig.getInt("combo_mp_absorb_rate", DEFAULT_COMBO_MP_ABSORB_RATE) + Math.max(0, egoLevel / 3);
+        int mpMaxRate = EgoConfig.getInt("combo_mp_absorb_max_rate", DEFAULT_COMBO_MP_ABSORB_MAX_RATE);
+        mpRate = Math.max(0, Math.min(Math.max(1, mpMaxRate), mpRate));
+        int mpAbsorb = Math.max(1, baseDamage * mpRate / 100);
+        pc.setNowMp(Math.min(pc.getTotalMp(), pc.getNowMp() + mpAbsorb));
+
+        boolean stunned = false;
+        boolean slowed = false;
+        if (target instanceof Character) {
+            Character c = (Character) target;
+            int stunChance = EgoConfig.percent("combo_stun_chance", DEFAULT_COMBO_STUN_CHANCE)
+                           + egoLevel * Math.max(0, EgoConfig.getInt("combo_stun_level_bonus", DEFAULT_COMBO_STUN_LEVEL_BONUS));
+            stunChance = Math.max(0, Math.min(35, stunChance));
+            if (Util.random(1, 100) <= stunChance)
+                stunned = tryEgoStun(pc, c, weapon, "EGO_COMBO_STUN");
+
+            int slowChance = EgoConfig.percent("combo_slow_chance", DEFAULT_COMBO_SLOW_CHANCE)
+                           + egoLevel * Math.max(0, EgoConfig.getInt("combo_slow_level_bonus", DEFAULT_COMBO_SLOW_LEVEL_BONUS));
+            slowChance = Math.max(0, Math.min(60, slowChance));
+            if (!stunned && Util.random(1, 100) <= slowChance)
+                slowed = tryEgoSlow(pc, c, weapon);
+        }
+
+        sendEffect(target, EgoConfig.getInt("combo_slow_effect", DEFAULT_COMBO_SLOW_EFFECT));
+        say(pc, "EGO_COMBO", String.format("\\fS[에고] 공명 흡수 발동. 추가 피해 +%d / HP 흡수 +%d / MP 흡수 +%d%s%s", addDamage, hpAbsorb, mpAbsorb, stunned ? " / 스턴" : "", slowed ? " / 슬로우" : ""));
+        return result;
     }
 
     private static void tryCounter(PcInstance pc, Character attacker, ItemInstance weapon, int baseDamage, int egoLevel, boolean automatic) {
@@ -274,120 +387,6 @@ public final class EgoWeaponAbilityController {
         } catch (Throwable e) {
             return false;
         }
-    }
-
-    private static int applyAttackByType(PcInstance pc, object target, int damage, int egoLevel, int effect, EgoAbilityType type) {
-        switch (type) {
-            case BLOOD_DRAIN:
-                int heal = Math.max(1, damage * (2 + egoLevel) / 100);
-                pc.setNowHp(Math.min(pc.getTotalHp(), pc.getNowHp() + heal));
-                sendEffect(target, effect > 0 ? effect : 8150);
-                say(pc, "BLOOD_DRAIN", String.format("\\fR[에고] 생명 흡수 발동. HP +%d", heal));
-                return damage + Math.max(1, egoLevel / 2);
-            case MANA_DRAIN:
-                int mp = Math.max(1, egoLevel / 2);
-                pc.setNowMp(Math.min(pc.getTotalMp(), pc.getNowMp() + mp));
-                sendEffect(target, effect > 0 ? effect : 7300);
-                say(pc, "MANA_DRAIN", String.format("\\fY[에고] 정신 흡수 발동. MP +%d", mp));
-                return damage;
-            case CRITICAL_BURST:
-                int criticalAdd = Math.max(1, egoLevel + EgoLevel.criticalDamage(egoLevel));
-                sendEffect(target, effect > 0 ? effect : 12487);
-                say(pc, "CRITICAL_BURST", String.format("\\fY[에고] 치명 폭발 발동. 추가 피해 +%d", criticalAdd));
-                return damage + criticalAdd;
-            case GUARDIAN_SHIELD:
-                int hpRate = pc.getNowHp() * 100 / Math.max(1, pc.getTotalHp());
-                if (hpRate <= EgoConfig.percent("guardian_shield_hp_rate", 40)) {
-                    int shieldHeal = Math.max(3, egoLevel * 2);
-                    pc.setNowHp(Math.min(pc.getTotalHp(), pc.getNowHp() + shieldHeal));
-                    sendEffect(pc, effect > 0 ? effect : 6321);
-                    say(pc, "GUARDIAN_SHIELD", String.format("\\fY[에고] 수호 의지 발동. HP +%d", shieldHeal));
-                }
-                return damage + Math.max(1, egoLevel / 3);
-            case AREA_SLASH:
-                int splashDamage = Math.max(1, damage * (8 + egoLevel) / 100);
-                int count = 0;
-                int areaRange = EgoConfig.getInt("area_range", DEFAULT_AREA_RANGE);
-                int areaMaxTarget = EgoConfig.getInt("area_max_target", DEFAULT_AREA_MAX_TARGET);
-                for (MonsterInstance mon : findNearbyMonsters(pc, target, areaRange)) {
-                    if (count >= areaMaxTarget)
-                        break;
-                    if (mon.getObjectId() == target.getObjectId())
-                        continue;
-                    safeSplashDamage(pc, mon, splashDamage);
-                    sendEffect(mon, effect > 0 ? effect : 12248);
-                    count++;
-                }
-                if (count > 0)
-                    say(pc, "AREA_SLASH", String.format("\\fY[에고] 공명 베기 발동. 주변 %d명에게 피해", count));
-                return damage;
-            case EXECUTION:
-                if (target instanceof Character) {
-                    Character t = (Character) target;
-                    int targetHpRate = t.getNowHp() * 100 / Math.max(1, t.getTotalHp());
-                    if (targetHpRate <= EgoConfig.percent("execution_target_hp_rate", 20)) {
-                        int add = Math.max(2, egoLevel * 2);
-                        sendEffect(target, effect > 0 ? effect : 8683);
-                        say(pc, "EXECUTION", String.format("\\fR[에고] 처형 발동. 추가 피해 +%d", add));
-                        return damage + add;
-                    }
-                }
-                return damage;
-            case FLAME_BRAND:
-                int fireAdd = Math.max(1, 2 + egoLevel);
-                sendEffect(target, effect > 0 ? effect : 1811);
-                say(pc, "FLAME_BRAND", String.format("\\fR[에고] 화염 각인 발동. 추가 피해 +%d", fireAdd));
-                return damage + fireAdd;
-            case FROST_BIND:
-                int frostAdd = Math.max(1, egoLevel / 2);
-                sendEffect(target, effect > 0 ? effect : 3684);
-                say(pc, "FROST_BIND", "\\fY[에고] 서리 충격 발동.");
-                return damage + frostAdd;
-            case EGO_BALANCE:
-            default:
-                int balanceAdd = Math.max(1, egoLevel / 2);
-                sendEffect(target, effect > 0 ? effect : 3940);
-                say(pc, "EGO_BALANCE", String.format("\\fY[에고] 공명 타격 발동. 추가 피해 +%d", balanceAdd));
-                return damage + balanceAdd;
-        }
-    }
-
-    private static int applyCommonProcEffects(PcInstance pc, object target, ItemInstance weapon, int baseDamage, int currentDamage, int egoLevel, EgoAbilityType type) {
-        if (pc == null || target == null || weapon == null || currentDamage <= 0)
-            return currentDamage;
-
-        int addRate = EgoConfig.getInt("combo_add_damage_rate", DEFAULT_COMBO_ADD_DAMAGE_RATE)
-                    + egoLevel * EgoConfig.getInt("combo_add_damage_level_rate", DEFAULT_COMBO_ADD_DAMAGE_LEVEL_RATE);
-        addRate = Math.max(0, Math.min(80, addRate));
-        int addDamage = Math.max(1, baseDamage * addRate / 100);
-        int result = currentDamage + addDamage;
-
-        int healRate = EgoConfig.getInt("combo_heal_rate", DEFAULT_COMBO_HEAL_RATE) + Math.max(0, egoLevel / 2);
-        int healMaxRate = EgoConfig.getInt("combo_heal_max_rate", DEFAULT_COMBO_HEAL_MAX_RATE);
-        healRate = Math.max(0, Math.min(Math.max(1, healMaxRate), healRate));
-        int heal = Math.max(1, baseDamage * healRate / 100);
-        pc.setNowHp(Math.min(pc.getTotalHp(), pc.getNowHp() + heal));
-
-        boolean stunned = false;
-        boolean slowed = false;
-        if (target instanceof Character) {
-            Character c = (Character) target;
-            int stunChance = EgoConfig.percent("combo_stun_chance", DEFAULT_COMBO_STUN_CHANCE)
-                           + egoLevel * Math.max(0, EgoConfig.getInt("combo_stun_level_bonus", DEFAULT_COMBO_STUN_LEVEL_BONUS));
-            stunChance = Math.max(0, Math.min(35, stunChance));
-            if (Util.random(1, 100) <= stunChance)
-                stunned = tryEgoStun(pc, c, weapon, "EGO_COMBO_STUN");
-
-            int slowChance = EgoConfig.percent("combo_slow_chance", DEFAULT_COMBO_SLOW_CHANCE)
-                           + egoLevel * Math.max(0, EgoConfig.getInt("combo_slow_level_bonus", DEFAULT_COMBO_SLOW_LEVEL_BONUS));
-            slowChance = Math.max(0, Math.min(60, slowChance));
-            if (!stunned && Util.random(1, 100) <= slowChance)
-                slowed = tryEgoSlow(pc, c, weapon);
-        }
-
-        sendEffect(target, DEFAULT_COMBO_SLOW_EFFECT);
-        say(pc, "EGO_COMBO", String.format("\\fS[에고] 공명 발동. 추가 피해 +%d / HP +%d%s%s", addDamage, heal, stunned ? " / 스턴" : "", slowed ? " / 슬로우" : ""));
-        return result;
     }
 
     private static boolean tryEgoSlow(PcInstance pc, Character target, ItemInstance weapon) {
@@ -477,9 +476,7 @@ public final class EgoWeaponAbilityController {
         long now = java.lang.System.currentTimeMillis();
         String key = weapon.getObjectId() + ":" + skill;
         Long last = procCoolMap.get(key);
-        if (last != null && now - last.longValue() < coolMs)
-            return false;
-        return true;
+        return last == null || now - last.longValue() >= coolMs;
     }
 
     private static void markProc(ItemInstance weapon, String skill) {
@@ -504,9 +501,7 @@ public final class EgoWeaponAbilityController {
     }
 
     private static void safeSplashDamage(PcInstance pc, MonsterInstance mon, int splashDamage) {
-        if (pc == null || mon == null || splashDamage <= 0)
-            return;
-        if (mon.isDead())
+        if (pc == null || mon == null || splashDamage <= 0 || mon.isDead())
             return;
         try {
             mon.toDamage(pc, splashDamage, Lineage.ATTACK_TYPE_WEAPON);
@@ -516,18 +511,13 @@ public final class EgoWeaponAbilityController {
 
     private static List<MonsterInstance> findNearbyMonsters(PcInstance pc, object center, int range) {
         List<MonsterInstance> list = new ArrayList<MonsterInstance>();
-        if (pc == null || center == null)
+        if (pc == null || center == null || pc.getInsideList() == null)
             return list;
-        List<object> inside = pc.getInsideList();
-        if (inside == null)
-            return list;
-        for (object o : inside) {
+        for (object o : pc.getInsideList()) {
             if (!(o instanceof MonsterInstance))
                 continue;
             MonsterInstance mon = (MonsterInstance) o;
-            if (mon.isDead())
-                continue;
-            if (mon.getMap() != pc.getMap())
+            if (mon.isDead() || mon.getMap() != pc.getMap())
                 continue;
             if (!Util.isDistance(center, mon, range))
                 continue;
@@ -555,8 +545,7 @@ public final class EgoWeaponAbilityController {
         if (last != null && now - last.longValue() < delay)
             return;
         procMessageDelayMap.put(key, now);
-        String out = EgoMessageUtil.keepColorOnNewLines(EgoMessageUtil.clientColor(msg));
-        ChattingController.toChatting(pc, out, Lineage.CHATTING_MODE_MESSAGE);
+        ChattingController.toChatting(pc, EgoMessageUtil.keepColorOnNewLines(EgoMessageUtil.clientColor(msg)), Lineage.CHATTING_MODE_MESSAGE);
     }
 
     private static void loadSkillBase() {
