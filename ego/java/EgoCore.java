@@ -1,7 +1,10 @@
 package lineage.world.controller;
 
 import java.sql.Connection;
+import java.sql.DatabaseMetaData;
+import java.sql.ResultSet;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -285,5 +288,245 @@ final class EgoOwnerRecognition {
         if (!EgoWeaponDatabase.isEgoWeapon(weapon))
             return;
         EgoWeaponDatabase.recognizeOwner(pc, weapon);
+    }
+}
+
+final class EgoWeaponTypeUtil {
+
+    private static final String FISHING_ROD = "fishing_rod";
+
+    private EgoWeaponTypeUtil() {
+    }
+
+    static String getOriginalType2(ItemInstance item) {
+        if (item == null || item.getItem() == null)
+            return "";
+        return normalize(item.getItem().getType2());
+    }
+
+    static String getType2(ItemInstance item) {
+        return getOriginalType2(item);
+    }
+
+    static boolean isWeaponSlot(ItemInstance item) {
+        if (item == null || item.getItem() == null)
+            return false;
+        try {
+            return item.getItem().getSlot() == Lineage.SLOT_WEAPON;
+        } catch (Throwable e) {
+            return false;
+        }
+    }
+
+    static boolean isFishingRod(ItemInstance item) {
+        return FISHING_ROD.equals(getOriginalType2(item));
+    }
+
+    static boolean isValidEgoBaseWeapon(ItemInstance item) {
+        return isWeaponSlot(item) && !isFishingRod(item);
+    }
+
+    static boolean isAbilityAllowed(String ability, ItemInstance item) {
+        return normalizeAbility(ability).length() > 0 && isValidEgoBaseWeapon(item);
+    }
+
+    static String getDefaultAbilityType(ItemInstance item) {
+        String name = safeItemName(item).toLowerCase();
+        if (name.indexOf("피") >= 0 || name.indexOf("blood") >= 0 || name.indexOf("흡혈") >= 0)
+            return "BLOOD_DRAIN";
+        if (name.indexOf("마나") >= 0 || name.indexOf("지식") >= 0 || name.indexOf("mana") >= 0)
+            return "MANA_DRAIN";
+        if (name.indexOf("화염") >= 0 || name.indexOf("불") >= 0 || name.indexOf("flame") >= 0 || name.indexOf("fire") >= 0)
+            return "FLAME_BRAND";
+        if (name.indexOf("얼음") >= 0 || name.indexOf("서리") >= 0 || name.indexOf("frost") >= 0 || name.indexOf("ice") >= 0)
+            return "FROST_BIND";
+        if (name.indexOf("수호") >= 0 || name.indexOf("가디언") >= 0 || name.indexOf("guardian") >= 0)
+            return "GUARDIAN_SHIELD";
+        return "EGO_BALANCE";
+    }
+
+    static String getDisplayTypeName(ItemInstance item) {
+        if (isFishingRod(item))
+            return "낚싯대";
+        if (isWeaponSlot(item))
+            return "무기";
+        return "무기 아님";
+    }
+
+    static String getAbilityDenyReason(String ability, ItemInstance item) {
+        if (item == null)
+            return "착용 무기가 없습니다.";
+        if (!isWeaponSlot(item))
+            return "무기 슬롯 아이템이 아닙니다.";
+        if (isFishingRod(item))
+            return "낚싯대는 에고무기로 사용할 수 없습니다.";
+        return "에고 대상으로 사용할 수 있습니다.";
+    }
+
+    static String getSupportedWeaponTypesText() {
+        return "지원 대상: 무기 슬롯 전체 / 제외: 낚싯대(fishing_rod)";
+    }
+
+    private static String safeItemName(ItemInstance item) {
+        if (item == null)
+            return "";
+        try {
+            String name = item.getName();
+            return name == null ? "" : name.trim();
+        } catch (Throwable e) {
+            return "";
+        }
+    }
+
+    private static String normalizeAbility(String ability) {
+        return ability == null ? "" : ability.trim().toUpperCase();
+    }
+
+    private static String normalize(String value) {
+        return value == null ? "" : value.trim().toLowerCase();
+    }
+}
+
+final class EgoSchema {
+
+    static final String T_EGO = "ego";
+    static final String T_EGO_SKILL = "ego_skill";
+    static final String T_EGO_SKILL_BASE = "ego_skill_base";
+    static final String T_EGO_LOG = "ego_log";
+    static final String T_EGO_TALK_PACK = "ego_talk_pack";
+    static final String T_EGO_CONFIG = "ego_config";
+    static final String T_EGO_LEVEL = "ego_level";
+    static final String T_EGO_BOND = "ego_bond";
+    static final String T_EGO_ITEM_TEMPLATE = "ego_item_template";
+
+    private static final Map<String, String[]> REQUIRED = new LinkedHashMap<String, String[]>();
+
+    static {
+        REQUIRED.put(T_EGO, new String[] { "item_id", "char_id", "use_yn", "ego_name", "ego_type", "ego_lv", "ego_exp", "need_exp", "talk_lv", "ctrl_lv", "last_talk", "last_warn", "bond", "bond_reason", "reg_date", "mod_date" });
+        REQUIRED.put(T_EGO_SKILL, new String[] { "id", "item_id", "skill", "skill_lv", "rate_bonus", "dmg_bonus", "last_proc", "use_yn", "reg_date", "mod_date" });
+        REQUIRED.put(T_EGO_SKILL_BASE, new String[] { "skill", "label", "memo", "base_rate", "lv_rate", "max_rate", "min_lv", "cool_ms", "effect", "use_yn" });
+        REQUIRED.put(T_EGO_LOG, new String[] { "id", "item_id", "char_id", "char_name", "target_name", "skill", "base_dmg", "final_dmg", "add_dmg", "reg_date" });
+        REQUIRED.put(T_EGO_TALK_PACK, new String[] { "id", "genre", "tone", "keyword", "message", "use_yn", "reg_date", "mod_date" });
+        REQUIRED.put(T_EGO_CONFIG, new String[] { "config_key", "config_value", "memo", "use_yn", "reg_date", "mod_date" });
+        REQUIRED.put(T_EGO_LEVEL, new String[] { "ego_lv", "need_exp", "proc_bonus", "critical_chance", "critical_damage", "counter_chance", "counter_power", "counter_critical", "memo", "use_yn", "reg_date", "mod_date" });
+        REQUIRED.put(T_EGO_BOND, new String[] { "item_id", "bond", "last_reason", "reg_date", "mod_date" });
+        REQUIRED.put(T_EGO_ITEM_TEMPLATE, new String[] { "item_code", "item_name", "java_class", "item_type1", "item_type2", "name_id", "inv_gfx", "ground_gfx", "stackable", "memo", "use_yn", "reg_date", "mod_date" });
+    }
+
+    private EgoSchema() {
+    }
+
+    static boolean isValid(Connection con) {
+        return validate(con).ok;
+    }
+
+    static String report(Connection con) {
+        return validate(con).message;
+    }
+
+    static void silentCheck(Connection con) {
+        try {
+            validate(con);
+        } catch (Throwable e) {
+        }
+    }
+
+    private static Result validate(Connection con) {
+        Result result = new Result();
+        StringBuilder sb = new StringBuilder();
+        sb.append("[에고 스키마 연결성 점검]\n");
+        sb.append("기준 SQL: ego/sql/ego_schema.sql\n");
+
+        if (con == null) {
+            result.ok = false;
+            sb.append("FAIL: Connection is null\n");
+            result.message = sb.toString();
+            return result;
+        }
+
+        try {
+            DatabaseMetaData meta = con.getMetaData();
+            boolean allOk = true;
+
+            for (Map.Entry<String, String[]> e : REQUIRED.entrySet()) {
+                String table = e.getKey();
+                if (!tableExists(meta, table)) {
+                    allOk = false;
+                    sb.append("MISSING TABLE: ").append(table).append('\n');
+                    continue;
+                }
+                sb.append("OK TABLE: ").append(table).append('\n');
+
+                String[] cols = e.getValue();
+                for (int i = 0; i < cols.length; i++) {
+                    String col = cols[i];
+                    if (!columnExists(meta, table, col)) {
+                        allOk = false;
+                        sb.append("  MISSING COLUMN: ").append(table).append('.').append(col).append('\n');
+                    }
+                }
+            }
+
+            if (allOk)
+                sb.append("RESULT: OK\n");
+            else
+                sb.append("RESULT: FAIL - ego/sql/ego_schema.sql 적용 후 .에고리로드 필요\n");
+
+            result.ok = allOk;
+            result.message = sb.toString();
+            return result;
+        } catch (Exception ex) {
+            result.ok = false;
+            sb.append("FAIL: ").append(ex.getMessage()).append('\n');
+            result.message = sb.toString();
+            return result;
+        }
+    }
+
+    private static boolean tableExists(DatabaseMetaData meta, String table) throws Exception {
+        ResultSet rs = null;
+        try {
+            rs = meta.getTables(null, null, table, null);
+            if (rs != null && rs.next())
+                return true;
+        } finally {
+            close(rs);
+        }
+        try {
+            rs = meta.getTables(null, null, table.toUpperCase(), null);
+            return rs != null && rs.next();
+        } finally {
+            close(rs);
+        }
+    }
+
+    private static boolean columnExists(DatabaseMetaData meta, String table, String column) throws Exception {
+        ResultSet rs = null;
+        try {
+            rs = meta.getColumns(null, null, table, column);
+            if (rs != null && rs.next())
+                return true;
+        } finally {
+            close(rs);
+        }
+        try {
+            rs = meta.getColumns(null, null, table, column.toUpperCase());
+            return rs != null && rs.next();
+        } finally {
+            close(rs);
+        }
+    }
+
+    private static void close(ResultSet rs) {
+        try {
+            if (rs != null)
+                rs.close();
+        } catch (Exception e) {
+        }
+    }
+
+    private static final class Result {
+        boolean ok;
+        String message;
     }
 }
