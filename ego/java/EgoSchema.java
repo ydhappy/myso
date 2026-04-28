@@ -14,11 +14,13 @@ import java.util.Map;
  * - Java 코드와 SQL 스키마 연결 누락을 빠르게 확인한다.
  * - 서버 시작/리로드 시 선택적으로 검증할 수 있다.
  *
- * 병합 우선 구조:
- * - ego_level_exp + ego_level_bonus -> ego_level
- * - ego_bond -> ego.bond / ego.bond_reason
+ * 기준 SQL:
+ * - ego/sql/ego_schema.sql
  *
- * 구버전 테이블은 fallback 허용.
+ * 정책:
+ * - 신규/기존 서버 모두 ego_schema.sql 1개만 적용한다.
+ * - 원클릭 전체삭제/전체초기화 SQL은 제공하지 않는다.
+ * - 구버전 테이블은 fallback으로만 허용한다.
  */
 public final class EgoSchema {
 
@@ -84,6 +86,7 @@ public final class EgoSchema {
         Result result = new Result();
         StringBuilder sb = new StringBuilder();
         sb.append("[에고 스키마 연결성 점검]\n");
+        sb.append("기준 SQL: ego/sql/ego_schema.sql\n");
 
         if (con == null) {
             result.ok = false;
@@ -118,7 +121,7 @@ public final class EgoSchema {
             if (allOk)
                 sb.append("RESULT: OK\n");
             else
-                sb.append("RESULT: FAIL - ego/sql/ego_merge_schema_euckr.sql 또는 ego_install_euckr.sql 적용 필요\n");
+                sb.append("RESULT: FAIL - ego/sql/ego_schema.sql 적용 후 .에고리로드 필요\n");
 
             result.ok = allOk;
             result.message = sb.toString();
