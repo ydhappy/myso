@@ -2,7 +2,9 @@ package lineage.world.controller;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
+import java.util.concurrent.ConcurrentHashMap;
 
 import lineage.bean.lineage.Inventory;
 import lineage.database.EgoWeaponDatabase;
@@ -24,7 +26,9 @@ public final class EgoChangeOrbController {
     public static final int DEFAULT_ITEM_CODE = 900001;
     public static final String ITEM_NAME = "에고 변경구슬";
 
+    private static final long USE_LOCK_MS = 1000L;
     private static final Random random = new Random();
+    private static final Map<Long, Long> useLockMap = new ConcurrentHashMap<Long, Long>();
     private static final String[] TONES = { "예의", "예의반대" };
     private static final String[] ABILITIES = {
         "EGO_BALANCE",
@@ -45,6 +49,20 @@ public final class EgoChangeOrbController {
         if (pc == null)
             return false;
 
+        long pcId = pc.getObjectId();
+        if (!acquireUseLock(pcId)) {
+            EgoMessageUtil.danger(pc, "에고 변경구슬은 잠시 후 다시 사용할 수 있습니다.");
+            return false;
+        }
+
+        try {
+            return useInternal(pc, orb);
+        } finally {
+            releaseUseLockLater(pcId);
+        }
+    }
+
+    private static boolean useInternal(PcInstance pc, ItemInstance orb) {
         Inventory inv = pc.getInventory();
         if (inv == null) {
             EgoMessageUtil.danger(pc, "인벤토리 정보를 찾을 수 없습니다.");
@@ -106,6 +124,20 @@ public final class EgoChangeOrbController {
         EgoView.refreshInventory(pc, weapon);
         EgoMessageUtil.info(pc, String.format("에고가 새롭게 반응합니다. 능력: %s / 대화: %s", ability, tone));
         return true;
+    }
+
+    private static boolean acquireUseLock(long pcId) {
+        long now = java.lang.System.currentTimeMillis();
+        Long last = useLockMap.get(Long.valueOf(pcId));
+        if (last != null && now - last.longValue() < USE_LOCK_MS)
+            return false;
+        useLockMap.put(Long.valueOf(pcId), Long.valueOf(now));
+        return true;
+    }
+
+    private static void releaseUseLockLater(long pcId) {
+        long now = java.lang.System.currentTimeMillis();
+        useLockMap.put(Long.valueOf(pcId), Long.valueOf(now));
     }
 
     private static void rollbackChange(ItemInstance weapon, String oldAbility, String oldTone) {
