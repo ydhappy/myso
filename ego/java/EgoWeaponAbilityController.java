@@ -26,14 +26,16 @@ import lineage.world.object.instance.ItemInstance;
 import lineage.world.object.instance.MonsterInstance;
 import lineage.world.object.instance.PcInstance;
 import lineage.world.object.magic.ShockStun;
+import lineage.world.object.magic.Slow;
 
 /**
  * 에고무기 특별 능력 컨트롤러.
  *
- * DB화 우선순위:
- * - ego_skill_base: 스킬별 발동률/쿨타임/이펙트
- * - ego_level: 레벨별 경험치/전투 보너스 통합
- * - ego_config: 경험치/스턴/자동반격/메시지/광역 범위 등 공통 설정
+ * 단순 최종 정책:
+ * - 에고 능력은 확률 발동형이다.
+ * - 발동 시 기본 능력 효과에 공통 보너스를 더한다.
+ * - 공통 보너스: 추가 피해 + HP 회복 + 확률 스턴 + 확률 슬로우.
+ * - 복잡한 액티브/광역/초월기 구조는 넣지 않는다.
  */
 public final class EgoWeaponAbilityController {
 
@@ -54,6 +56,17 @@ public final class EgoWeaponAbilityController {
     private static final int DEFAULT_STUN_TIME = 2;
     private static final int DEFAULT_AUTO_COUNTER_COOL_MS = 2500;
     private static final int DEFAULT_STUN_COOL_MS = 6000;
+
+    private static final int DEFAULT_COMBO_ADD_DAMAGE_RATE = 12;
+    private static final int DEFAULT_COMBO_ADD_DAMAGE_LEVEL_RATE = 2;
+    private static final int DEFAULT_COMBO_HEAL_RATE = 5;
+    private static final int DEFAULT_COMBO_HEAL_MAX_RATE = 12;
+    private static final int DEFAULT_COMBO_STUN_CHANCE = 4;
+    private static final int DEFAULT_COMBO_STUN_LEVEL_BONUS = 1;
+    private static final int DEFAULT_COMBO_SLOW_CHANCE = 9;
+    private static final int DEFAULT_COMBO_SLOW_LEVEL_BONUS = 1;
+    private static final int DEFAULT_COMBO_SLOW_TIME = 4;
+    private static final int DEFAULT_COMBO_SLOW_EFFECT = 3684;
 
     private static final Map<String, Long> procMessageDelayMap = new ConcurrentHashMap<String, Long>();
     private static final Map<String, Long> expDelayMap = new ConcurrentHashMap<String, Long>();
@@ -110,6 +123,8 @@ public final class EgoWeaponAbilityController {
         int bonusDamage = abilityInfo == null ? 0 : Math.max(0, abilityInfo.damageBonus);
         if (bonusDamage > 0 && result > 0)
             result += bonusDamage;
+
+        result = applyCommonProcEffects(pc, target, weapon, damage, result, effectiveLevel, type);
 
         if (effectiveLevel >= getStunLevel() && target instanceof Character)
             tryEgoStun(pc, (Character) target, weapon, "EGO_STUN_ATTACK");
@@ -334,6 +349,63 @@ public final class EgoWeaponAbilityController {
                 sendEffect(target, effect > 0 ? effect : 3940);
                 say(pc, "EGO_BALANCE", String.format("\\fY[에고] 공명 타격 발동. 추가 피해 +%d", balanceAdd));
                 return damage + balanceAdd;
+        }
+    }
+
+    private static int applyCommonProcEffects(PcInstance pc, object target, ItemInstance weapon, int baseDamage, int currentDamage, int egoLevel, EgoAbilityType type) {
+        if (pc == null || target == null || weapon == null || currentDamage <= 0)
+            return currentDamage;
+
+        int addRate = EgoConfig.getInt("combo_add_damage_rate", DEFAULT_COMBO_ADD_DAMAGE_RATE)
+                    + egoLevel * EgoConfig.getInt("combo_add_damage_level_rate", DEFAULT_COMBO_ADD_DAMAGE_LEVEL_RATE);
+        addRate = Math.max(0, Math.min(80, addRate));
+        int addDamage = Math.max(1, baseDamage * addRate / 100);
+        int result = currentDamage + addDamage;
+
+        int healRate = EgoConfig.getInt("combo_heal_rate", DEFAULT_COMBO_HEAL_RATE) + Math.max(0, egoLevel / 2);
+        int healMaxRate = EgoConfig.getInt("combo_heal_max_rate", DEFAULT_COMBO_HEAL_MAX_RATE);
+        healRate = Math.max(0, Math.min(Math.max(1, healMaxRate), healRate));
+        int heal = Math.max(1, baseDamage * healRate / 100);
+        pc.setNowHp(Math.min(pc.getTotalHp(), pc.getNowHp() + heal));
+
+        boolean stunned = false;
+        boolean slowed = false;
+        if (target instanceof Character) {
+            Character c = (Character) target;
+            int stunChance = EgoConfig.percent("combo_stun_chance", DEFAULT_COMBO_STUN_CHANCE)
+                           + egoLevel * Math.max(0, EgoConfig.getInt("combo_stun_level_bonus", DEFAULT_COMBO_STUN_LEVEL_BONUS));
+            stunChance = Math.max(0, Math.min(35, stunChance));
+            if (Util.random(1, 100) <= stunChance)
+                stunned = tryEgoStun(pc, c, weapon, "EGO_COMBO_STUN");
+
+            int slowChance = EgoConfig.percent("combo_slow_chance", DEFAULT_COMBO_SLOW_CHANCE)
+                           + egoLevel * Math.max(0, EgoConfig.getInt("combo_slow_level_bonus", DEFAULT_COMBO_SLOW_LEVEL_BONUS));
+            slowChance = Math.max(0, Math.min(60, slowChance));
+            if (!stunned && Util.random(1, 100) <= slowChance)
+                slowed = tryEgoSlow(pc, c, weapon);
+        }
+
+        sendEffect(target, DEFAULT_COMBO_SLOW_EFFECT);
+        say(pc, "EGO_COMBO", String.format("\\fS[에고] 공명 발동. 추가 피해 +%d / HP +%d%s%s", addDamage, heal, stunned ? " / 스턴" : "", slowed ? " / 슬로우" : ""));
+        return result;
+    }
+
+    private static boolean tryEgoSlow(PcInstance pc, Character target, ItemInstance weapon) {
+        if (pc == null || target == null || weapon == null)
+            return false;
+        if (target.isDead() || target.isLock())
+            return false;
+        if (!checkCooldown(weapon, "EGO_COMBO_SLOW", EgoConfig.getInt("combo_slow_cool_ms", 4000)))
+            return false;
+        try {
+            int time = Math.max(1, EgoConfig.getInt("combo_slow_time", DEFAULT_COMBO_SLOW_TIME));
+            int effect = EgoConfig.getInt("combo_slow_effect", DEFAULT_COMBO_SLOW_EFFECT);
+            markProc(weapon, "EGO_COMBO_SLOW");
+            sendEffect(target, effect);
+            Slow.init(target, time);
+            return true;
+        } catch (Throwable e) {
+            return false;
         }
     }
 
