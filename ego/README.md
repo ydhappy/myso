@@ -134,16 +134,40 @@ Java 클래스: lineage.world.object.item.EgoOrb
 이미 에고무기: 능력/대화/레벨/경험치 변경 없음, 현재 캐릭터를 주인으로 재인식
 ```
 
+## DB 구조
+
+현재 런타임 기준은 `ego` 중심 통합 구조입니다.
+
+```text
+ego                 에고무기 통합 런타임 정보
+ego_skill_base      에고 능력 기본값/템플릿
+ego_log             에고 발동/성장 로그
+ego_talk_pack       장르/성향 대사팩
+ego_config          런타임 설정값
+ego_level           레벨별 성장/전투 보정값
+ego_item_template   에고 구슬 아이템 등록 참고 템플릿
+```
+
+`ego_skill` 물리 테이블은 `ego.ability_*` 컬럼으로 병합되었습니다. `ego_bond` 물리 테이블은 `ego.bond`, `ego.bond_reason`으로 병합되었습니다.
+
 ## DB 연결 기준
 
 ```text
 ego.item_id              Java item objectId
 ego.char_id              현재 주인 objectId
 ego.ego_type             예의 / 예의반대 / 싸이코패스
-ego_skill.skill          Java 런타임 능력명
+ego.ability_type         Java 런타임 능력명
+ego.ability_lv           능력 보정 레벨
+ego.ability_rate_bonus   발동 확률 보너스
+ego.ability_dmg_bonus    피해 보너스
+ego.ability_last_proc    마지막 발동 시간
+ego.bond                 유대감
+ego.bond_reason          마지막 유대감 사유
 ego_skill_base.skill     Java 런타임 능력명
 ego_talk_pack.tone       예의 / 예의반대 / 싸이코패스
 ego_config.config_key    Java 설정 키
+ego_level.ego_lv         레벨별 성장/전투 보정 키
+ego_log.skill            발동/성장 로그 능력명
 ```
 
 ## 현재 병합/삭제된 파일
