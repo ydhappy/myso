@@ -3,6 +3,8 @@ package lineage.world.controller;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -13,6 +15,7 @@ import lineage.database.DatabaseConnection;
  *
  * ego_config 테이블이 있으면 DB 값을 우선 사용한다.
  * 테이블/값이 없으면 Java 기본값으로 fallback한다.
+ * 리로드 중에는 기존 설정을 유지하고, 로드 성공분만 원자적으로 교체한다.
  */
 public final class EgoConfig {
 
@@ -22,14 +25,18 @@ public final class EgoConfig {
     }
 
     public static void reload(Connection con) {
+        Map<String, String> loaded = load(con);
         configMap.clear();
-        load(con);
+        configMap.putAll(loaded);
     }
 
     public static String getString(String key, String defaultValue) {
         if (key == null)
             return defaultValue;
-        String value = configMap.get(key.trim());
+        String k = key.trim();
+        if (k.length() == 0)
+            return defaultValue;
+        String value = configMap.get(k);
         if (value == null || value.trim().length() == 0)
             return defaultValue;
         return value.trim();
@@ -65,7 +72,8 @@ public final class EgoConfig {
         return value;
     }
 
-    private static void load(Connection con) {
+    private static Map<String, String> load(Connection con) {
+        Map<String, String> loaded = new HashMap<String, String>();
         PreparedStatement st = null;
         ResultSet rs = null;
         boolean closeCon = false;
@@ -74,13 +82,15 @@ public final class EgoConfig {
                 con = DatabaseConnection.getLineage();
                 closeCon = true;
             }
+            if (con == null || !tableExists(con, "ego_config"))
+                return loaded;
             st = con.prepareStatement("SELECT config_key, config_value FROM ego_config WHERE use_yn=1");
             rs = st.executeQuery();
             while (rs.next()) {
                 String key = rs.getString("config_key");
                 String value = rs.getString("config_value");
                 if (key != null && key.trim().length() > 0)
-                    configMap.put(key.trim(), value == null ? "" : value.trim());
+                    loaded.put(key.trim(), value == null ? "" : value.trim());
             }
         } catch (Exception e) {
             // ego_config 미적용 서버에서도 Java 기본값으로 동작한다.
@@ -89,6 +99,19 @@ public final class EgoConfig {
                 DatabaseConnection.close(con, st, rs);
             else
                 DatabaseConnection.close(st, rs);
+        }
+        return loaded;
+    }
+
+    private static boolean tableExists(Connection con, String table) {
+        ResultSet rs = null;
+        try {
+            rs = con.getMetaData().getTables(null, null, table, null);
+            return rs != null && rs.next();
+        } catch (SQLException e) {
+            return false;
+        } finally {
+            try { if (rs != null) rs.close(); } catch (Exception e) {}
         }
     }
 }
