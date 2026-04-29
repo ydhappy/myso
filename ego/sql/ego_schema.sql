@@ -6,6 +6,9 @@
 -- Java runtime ability names are kept 1:1 with EgoWeaponAbilityController.
 -- Simple input aliases are normalized in EgoWeaponDatabase.
 -- Ego personality styles: 예의, 예의반대, 싸이코패스.
+-- DB reorganization:
+--   ego_skill -> merged into ego ability_* columns.
+--   ego_bond  -> merged into ego bond/bond_reason columns.
 -- ============================================================
 
 SET NAMES utf8;
@@ -21,6 +24,11 @@ CREATE TABLE IF NOT EXISTS ego (
     need_exp BIGINT NOT NULL DEFAULT 100,
     talk_lv INT NOT NULL DEFAULT 1,
     ctrl_lv INT NOT NULL DEFAULT 1,
+    ability_type VARCHAR(40) NOT NULL DEFAULT '',
+    ability_lv INT NOT NULL DEFAULT 1,
+    ability_rate_bonus INT NOT NULL DEFAULT 0,
+    ability_dmg_bonus INT NOT NULL DEFAULT 0,
+    ability_last_proc BIGINT NOT NULL DEFAULT 0,
     last_talk BIGINT NOT NULL DEFAULT 0,
     last_warn BIGINT NOT NULL DEFAULT 0,
     bond INT NOT NULL DEFAULT 0,
@@ -31,25 +39,9 @@ CREATE TABLE IF NOT EXISTS ego (
     INDEX ego_char_idx (char_id),
     INDEX ego_name_idx (ego_name),
     INDEX ego_lv_idx (ego_lv),
+    INDEX ego_ability_idx (ability_type),
     INDEX ego_bond_idx (bond)
-) ENGINE=InnoDB DEFAULT CHARSET=euckr COLLATE=euckr_korean_ci COMMENT='에고무기 기본 정보';
-
-CREATE TABLE IF NOT EXISTS ego_skill (
-    id BIGINT NOT NULL AUTO_INCREMENT,
-    item_id BIGINT NOT NULL,
-    skill VARCHAR(40) NOT NULL,
-    skill_lv INT NOT NULL DEFAULT 1,
-    rate_bonus INT NOT NULL DEFAULT 0,
-    dmg_bonus INT NOT NULL DEFAULT 0,
-    last_proc BIGINT NOT NULL DEFAULT 0,
-    use_yn TINYINT(1) NOT NULL DEFAULT 1,
-    reg_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    mod_date DATETIME NULL DEFAULT NULL,
-    PRIMARY KEY (id),
-    UNIQUE KEY ego_skill_uk (item_id, skill),
-    INDEX ego_skill_item_idx (item_id),
-    INDEX ego_skill_idx (skill)
-) ENGINE=InnoDB DEFAULT CHARSET=euckr COLLATE=euckr_korean_ci COMMENT='에고무기 능력 정보';
+) ENGINE=InnoDB DEFAULT CHARSET=euckr COLLATE=euckr_korean_ci COMMENT='에고무기 통합 정보';
 
 CREATE TABLE IF NOT EXISTS ego_skill_base (
     skill VARCHAR(40) NOT NULL,
@@ -123,16 +115,6 @@ CREATE TABLE IF NOT EXISTS ego_level (
     PRIMARY KEY (ego_lv)
 ) ENGINE=InnoDB DEFAULT CHARSET=euckr COLLATE=euckr_korean_ci COMMENT='에고 레벨 통합 설정';
 
-CREATE TABLE IF NOT EXISTS ego_bond (
-    item_id BIGINT NOT NULL,
-    bond INT NOT NULL DEFAULT 0,
-    last_reason VARCHAR(40) NOT NULL DEFAULT '',
-    reg_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    mod_date DATETIME NULL DEFAULT NULL,
-    PRIMARY KEY (item_id),
-    INDEX ego_bond_idx (bond)
-) ENGINE=InnoDB DEFAULT CHARSET=euckr COLLATE=euckr_korean_ci COMMENT='에고 유대감 fallback';
-
 CREATE TABLE IF NOT EXISTS ego_item_template (
     item_code INT NOT NULL,
     item_name VARCHAR(80) NOT NULL,
@@ -169,17 +151,110 @@ SET @sql := IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHE
     'SELECT ''ego.bond_reason already exists'' AS info');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
-UPDATE ego_skill SET skill='EGO_BALANCE' WHERE skill='BALANCE';
-UPDATE ego_skill SET skill='BLOOD_DRAIN' WHERE skill='BLOOD';
-UPDATE ego_skill SET skill='MANA_DRAIN' WHERE skill='MANA';
-UPDATE ego_skill SET skill='CRITICAL_BURST' WHERE skill='CRIT';
-UPDATE ego_skill SET skill='GUARDIAN_SHIELD' WHERE skill='SHIELD';
-UPDATE ego_skill SET skill='AREA_SLASH' WHERE skill='AREA';
-UPDATE ego_skill SET skill='EXECUTION' WHERE skill='EXECUTE';
-UPDATE ego_skill SET skill='FLAME_BRAND' WHERE skill='FIRE';
-UPDATE ego_skill SET skill='FROST_BIND' WHERE skill='FROST';
-UPDATE ego_skill SET skill='EGO_COUNTER' WHERE skill='COUNTER';
-UPDATE ego_skill SET skill='EGO_REVENGE' WHERE skill='REVENGE';
+SET @sql := IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ego' AND COLUMN_NAME = 'ability_type') = 0,
+    'ALTER TABLE ego ADD COLUMN ability_type VARCHAR(40) NOT NULL DEFAULT "" AFTER ctrl_lv',
+    'SELECT ''ego.ability_type already exists'' AS info');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @sql := IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ego' AND COLUMN_NAME = 'ability_lv') = 0,
+    'ALTER TABLE ego ADD COLUMN ability_lv INT NOT NULL DEFAULT 1 AFTER ability_type',
+    'SELECT ''ego.ability_lv already exists'' AS info');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @sql := IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ego' AND COLUMN_NAME = 'ability_rate_bonus') = 0,
+    'ALTER TABLE ego ADD COLUMN ability_rate_bonus INT NOT NULL DEFAULT 0 AFTER ability_lv',
+    'SELECT ''ego.ability_rate_bonus already exists'' AS info');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @sql := IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ego' AND COLUMN_NAME = 'ability_dmg_bonus') = 0,
+    'ALTER TABLE ego ADD COLUMN ability_dmg_bonus INT NOT NULL DEFAULT 0 AFTER ability_rate_bonus',
+    'SELECT ''ego.ability_dmg_bonus already exists'' AS info');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @sql := IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ego' AND COLUMN_NAME = 'ability_last_proc') = 0,
+    'ALTER TABLE ego ADD COLUMN ability_last_proc BIGINT NOT NULL DEFAULT 0 AFTER ability_dmg_bonus',
+    'SELECT ''ego.ability_last_proc already exists'' AS info');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @sql := IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ego' AND INDEX_NAME = 'ego_ability_idx') = 0,
+    'ALTER TABLE ego ADD INDEX ego_ability_idx (ability_type)',
+    'SELECT ''ego_ability_idx already exists'' AS info');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+UPDATE ego SET ability_type='EGO_BALANCE' WHERE ability_type='BALANCE';
+UPDATE ego SET ability_type='BLOOD_DRAIN' WHERE ability_type='BLOOD';
+UPDATE ego SET ability_type='MANA_DRAIN' WHERE ability_type='MANA';
+UPDATE ego SET ability_type='CRITICAL_BURST' WHERE ability_type='CRIT';
+UPDATE ego SET ability_type='GUARDIAN_SHIELD' WHERE ability_type='SHIELD';
+UPDATE ego SET ability_type='AREA_SLASH' WHERE ability_type='AREA';
+UPDATE ego SET ability_type='EXECUTION' WHERE ability_type='EXECUTE';
+UPDATE ego SET ability_type='FLAME_BRAND' WHERE ability_type='FIRE';
+UPDATE ego SET ability_type='FROST_BIND' WHERE ability_type='FROST';
+UPDATE ego SET ability_type='EGO_COUNTER' WHERE ability_type='COUNTER';
+UPDATE ego SET ability_type='EGO_REVENGE' WHERE ability_type='REVENGE';
+
+SET @has_ego_skill := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ego_skill');
+SET @sql := IF(@has_ego_skill > 0,
+    'UPDATE ego_skill SET skill=''EGO_BALANCE'' WHERE skill=''BALANCE''',
+    'SELECT ''ego_skill not exists'' AS info');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @sql := IF(@has_ego_skill > 0,
+    'UPDATE ego_skill SET skill=''BLOOD_DRAIN'' WHERE skill=''BLOOD''',
+    'SELECT ''ego_skill not exists'' AS info');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @sql := IF(@has_ego_skill > 0,
+    'UPDATE ego_skill SET skill=''MANA_DRAIN'' WHERE skill=''MANA''',
+    'SELECT ''ego_skill not exists'' AS info');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @sql := IF(@has_ego_skill > 0,
+    'UPDATE ego_skill SET skill=''CRITICAL_BURST'' WHERE skill=''CRIT''',
+    'SELECT ''ego_skill not exists'' AS info');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @sql := IF(@has_ego_skill > 0,
+    'UPDATE ego_skill SET skill=''GUARDIAN_SHIELD'' WHERE skill=''SHIELD''',
+    'SELECT ''ego_skill not exists'' AS info');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @sql := IF(@has_ego_skill > 0,
+    'UPDATE ego_skill SET skill=''AREA_SLASH'' WHERE skill=''AREA''',
+    'SELECT ''ego_skill not exists'' AS info');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @sql := IF(@has_ego_skill > 0,
+    'UPDATE ego_skill SET skill=''EXECUTION'' WHERE skill=''EXECUTE''',
+    'SELECT ''ego_skill not exists'' AS info');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @sql := IF(@has_ego_skill > 0,
+    'UPDATE ego_skill SET skill=''FLAME_BRAND'' WHERE skill=''FIRE''',
+    'SELECT ''ego_skill not exists'' AS info');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @sql := IF(@has_ego_skill > 0,
+    'UPDATE ego_skill SET skill=''FROST_BIND'' WHERE skill=''FROST''',
+    'SELECT ''ego_skill not exists'' AS info');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @sql := IF(@has_ego_skill > 0,
+    'UPDATE ego_skill SET skill=''EGO_COUNTER'' WHERE skill=''COUNTER''',
+    'SELECT ''ego_skill not exists'' AS info');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @sql := IF(@has_ego_skill > 0,
+    'UPDATE ego_skill SET skill=''EGO_REVENGE'' WHERE skill=''REVENGE''',
+    'SELECT ''ego_skill not exists'' AS info');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @sql := IF(@has_ego_skill > 0,
+    'UPDATE ego e SET ability_type=(SELECT s.skill FROM ego_skill s WHERE s.item_id=e.item_id AND s.use_yn=1 ORDER BY s.id ASC LIMIT 1), ability_lv=IFNULL((SELECT s.skill_lv FROM ego_skill s WHERE s.item_id=e.item_id AND s.use_yn=1 ORDER BY s.id ASC LIMIT 1), 1), ability_rate_bonus=IFNULL((SELECT s.rate_bonus FROM ego_skill s WHERE s.item_id=e.item_id AND s.use_yn=1 ORDER BY s.id ASC LIMIT 1), 0), ability_dmg_bonus=IFNULL((SELECT s.dmg_bonus FROM ego_skill s WHERE s.item_id=e.item_id AND s.use_yn=1 ORDER BY s.id ASC LIMIT 1), 0), ability_last_proc=IFNULL((SELECT s.last_proc FROM ego_skill s WHERE s.item_id=e.item_id AND s.use_yn=1 ORDER BY s.id ASC LIMIT 1), 0), mod_date=NOW() WHERE EXISTS (SELECT 1 FROM ego_skill s WHERE s.item_id=e.item_id AND s.use_yn=1)',
+    'SELECT ''ego_skill migration skipped'' AS info');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @has_ego_bond := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ego_bond');
+SET @sql := IF(@has_ego_bond > 0,
+    'UPDATE ego e SET bond=IFNULL((SELECT b.bond FROM ego_bond b WHERE b.item_id=e.item_id LIMIT 1), e.bond), bond_reason=IFNULL((SELECT b.last_reason FROM ego_bond b WHERE b.item_id=e.item_id LIMIT 1), e.bond_reason), mod_date=NOW() WHERE EXISTS (SELECT 1 FROM ego_bond b WHERE b.item_id=e.item_id)',
+    'SELECT ''ego_bond migration skipped'' AS info');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+UPDATE ego SET ability_type='' WHERE ability_type IS NULL;
+UPDATE ego SET ability_lv=1 WHERE ability_lv IS NULL OR ability_lv < 1;
+UPDATE ego SET ability_rate_bonus=0 WHERE ability_rate_bonus IS NULL;
+UPDATE ego SET ability_dmg_bonus=0 WHERE ability_dmg_bonus IS NULL OR ability_dmg_bonus < 0;
+UPDATE ego SET ability_last_proc=0 WHERE ability_last_proc IS NULL OR ability_last_proc < 0;
 
 INSERT INTO ego_skill_base (skill, label, memo, base_rate, lv_rate, max_rate, min_lv, cool_ms, effect, use_yn) VALUES
 ('EGO_BALANCE', '공명', '균형형 추가 피해', 3, 1, 25, 1, 0, 3940, 1),
@@ -291,8 +366,12 @@ UPDATE ego SET ego_lv=10 WHERE ego_lv > 10;
 UPDATE ego e INNER JOIN ego_level l ON e.ego_lv=l.ego_lv SET e.need_exp=l.need_exp WHERE l.use_yn=1;
 UPDATE ego SET need_exp=0, ego_exp=0 WHERE ego_lv >= 10;
 
+DROP TABLE IF EXISTS ego_skill;
+DROP TABLE IF EXISTS ego_bond;
+
 SELECT 'EGO_SCHEMA_SQL_OK' AS result;
 SHOW TABLES LIKE 'ego%';
+SELECT item_id, char_id, ego_name, ego_type, ego_lv, ego_exp, need_exp, ability_type, ability_lv, ability_rate_bonus, ability_dmg_bonus, ability_last_proc, bond, bond_reason FROM ego;
 SELECT * FROM ego_level ORDER BY ego_lv;
 SELECT * FROM ego_config ORDER BY config_key;
 SELECT * FROM ego_skill_base ORDER BY skill;
