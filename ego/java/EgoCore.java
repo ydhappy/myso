@@ -390,26 +390,22 @@ final class EgoWeaponTypeUtil {
 final class EgoSchema {
 
     static final String T_EGO = "ego";
-    static final String T_EGO_SKILL = "ego_skill";
     static final String T_EGO_SKILL_BASE = "ego_skill_base";
     static final String T_EGO_LOG = "ego_log";
     static final String T_EGO_TALK_PACK = "ego_talk_pack";
     static final String T_EGO_CONFIG = "ego_config";
     static final String T_EGO_LEVEL = "ego_level";
-    static final String T_EGO_BOND = "ego_bond";
     static final String T_EGO_ITEM_TEMPLATE = "ego_item_template";
 
     private static final Map<String, String[]> REQUIRED = new LinkedHashMap<String, String[]>();
 
     static {
-        REQUIRED.put(T_EGO, new String[] { "item_id", "char_id", "use_yn", "ego_name", "ego_type", "ego_lv", "ego_exp", "need_exp", "talk_lv", "ctrl_lv", "last_talk", "last_warn", "bond", "bond_reason", "reg_date", "mod_date" });
-        REQUIRED.put(T_EGO_SKILL, new String[] { "id", "item_id", "skill", "skill_lv", "rate_bonus", "dmg_bonus", "last_proc", "use_yn", "reg_date", "mod_date" });
+        REQUIRED.put(T_EGO, new String[] { "item_id", "char_id", "use_yn", "ego_name", "ego_type", "ego_lv", "ego_exp", "need_exp", "talk_lv", "ctrl_lv", "ability_type", "ability_lv", "ability_rate_bonus", "ability_dmg_bonus", "ability_last_proc", "last_talk", "last_warn", "bond", "bond_reason", "reg_date", "mod_date" });
         REQUIRED.put(T_EGO_SKILL_BASE, new String[] { "skill", "label", "memo", "base_rate", "lv_rate", "max_rate", "min_lv", "cool_ms", "effect", "use_yn" });
         REQUIRED.put(T_EGO_LOG, new String[] { "id", "item_id", "char_id", "char_name", "target_name", "skill", "base_dmg", "final_dmg", "add_dmg", "reg_date" });
         REQUIRED.put(T_EGO_TALK_PACK, new String[] { "id", "genre", "tone", "keyword", "message", "use_yn", "reg_date", "mod_date" });
         REQUIRED.put(T_EGO_CONFIG, new String[] { "config_key", "config_value", "memo", "use_yn", "reg_date", "mod_date" });
         REQUIRED.put(T_EGO_LEVEL, new String[] { "ego_lv", "need_exp", "proc_bonus", "critical_chance", "critical_damage", "counter_chance", "counter_power", "counter_critical", "memo", "use_yn", "reg_date", "mod_date" });
-        REQUIRED.put(T_EGO_BOND, new String[] { "item_id", "bond", "last_reason", "reg_date", "mod_date" });
         REQUIRED.put(T_EGO_ITEM_TEMPLATE, new String[] { "item_code", "item_name", "java_class", "item_type1", "item_type2", "name_id", "inv_gfx", "ground_gfx", "stackable", "memo", "use_yn", "reg_date", "mod_date" });
     }
 
