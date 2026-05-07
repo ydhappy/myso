@@ -379,7 +379,8 @@ public class PcRobotInstance extends RobotInstance {
 
         String event = triggerType == null ? "" : triggerType.trim().toUpperCase();
         long now = System.currentTimeMillis();
-        boolean ignoreCooldown = "KILL".equalsIgnoreCase(event) && RobotController.getWhaleOptionInt("kill_cooldown_ignore", 1) > 0;
+        boolean ignoreCooldown = ("KILL".equalsIgnoreCase(event) && RobotController.getWhaleOptionInt("kill_cooldown_ignore", 1) > 0)
+            || "SPAWN".equalsIgnoreCase(event);
         if (!ignoreCooldown && whaleChatCooldownMillis > 0 && now - whaleLastChatTime < whaleChatCooldownMillis) {
             return;
         }
@@ -394,6 +395,8 @@ public class PcRobotInstance extends RobotInstance {
             chance += RobotController.getWhaleOptionInt("damage_bonus", 8);
         } else if ("KILL".equalsIgnoreCase(event)) {
             chance += RobotController.getWhaleOptionInt("kill_bonus", 25);
+        } else if ("SPAWN".equalsIgnoreCase(event)) {
+            chance += RobotController.getWhaleOptionInt("spawn_bonus", 50);
         }
         int chanceCap = Math.max(1, RobotController.getWhaleOptionInt("chance_cap", 95));
         chance = Math.max(1, Math.min(chanceCap, chance));
@@ -2103,6 +2106,7 @@ public class PcRobotInstance extends RobotInstance {
         goToHome(false);
         // 부활 뒷 처리.
         toRevival(this);
+        tryWhaleMent("SPAWN", null);
         // 상태 변환.
         setAiStatus(Lineage.AI_STATUS_WALK);
     }
