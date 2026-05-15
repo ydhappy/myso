@@ -1,3 +1,5 @@
 nicegui
-python-dotenv
+fastapi
+uvicorn
 pymysql
+python-dotenv
