@@ -1,0 +1,7 @@
+nicegui
+fastapi
+uvicorn[standard]
+python-dotenv
+websockets
+requests
+pydantic
