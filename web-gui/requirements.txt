@@ -1,7 +1,6 @@
-nicegui
+nicegui==2.10.0
 fastapi
 uvicorn
 pymysql
 python-dotenv
-pandas
-plotly
+jinja2

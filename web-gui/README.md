@@ -1,5 +1,8 @@
 # Bitna Web GUI
 
-l1j-kr 2.0 완전 대체용 현대적 Web 관리 패널
+Modern Web GUI for l1j-kr 2.0 bitna server
 
-NiceGUI + FastAPI + Tailwind 기반
+## 실행 방법
+1. `pip install -r requirements.txt`
+2. `.env` 파일 생성 후 DB 정보 입력
+3. `python main.py`
