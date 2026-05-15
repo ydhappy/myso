@@ -5,25 +5,28 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-DB_CONFIG = {
-    'host': os.getenv('DB_HOST', 'localhost'),
-    'user': os.getenv('DB_USER', 'root'),
-    'password': os.getenv('DB_PASSWORD', ''),
-    'db': os.getenv('DB_NAME', 'goldbitna_l200'),
-    'port': int(os.getenv('DB_PORT', 3306)),
-    'cursorclass': pymysql.cursors.DictCursor
-}
-
 def get_db():
-    return pymysql.connect(**DB_CONFIG)
+    try:
+        conn = pymysql.connect(
+            host=os.getenv('DB_HOST', 'localhost'),
+            user=os.getenv('DB_USER', 'root'),
+            password=os.getenv('DB_PASSWORD', ''),
+            database=os.getenv('DB_NAME', 'goldbitna_l200'),
+            port=int(os.getenv('DB_PORT', 3306)),
+            cursorclass=pymysql.cursors.DictCursor
+        )
+        return conn
+    except Exception as e:
+        print(f'DB Error: {e}')
+        return None
 
-ui.label('bitna l1j-kr 2.0 Web GUI - SWT 완전 대체').classes('text-4xl font-bold text-center mt-8')
+ui.label('bitna l1j-kr 2.0 Web GUI').classes('text-4xl font-bold text-center mt-10')
+ui.label('SWT GUI 완전 대체').classes('text-center text-xl text-gray-500')
 
 with ui.tabs().classes('w-full'):
     ui.tab('Dashboard')
-    ui.tab('Live Console')
     ui.tab('Players')
+    ui.tab('Console')
     ui.tab('NPC Spawn')
-    ui.tab('Action Flow')
 
-ui.run(port=8080, dark=True, title='bitna Web GUI')
+ui.run(title='bitna Web GUI', port=8080, dark=True)
