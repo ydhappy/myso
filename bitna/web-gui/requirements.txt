@@ -1,0 +1,3 @@
+nicegui
+pymysql
+python-dotenv
