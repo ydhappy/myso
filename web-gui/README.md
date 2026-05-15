@@ -1,9 +1,9 @@
-# bitna Web GUI
+# Web GUI for bitna l1j-kr 2.0 Server
 
-l1j-kr 2.0 서버를 위한 현대적인 Web 관리자 페이지
+Modern Web GUI replacing the old SWT GUI.
 
-## 실행 방법
-
-1. `pip install -r requirements.txt`
-2. `.env` 파일 생성 후 DB 정보 입력
-3. `python main.py`
+## How to run
+1. cd web-gui
+2. pip install -r requirements.txt
+3. cp .env.example .env
+4. python main.py
