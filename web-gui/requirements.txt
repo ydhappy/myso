@@ -1,0 +1,6 @@
+nicegui
+fastapi
+uvicorn
+pymysql
+python-dotenv
+jinja2
