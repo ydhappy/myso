@@ -1,0 +1,10 @@
+[project]
+name = "bitna-web-gui"
+version = "0.1.0"
+description = "Modern Web GUI for bitna l1j-kr server"
+requires-python = ">=3.10"
+dependencies = [
+    "nicegui",
+    "fastapi",
+    "uvicorn",
+]
