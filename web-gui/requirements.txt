@@ -1,0 +1,7 @@
+nicegui
+fastapi
+uvicorn
+pymysql
+python-dotenv
+pandas
+plotly
